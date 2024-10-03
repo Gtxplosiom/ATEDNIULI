@@ -1,0 +1,43 @@
+﻿<Window x:Class="ATEDNIULI.IntentWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ATEDNIULI"
+        mc:Ignorable="d"
+        Title="IntentWindow"
+            Height="93" Width="269"
+    WindowStyle="None"
+    AllowsTransparency="True"
+    Background="Transparent">
+    <Border Background="#F4E9CD"
+    CornerRadius="20"
+    BorderBrush="Black"
+    BorderThickness="1"
+    Padding="10">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="243*"/>
+                <ColumnDefinition Width="4*"/>
+            </Grid.ColumnDefinitions>
+            
+            <TextBox x:Name="IntentOutput"
+             Text="Intent Here:"
+             IsReadOnly="True"
+             TextWrapping="Wrap"
+             AcceptsReturn="True"
+             VerticalScrollBarVisibility="Auto"
+             HorizontalScrollBarVisibility="Auto"
+             Background="#F4E9CD"
+             Foreground="#031926"
+             Grid.ColumnSpan="2"/>
+
+            <Button x:Name="StopButton"
+            Content="Stop"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="76,404,0,0"
+            Click="StopButton_Click" Width="96"/>
+        </Grid>
+    </Border>
+</Window>

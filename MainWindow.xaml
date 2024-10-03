@@ -1,0 +1,69 @@
+﻿<Window x:Class="ATEDNIULI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="MainWindow" WindowStyle="None" Height="250" Width="50">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0"/>
+    </WindowChrome.WindowChrome>
+    <Window.Resources>
+        <Style x:Key="RoundedButtonStyle" TargetType="Button">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                CornerRadius="20"
+                                BorderThickness="0">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="border"
+                                                            Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                            To="#468189" Duration="0:0:0.1" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="border"
+                                                            Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                            To="#77ACA2" Duration="0:0:0.3" />
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Button Name="settings_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,10,0,0" Visibility="Collapsed">
+            <Image Name="settings_icon" Source="/assets/icons/settings.png" Width="35"/>
+        </Button>
+        <Button Name="help_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,55,0,0" Visibility="Collapsed">
+            <Image Name="help_icon" Source="/assets/icons/help.png" Width="35"/>
+        </Button>
+        <Button Name="toggle_button" Height="18" Width="50" BorderThickness="0" Background="#77ACA2" Click="toggle_button_Click" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,131">
+            <Image Name="expand_icon" Source="/assets/icons/expand.png" Width="50" HorizontalAlignment="Center" Stretch="Fill"/>
+        </Button>
+        <Border Name="camera_mouse_border"  Margin="0,0,0,95">
+            <Image Name="camera_mouse_icon" Source="/assets/icons/camera-mouse-preview.png" Width="35" VerticalAlignment="Bottom"/>
+        </Border>
+        <Border Name="object_detection_border"  Margin="0,0,0,55">
+            <Image Name="object_detection_icon" Source="/assets/icons/object-detection-disabled.png" Width="35" VerticalAlignment="Bottom"/>
+        </Border>
+        <Border Name="listening_border"  Margin="0,0,0,8">
+            <Image Name="listening_icon" Source="/assets/icons/listening-disabled.png" Width="35" VerticalAlignment="Bottom"/>
+        </Border>
+    </Grid>
+</Window>
