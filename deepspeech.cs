@@ -18,7 +18,6 @@ using System.Text;
 using NetMQ;
 using NetMQ.Sockets;
 
-
 class LiveTranscription
 {
     private readonly ASRWindow asr_window;
@@ -182,6 +181,7 @@ class LiveTranscription
         InitializeSocket();
         InitializeTimer();
     }
+
     private void InitializeSocket()
     {
         socket = new RequestSocket("tcp://localhost:6969");
@@ -870,3 +870,4 @@ class LiveTranscription
 }
 
 // TODO - ig aapply pa an intent recognition ngan yolo functionalities
+// TODO - REFACTOR THIS ALL! to fix crashes and instability.
