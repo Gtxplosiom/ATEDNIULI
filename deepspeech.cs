@@ -67,7 +67,7 @@ class LiveTranscription
     private string lastTypedPhrase = string.Empty;
     private bool typing_mode = false;
 
-    private bool wake_word_required = true; // Default to requiring the wake word
+    private bool wake_word_required = false; // Default to requiring the wake word
 
     string app_directory = Directory.GetCurrentDirectory(); // possible gamiton labi pag reference hin assets kay para robust hiya ha iba iba na systems
 
@@ -119,10 +119,13 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta15.pbmm";
-    string scorer_path = @"assets\models\demo.scorer";
+    string scorer_path = @"assets\models\waray_english_2.scorer";
     string ww_scorer_path = @"assets\models\wake_word.scorer";
 
-    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, cameramouse camera_mouse)
+    // importante para diri mag error an memory corrupt ha deepspeech model
+    private readonly object streamLock = new object();
+
+    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, cameramouse camera_mouse) // 
     {
         this.asr_window = asr_window ?? throw new ArgumentNullException(nameof(asr_window));
         this.intent_window = intent_window ?? throw new ArgumentNullException(nameof(intent_window));
@@ -135,6 +138,7 @@ class LiveTranscription
             OperatingMode = OperatingMode.VeryAggressive
         };
 
+        // initialize python
         Task.Run(() =>
         {
             ProcessStartInfo start = new ProcessStartInfo
@@ -171,6 +175,7 @@ class LiveTranscription
             }
         });
 
+        // pag communicate ha python code ha fld nga ma wait anay bago mag load an python bago mag continue ha rest of the program
         using (var notifySocket = new PullSocket("tcp://localhost:6970"))
         {
             Console.WriteLine("Waiting for the model to be ready...");
@@ -178,12 +183,25 @@ class LiveTranscription
             Console.WriteLine(readyMessage); // Print the "ready" message
         }
 
+        // pan run hin code
         InitializeSocket();
+
+        // timers
         InitializeTimer();
     }
 
+
+
+    // zmq stuffs
     private void InitializeSocket()
     {
+        if (socket != null && socket.IsDisposed == false)
+        {
+            socket.Close();  // Close the existing socket
+            socket.Dispose(); // Release resources associated with the socket
+        }
+
+        // Create a new socket instance
         socket = new RequestSocket("tcp://localhost:6969");
     }
 
@@ -198,6 +216,7 @@ class LiveTranscription
         deep_speech_model.AddHotWord("hello", 7);
     }
 
+    // transcfiption function
     public void StartTranscription()
     {
         try
@@ -230,35 +249,43 @@ class LiveTranscription
         }
     }
 
+    private void OnRecordingStopped(object sender, StoppedEventArgs e) // emergency stop handling
+    {
+        if (e.Exception != null)
+        {
+            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Recording Stopped Error: {e.Exception.Message}"));
+        }
+
+        if (is_running)
+        {
+            StartTranscription();
+        }
+    }
+
+    // timer function
     private void InitializeTimer()
     {
-        inactivity_timer = new System.Timers.Timer(2000); // 3 seconds
+        inactivity_timer = new System.Timers.Timer(1000); // 2 seconds
         inactivity_timer.Elapsed += OnInactivityTimerElapsed;
         inactivity_timer.AutoReset = false; // Do not restart automatically
 
         intent_window_timer = new System.Timers.Timer(3000); // 3 seconds
         intent_window_timer.Elapsed += OnIntentTimerElapsed;
         intent_window_timer.AutoReset = false;
-
-        input_timer = new System.Timers.Timer(5000); // 3 seconds
-        input_timer.Elapsed += OnIntentTimerElapsed;
-        input_timer.AutoReset = false;
     }
 
+    // timer stuff kun mag timeout
     private void OnInactivityTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
-        // pag check kun an partial result ngan an previous (3 sec ago) parehas
         if (current_partial == previous_partial)
         {
             asr_window.Dispatcher.Invoke(() =>
             {
-                asr_window.AppendText("Finalizing stream due to inactivity.", true);
                 FinalizeStream();
             });
         }
         else
         {
-            // Update the previous partial and restart the timer
             previous_partial = current_partial;
             inactivity_timer.Start(); // Restart timer
         }
@@ -271,140 +298,151 @@ class LiveTranscription
 
     private void OnInputTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
-        asr_window.Dispatcher.Invoke(() =>
+        try
         {
-            asr_window.AppendText("Finalizing stream due to input too long", true);
-            FinalizeStream();
-        });
+            // Check if the partial result has at least 5 words
+            if (current_partial.Split(' ').Length >= 5)
+            {
+                asr_window.Dispatcher.Invoke(() =>
+                {
+                    FinalizeStream();
+                });
+            }
+            else
+            {
+                Console.WriteLine("Partial result does not meet word count requirement.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in Input Timer: {ex.Message}");
+        }
     }
 
-    // importante para diri mag error an memory corrupt ha deepspeech model
-    private readonly object streamLock = new object();
+    private string received = "";
 
-    //pag end hin stream "forcefully"
+    // Forcefully end the stream
     private void FinalizeStream()
     {
-        inactivity_timer.Stop();
-
-        asr_window.Dispatcher.Invoke(() =>
+        try
         {
-            if (asr_window.IsVisible)
+            // Offload work to a background task
+            Task.Run(() =>
             {
                 lock (streamLock)
                 {
-                    try
-                    {
-                        string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
+                    Console.WriteLine("Finalizing stream...");
+                    string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
+                    Console.WriteLine("Stream finalized.");
 
-                        socket.SendFrame(final_result_from_stream);
-                        string receivedMessage = socket.ReceiveFrameString();
+                    // Perform socket operations in a background thread
+                    socket.SendFrame(final_result_from_stream);
+                    string receivedMessage = socket.ReceiveFrameString();
+                    received = receivedMessage;
 
-                        intent_window.Dispatcher.Invoke(() =>
-                        {
-                            intent_window.AppendText($"Intent: {receivedMessage}");
-                        });
-
-                        intent_window_timer.Start();
-                        asr_window.Hide();
-
-                        deep_speech_stream.Dispose();
-                        deep_speech_stream = deep_speech_model.CreateStream();
-
-                        wake_word_detected = false;
-                        ResetCommandCounts();
-
-                    }
-                    catch (Exception ex)
-                    {
-                        // Handle exceptions (log them, show error messages, etc.)
-                        Console.WriteLine($"Error: {ex.Message}");
-                    }
+                    // Dispose and reset the stream
+                    deep_speech_stream.Dispose();
+                    deep_speech_stream = deep_speech_model.CreateStream();
                 }
-            }
-        });
+            }).ContinueWith(t =>
+            {
+                // Check if an exception was thrown in the Task
+                if (t.Exception != null)
+                {
+                    Console.WriteLine($"Error finalizing stream: {t.Exception.InnerException.Message}");
+                    // Handle exceptions (log them, show error messages, etc.)
+                    return;
+                }
+
+                // Update the UI on the UI thread
+                asr_window.Dispatcher.Invoke(() =>
+                {
+                    if (asr_window.IsVisible)
+                    {
+                        try
+                        {
+                            intent_window.AppendText($"Intent: {received}");
+                            intent_window_timer.Start();
+                            asr_window.Hide();
+
+                            wake_word_detected = false;
+                            ResetCommandCounts();
+
+                            Console.WriteLine("Stream finalized successfully.");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Error updating UI: {ex.Message}");
+                            // Handle exceptions (log them, show error messages, etc.)
+                        }
+                    }
+                });
+            }, TaskScheduler.FromCurrentSynchronizationContext()); // Ensure the continuation runs on the UI thread context
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in FinalizeStream: {ex.Message}");
+            // Handle exceptions (log them, show error messages, etc.)
+        }
     }
 
+
+    // function kun may makalap na audio ha mic
     private void OnDataAvailable(object sender, WaveInEventArgs e)
     {
         if (!is_running) return;
 
         try
         {
+            if (e.BytesRecorded > 0)
             {
-                if (e.BytesRecorded > 0)
+                short[] short_buffer = new short[e.BytesRecorded / 2];
+                Buffer.BlockCopy(e.Buffer, 0, short_buffer, 0, e.BytesRecorded);
+
+                bool is_speech = vad.HasSpeech(short_buffer);
+
+                if (is_speech)
                 {
-                    short[] short_buffer = new short[e.BytesRecorded / 2];
-                    Buffer.BlockCopy(e.Buffer, 0, short_buffer, 0, e.BytesRecorded);
-
-                    bool is_speech = vad.HasSpeech(short_buffer);
-
-                    if (is_speech)
+                    lock (streamLock)
                     {
-                        lock (streamLock)
+                        try
                         {
-                            try
+                            deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
+
+                            string partial_result = deep_speech_model.IntermediateDecode(deep_speech_stream).Trim();
+
+                            if (string.IsNullOrEmpty(partial_result)) return;
+
+                            current_partial = partial_result;
+
+                            if (!inactivity_timer.Enabled)
                             {
-                                deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
+                                inactivity_timer.Start();
+                            }
 
-                                string partial_result = deep_speech_model.IntermediateDecode(deep_speech_stream).Trim();
-
-                                if (string.IsNullOrEmpty(partial_result)) return;
-                                // Update the most recent partial result
-                                current_partial = partial_result;
-
-                                if (!inactivity_timer.Enabled)
+                            if (wake_word_required)
+                            {
+                                int new_click_count = partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1;
+                                if (new_click_count > click_command_count)
                                 {
-                                    // Start the inactivity timer if it isn't running
-                                    inactivity_timer.Start();
+                                    int clicks_to_perform = new_click_count - click_command_count;
+                                    for (int i = 0; i < clicks_to_perform; i++)
+                                    {
+                                        SimulateMouseClick();
+                                    }
+                                    click_command_count = new_click_count;
                                 }
 
-                                if (wake_word_required)
+                                if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
                                 {
-                                    int new_click_count = partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1;
-                                    if (new_click_count > click_command_count)
-                                    {
-                                        int clicks_to_perform = new_click_count - click_command_count;
-                                        for (int i = 0; i < clicks_to_perform; i++)
-                                        {
-                                            SimulateMouseClick();
-                                        }
-                                        click_command_count = new_click_count;
-                                    }
+                                    wake_word_detected = true;
 
-                                    if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
-                                    {
-                                        wake_word_detected = true;
+                                    partial_result = RemoveWakeWord(partial_result, wake_word);
+                                    click_command_count = 0;
 
-                                        partial_result = RemoveWakeWord(partial_result, wake_word);
-                                        click_command_count = 0;
+                                    main_window.Dispatcher.Invoke(() => main_window.SetListeningIcon(true));
 
-                                        // Update the listening icon in the main window
-                                        main_window.Dispatcher.Invoke(() => main_window.SetListeningIcon(true));
-
-                                        intent_window.Dispatcher.Invoke(() => intent_window.Show());
-
-                                        // Handle ASR window operations
-                                        asr_window.Dispatcher.Invoke(() =>
-                                        {
-                                            if (!asr_window.IsVisible)
-                                            {
-                                                asr_window.Show();
-                                            }
-
-                                            asr_window.AppendText($"You said: {partial_result}", true);
-
-                                            // Process command and send frame
-                                            ProcessCommand(partial_result);
-                                        });
-                                    }
-
-                                }
-                                else
-                                {
-                                    main_window.Dispatcher.Invoke(() =>
-                                    {
-                                        main_window.SetListeningIcon(true);
-                                    });
+                                    intent_window.Dispatcher.Invoke(() => intent_window.Show());
 
                                     asr_window.Dispatcher.Invoke(() =>
                                     {
@@ -412,89 +450,96 @@ class LiveTranscription
                                         {
                                             asr_window.Show();
                                         }
-                                        asr_window.AppendText("You said: " + partial_result, true);
+
+                                        asr_window.AppendText($"You said: {partial_result}", true);
+
                                         ProcessCommand(partial_result);
                                     });
                                 }
+
                             }
-                            catch (AccessViolationException ex)
+                            else // kun diri kailangan wake word
                             {
-                                Console.WriteLine($"AccessViolationException: {ex.Message}");
-                                deep_speech_model.FinishStream(deep_speech_stream);
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"General Exception: {ex.Message}");
+                                main_window.Dispatcher.Invoke(() =>
+                                {
+                                    main_window.SetListeningIcon(true);
+                                });
+
+                                intent_window.Dispatcher.Invoke(() => intent_window.Show());
+
+                                asr_window.Dispatcher.Invoke(() =>
+                                {
+                                    if (!asr_window.IsVisible)
+                                    {
+                                        asr_window.Show();
+                                    }
+
+
+                                    asr_window.AppendText("You said: " + partial_result, true);
+
+                                    ProcessCommand(partial_result);
+                                });
                             }
                         }
-                    }
-                    else
-                    {
-                        inactivity_timer.Stop();
-
-                        asr_window.Dispatcher.Invoke(() =>
+                        catch (AccessViolationException ex)
                         {
-                            if (asr_window.IsVisible)
-                            {
-                                try
-                                {
-                                    string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
-
-                                    socket.SendFrame(final_result_from_stream);
-                                    string receivedMessage = socket.ReceiveFrameString();
-
-                                    intent_window.Dispatcher.Invoke(() =>
-                                    {
-                                        intent_window.AppendText($"Intent: {receivedMessage}");
-                                    });
-
-                                    intent_window_timer.Start();
-                                    asr_window.Hide();
-
-                                    deep_speech_stream.Dispose();
-                                    deep_speech_stream = deep_speech_model.CreateStream();
-
-                                    wake_word_detected = false;
-                                    ResetCommandCounts();
-
-                                    inactivity_timer.Stop();
-                                    input_timer.Stop();
-
-                                }
-                                catch (Exception ex)
-                                {
-                                    // Handle exceptions (log them, show error messages, etc.)
-                                    Console.WriteLine($"Error: {ex.Message}");
-                                }
-                            }
-
-
-                        });
-
+                            Console.WriteLine($"AccessViolationException: {ex.Message}");
+                            deep_speech_model.FinishStream(deep_speech_stream);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"General Exception: {ex.Message}");
+                        }
                     }
                 }
                 else
                 {
-                    asr_window.Dispatcher.Invoke(() => asr_window.AppendText("No audio data recorded."));
+                    asr_window.Dispatcher.Invoke(() =>
+                    {
+                        if (asr_window.IsVisible)
+                        {
+                            try
+                            {
+                                string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
+
+                                socket.SendFrame(final_result_from_stream);
+                                string receivedMessage = socket.ReceiveFrameString();
+
+
+                                intent_window.Dispatcher.Invoke(() =>
+                                {
+                                    intent_window.AppendText($"Intent: {receivedMessage}");
+                                });
+
+                                intent_window_timer.Start();
+                                asr_window.Hide();
+
+                                deep_speech_stream.Dispose();
+                                deep_speech_stream = deep_speech_model.CreateStream();
+
+                                wake_word_detected = false;
+                                ResetCommandCounts();
+                            }
+                            catch (Exception ex)
+                            {
+                                // Handle exceptions (log them, show error messages, etc.)
+                                Console.WriteLine($"Error: {ex.Message}");
+                            }
+                        }
+
+
+                    });
+
                 }
+            }
+            else
+            {
+                asr_window.Dispatcher.Invoke(() => asr_window.AppendText("No audio data recorded."));
             }
         }
         catch (Exception ex)
         {
             asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"DataAvailable Error: {ex.Message}"));
-        }
-    }
-
-    private void OnRecordingStopped(object sender, StoppedEventArgs e) // wip
-    {
-        if (e.Exception != null)
-        {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Recording Stopped Error: {e.Exception.Message}"));
-        }
-
-        if (is_running)
-        {
-            StartTranscription();
         }
     }
 

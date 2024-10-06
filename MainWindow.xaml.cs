@@ -23,6 +23,12 @@ namespace ATEDNIULI
             var bg_color = (Brush)new BrushConverter().ConvertFromString("#77ACA2");
             Topmost = true;
             Background = bg_color;
+
+            Dispatcher.UnhandledException += (sender, e) =>
+            {
+                Console.WriteLine("Dispatcher unhandled exception: " + e.Exception);
+                // Log the exception or take other actions
+            };
         }
 
         public void SetListeningIcon(bool isActive)

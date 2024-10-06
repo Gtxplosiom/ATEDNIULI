@@ -36,6 +36,12 @@ namespace ATEDNIULI
 
             // Store the reference to the MainWindow
             main_window = mainWindow;
+
+            Dispatcher.UnhandledException += (sender, e) =>
+            {
+                Console.WriteLine("Dispatcher unhandled exception: " + e.Exception);
+                // Log the exception or take other actions
+            };
         }
 
 
