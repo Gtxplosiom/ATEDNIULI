@@ -54,6 +54,7 @@ class LiveTranscription
     private int volume_up_command_count = 0;
     private int volume_down_command_count = 0;
     private int search_command_count = 0;
+    private int show_items_command_count = 0;
 
     private int switch_command_count = 0;
     private int left_command_count = 0;
@@ -119,7 +120,7 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta15.pbmm";
-    string scorer_path = @"assets\models\waray_english_2.scorer";
+    string scorer_path = @"assets\models\idrismunir.scorer";
     string ww_scorer_path = @"assets\models\wake_word.scorer";
 
     // importante para diri mag error an memory corrupt ha deepspeech model
@@ -619,6 +620,8 @@ class LiveTranscription
 
         // Handle other commands
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
+        HandleCommand("show items", transcription, ref show_items_command_count, () => OpenShowItemsWindow());
+        HandleCommand("stop showing", transcription, ref show_items_command_count, () => CloseShowItemsWindow());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(Keys.ControlKey)); // Customize as needed
         HandleCommand("open chrome", transcription, ref chrome_command_count, () => StartProcess("chrome"));
@@ -698,6 +701,28 @@ class LiveTranscription
         }
 
         return text;
+    }
+
+    private ShowItems showItemsWindow; // Field to hold the window reference
+
+    private void OpenShowItemsWindow()
+    {
+        // If the window is already open, don't open another instance
+        if (showItemsWindow == null || !showItemsWindow.IsVisible)
+        {
+            showItemsWindow = new ShowItems();
+            showItemsWindow.Show();
+        }
+    }
+
+    private void CloseShowItemsWindow()
+    {
+        // Check if the window is currently open and close it
+        if (showItemsWindow != null && showItemsWindow.IsVisible)
+        {
+            showItemsWindow.Close();
+            showItemsWindow = null; // Reset the reference after closing
+        }
     }
 
     public static void ScrollUp(int steps = 120) // Adjust steps as needed
@@ -828,6 +853,7 @@ class LiveTranscription
         volume_up_command_count = 0;
         volume_down_command_count = 0;
         search_command_count = 0;
+        show_items_command_count = 0;
 
         switch_command_count = 0;
         left_command_count = 0;
