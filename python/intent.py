@@ -16,6 +16,7 @@ class IntentRecognition:
         self.intent_labels = None
         self.model = load_model("assets/models/intent_model_1/my_model.keras")
         self.prep_data()
+        
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind("tcp://localhost:6969")
@@ -23,7 +24,7 @@ class IntentRecognition:
         # Send a "ready" message once the setup is complete
         notify_socket = self.context.socket(zmq.PUSH)
         notify_socket.connect("tcp://localhost:6970")
-        notify_socket.send_string("Model is ready")
+        notify_socket.send_string("Intent recognition model loaded")
 
     def prep_data(self):
         with open('assets/models/intent_model_1/tokenizer.pickle', 'rb') as handle:

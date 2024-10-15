@@ -17,6 +17,9 @@ using Python.Runtime;
 using System.Text;
 using NetMQ;
 using NetMQ.Sockets;
+using System.Collections.Generic;
+using Newtonsoft.Json;
+using System.Threading;
 
 class LiveTranscription
 {
@@ -73,6 +76,7 @@ class LiveTranscription
     string app_directory = Directory.GetCurrentDirectory(); // possible gamiton labi pag reference hin assets kay para robust hiya ha iba iba na systems
 
     private RequestSocket socket;
+    private SubscriberSocket pullsocket;
 
     private System.Timers.Timer inactivity_timer;
     private System.Timers.Timer intent_window_timer;
@@ -140,6 +144,7 @@ class LiveTranscription
         };
 
         // initialize python
+        // initialize intent recognition
         Task.Run(() =>
         {
             ProcessStartInfo start = new ProcessStartInfo
@@ -177,24 +182,24 @@ class LiveTranscription
         });
 
         // pag communicate ha python code ha fld nga ma wait anay bago mag load an python bago mag continue ha rest of the program
-        using (var notifySocket = new PullSocket("tcp://localhost:6970"))
+        using (var notifySocketIR = new PullSocket("tcp://localhost:6970"))
         {
             Console.WriteLine("Waiting for the model to be ready...");
-            string readyMessage = notifySocket.ReceiveFrameString();
+            string readyMessage = notifySocketIR.ReceiveFrameString();
             Console.WriteLine(readyMessage); // Print the "ready" message
         }
 
         // pan run hin code
-        InitializeSocket();
+        InitializeIntentSocket();
 
         // timers
         InitializeTimer();
+
+        DetectScreen();
     }
 
-
-
     // zmq stuffs
-    private void InitializeSocket()
+    private void InitializeIntentSocket()
     {
         if (socket != null && socket.IsDisposed == false)
         {
@@ -216,6 +221,94 @@ class LiveTranscription
         deep_speech_model.EnableExternalScorer(scorer_path);
         deep_speech_model.AddHotWord("hello", 7);
     }
+
+    public class DetectionResult
+    {
+        public int TileX { get; set; }
+        public int TileY { get; set; }
+        public List<Detection> Detections { get; set; }
+    }
+
+    public class Detection
+    {
+        public int X { get; set; }          // x coordinate
+        public int Y { get; set; }          // y coordinate
+        public string ClassName { get; set; } // class name
+    }
+
+    public void DetectScreen()
+    {
+        // Ensure the socket is initialized
+        if (pullsocket == null)
+        {
+            pullsocket = new SubscriberSocket("tcp://localhost:4200");
+            pullsocket.Subscribe(""); // Subscribe to all messages
+        }
+
+        Task detectionTask = Task.Run(() =>
+        {
+            ProcessStartInfo start = new ProcessStartInfo
+            {
+                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe",
+                Arguments = "C:\\Users\\super.admin\\Desktop\\Capstone\\ATEDNIULI\\edn-app\\ATEDNIULI\\python\\tiled_inference_optimized_screenshot_c.py",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                EnvironmentVariables =
+                {
+                    { "PYTHONIOENCODING", "utf-8:replace" }
+                }
+            };
+
+            using (Process process = Process.Start(start))
+            {
+                // Optionally read the output of the Python script
+                using (var reader = process.StandardOutput)
+                {
+                    string result = reader.ReadToEnd();
+                    Console.WriteLine(result);
+                }
+
+                // Optionally read the error output of the Python script
+                using (var errorReader = process.StandardError)
+                {
+                    string error = errorReader.ReadToEnd();
+                    if (!string.IsNullOrEmpty(error))
+                    {
+                        Console.WriteLine($"Error: {error}");
+                    }
+                }
+            }
+        });
+
+        // Wait for the task to complete
+        detectionTask.Wait();
+
+        Console.WriteLine("Waiting for detection results...");
+
+        try
+        {
+            string receivedMessage = pullsocket.ReceiveFrameString(); // Receiving the list of detected objects
+
+            // Parse the received JSON message
+            var detectionResults = JsonConvert.DeserializeObject<List<DetectionResult>>(receivedMessage);
+
+            // Process detections (for example, log or use them in the app)
+            foreach (var detectionResult in detectionResults)
+            {
+                Console.WriteLine($"Tile: ({detectionResult.TileX}, {detectionResult.TileY}) - Detected objects: {detectionResult.Detections.Count}");
+                foreach (var detection in detectionResult.Detections)
+                {
+                    Console.WriteLine($"Detected: {detection.ClassName} at ({detection.X}, {detection.Y})");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error receiving detection results: {ex.Message}");
+        }
+    }
+
 
     // transcfiption function
     public void StartTranscription()
@@ -388,7 +481,7 @@ class LiveTranscription
     }
 
 
-    // function kun may makalap na audio ha mic
+    // function kun may makalap na audio an mic
     private void OnDataAvailable(object sender, WaveInEventArgs e)
     {
         if (!is_running) return;
@@ -474,7 +567,6 @@ class LiveTranscription
                                     {
                                         asr_window.Show();
                                     }
-
 
                                     asr_window.AppendText("You said: " + partial_result, true);
 

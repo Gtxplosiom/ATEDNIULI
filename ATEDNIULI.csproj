@@ -82,6 +82,9 @@
     <Reference Include="NetMQ, Version=4.0.1.13, Culture=neutral, PublicKeyToken=a6decef4ddc58b3a, processorArchitecture=MSIL">
       <HintPath>packages\NetMQ.4.0.1.13\lib\net47\NetMQ.dll</HintPath>
     </Reference>
+    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>packages\Newtonsoft.Json.13.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="OpenCvSharp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=6adad1e807fea099, processorArchitecture=MSIL">
       <HintPath>packages\OpenCvSharp4.4.10.0.20240616\lib\netstandard2.0\OpenCvSharp.dll</HintPath>
     </Reference>
@@ -248,6 +251,9 @@
     <None Include="assets\models\intent_model_1\train_intents_1.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="assets\models\official-train-1-best-640.onnx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="assets\models\please_work\intent_labels.pickle">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -302,6 +308,9 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Resource Include="assets\classes.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Resource>
     <Content Include="assets\models\please_work\pleasework.py" />
     <Content Include="python\intent.py">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
@@ -309,7 +318,7 @@
     <Content Include="python\intent_recognition.py">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="python\tiled_inference_optimized_screenshot.py">
+    <Content Include="python\tiled_inference_optimized_screenshot_c.py">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="python\__init__.py">
