@@ -1,5 +1,6 @@
 ﻿using ATEDNIULI;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media.Imaging;
@@ -12,17 +13,23 @@ namespace ATEDNIULI
         private BackgroundWorker background_worker;
         private MainWindow main_window;
         private IntentWindow intent_window;
+        private ShowItems show_items;
         private cameramouse camera_mouse;
 
         public ASRWindow(MainWindow mainWindow)
         {
             InitializeComponent();
+
             camera_mouse = new cameramouse();
+
+            var tagItems = new List<TagItem>();
+
+            show_items = new ShowItems(tagItems);
 
             // Initialize IntentWindow
             intent_window = new IntentWindow(mainWindow);
 
-            live_transcription = new LiveTranscription(this, intent_window, mainWindow, camera_mouse);
+            live_transcription = new LiveTranscription(this, intent_window, mainWindow, show_items, camera_mouse);
 
             // Initialize BackgroundWorker
             background_worker = new BackgroundWorker();

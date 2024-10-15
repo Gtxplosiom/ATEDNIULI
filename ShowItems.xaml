@@ -7,7 +7,6 @@
         Background="Transparent" 
         Topmost="True" 
         SizeToContent="Manual"
-        MouseDown="Window_MouseDown"
         WindowStartupLocation="CenterScreen">
         <!-- Added this line -->
     <Canvas x:Name="OverlayCanvas">

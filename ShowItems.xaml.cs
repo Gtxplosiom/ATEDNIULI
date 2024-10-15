@@ -10,7 +10,7 @@ namespace ATEDNIULI
     {
         private readonly List<TagItem> _items;
 
-        public ShowItems()
+        public ShowItems(List<TagItem> items)
         {
             InitializeComponent();
 
@@ -22,14 +22,7 @@ namespace ATEDNIULI
             Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
             Top = (SystemParameters.PrimaryScreenHeight - Height) / 2;
 
-            _items = new List<TagItem>
-            {
-                new TagItem { Tag = "1 - Item A", CenterX = 100, CenterY = 100 },
-                new TagItem { Tag = "2 - Item B", CenterX = 150, CenterY = 110 },
-                new TagItem { Tag = "3 - Item C", CenterX = 300, CenterY = 200 },
-                new TagItem { Tag = "4 - Item D", CenterX = 100, CenterY = 100 }, // Overlapping item for testing
-                new TagItem { Tag = "5 - Item E", CenterX = 250, CenterY = 250 }
-            };
+            _items = items;
 
             AddTagsToCanvas();
         }
@@ -58,7 +51,7 @@ namespace ATEDNIULI
                 textBlock.MouseLeave += Tag_MouseLeave;
 
                 // Add the TextBlock to the Canvas
-                OverlayCanvas.Children.Add(textBlock); // Add to the correct Canvas
+                OverlayCanvas.Children.Add(textBlock);
             }
         }
 
@@ -77,17 +70,9 @@ namespace ATEDNIULI
         {
             ((TextBlock)sender).Background = Brushes.LightGray;
         }
-
-        private void Window_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            // Close or drag the window if needed
-            if (e.ChangedButton == MouseButton.Left)
-            {
-                //
-            }
-        }
     }
 
+    // Class to represent items with tags and coordinates
     public class TagItem
     {
         public string Tag { get; set; }

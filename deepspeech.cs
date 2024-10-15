@@ -20,12 +20,14 @@ using NetMQ.Sockets;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using System.Threading;
+using OpenCvSharp;
 
 class LiveTranscription
 {
     private readonly ASRWindow asr_window;
     private readonly IntentWindow intent_window;
     private readonly MainWindow main_window;
+    private readonly ShowItems show_items;
     private readonly cameramouse camera_mouse;
     private WaveInEvent wave_in_event;
     private DeepSpeechStream deep_speech_stream;
@@ -130,11 +132,12 @@ class LiveTranscription
     // importante para diri mag error an memory corrupt ha deepspeech model
     private readonly object streamLock = new object();
 
-    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, cameramouse camera_mouse) // 
+    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, cameramouse camera_mouse) // 
     {
         this.asr_window = asr_window ?? throw new ArgumentNullException(nameof(asr_window));
         this.intent_window = intent_window ?? throw new ArgumentNullException(nameof(intent_window));
         this.main_window = main_window ?? throw new ArgumentNullException(nameof(main_window));
+        this.show_items = show_items ?? throw new ArgumentNullException(nameof(show_items));
         this.camera_mouse = camera_mouse ?? throw new ArgumentNullException(nameof(camera_mouse));
         vad = new WebRtcVad
         {
@@ -249,27 +252,21 @@ class LiveTranscription
         {
             ProcessStartInfo start = new ProcessStartInfo
             {
-                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe",
-                Arguments = "C:\\Users\\super.admin\\Desktop\\Capstone\\ATEDNIULI\\edn-app\\ATEDNIULI\\python\\tiled_inference_optimized_screenshot_c.py",
+                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe", // Your Python executable path
+                Arguments = @"C:\Users\super.admin\Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\python\tiled_inference_optimized_screenshot_c.py", // Your Python script path
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                EnvironmentVariables =
-                {
-                    { "PYTHONIOENCODING", "utf-8:replace" }
-                }
+                RedirectStandardError = true
             };
 
             using (Process process = Process.Start(start))
             {
-                // Optionally read the output of the Python script
                 using (var reader = process.StandardOutput)
                 {
                     string result = reader.ReadToEnd();
                     Console.WriteLine(result);
                 }
 
-                // Optionally read the error output of the Python script
                 using (var errorReader = process.StandardError)
                 {
                     string error = errorReader.ReadToEnd();
@@ -281,7 +278,6 @@ class LiveTranscription
             }
         });
 
-        // Wait for the task to complete
         detectionTask.Wait();
 
         Console.WriteLine("Waiting for detection results...");
@@ -293,15 +289,29 @@ class LiveTranscription
             // Parse the received JSON message
             var detectionResults = JsonConvert.DeserializeObject<List<DetectionResult>>(receivedMessage);
 
-            // Process detections (for example, log or use them in the app)
+            // Create tag items based on detection results
+            List<TagItem> tagItems = new List<TagItem>();
+            int counter = 1;
+
             foreach (var detectionResult in detectionResults)
             {
-                Console.WriteLine($"Tile: ({detectionResult.TileX}, {detectionResult.TileY}) - Detected objects: {detectionResult.Detections.Count}");
                 foreach (var detection in detectionResult.Detections)
                 {
-                    Console.WriteLine($"Detected: {detection.ClassName} at ({detection.X}, {detection.Y})");
+                    tagItems.Add(new TagItem
+                    {
+                        Tag = $"{counter++} - {detection.ClassName}",
+                        CenterX = detection.X,
+                        CenterY = detection.Y
+                    });
                 }
             }
+
+            // Open the ShowItems window with the detected tag items
+            show_items.Dispatcher.Invoke(() =>
+            {
+                ShowItems showItemsWindow = new ShowItems(tagItems);
+                showItemsWindow.Show();
+            });
         }
         catch (Exception ex)
         {
@@ -712,7 +722,7 @@ class LiveTranscription
 
         // Handle other commands
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
-        HandleCommand("show items", transcription, ref show_items_command_count, () => OpenShowItemsWindow());
+        HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => CloseShowItemsWindow());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(Keys.ControlKey)); // Customize as needed
@@ -796,16 +806,6 @@ class LiveTranscription
     }
 
     private ShowItems showItemsWindow; // Field to hold the window reference
-
-    private void OpenShowItemsWindow()
-    {
-        // If the window is already open, don't open another instance
-        if (showItemsWindow == null || !showItemsWindow.IsVisible)
-        {
-            showItemsWindow = new ShowItems();
-            showItemsWindow.Show();
-        }
-    }
 
     private void CloseShowItemsWindow()
     {
