@@ -6,7 +6,7 @@ import zmq
 import json
 
 class YOLOv8:
-    def __init__(self, onnx_model, confidence_thres=0.5, iou_thres=0.5, tile_size=640, overlap=80, model_input_size=640):
+    def __init__(self, onnx_model, confidence_thres=0.5, iou_thres=0.5, tile_size=400, overlap=40, model_input_size=640):
         self.onnx_model = onnx_model
         self.confidence_thres = confidence_thres
         self.iou_thres = iou_thres
@@ -52,7 +52,7 @@ class YOLOv8:
         image_data = np.transpose(image_data, (2, 0, 1))  # Channel first
         return np.expand_dims(image_data, axis=0).astype(np.float32)
 
-    def postprocess(self, img, output):
+    def postprocess(self, img, output, tile_x_offset, tile_y_offset):
         outputs = np.transpose(np.squeeze(output[0]))
         boxes, scores, class_ids = [], [], []
         detections = []  # To store the (x, y, class_name) for detected items
@@ -69,15 +69,15 @@ class YOLOv8:
 
             if max_score >= self.confidence_thres:
                 class_id = np.argmax(classes_scores)
-                
+
                 # Check if class_id is within the valid range
                 if class_id >= len(self.classes):
                     print(f"Warning: Detected class_id {class_id} out of bounds (max {len(self.classes) - 1}).")
                     continue  # Skip to the next detection
                 
                 x, y, w, h = row[:4]
-                left = int((x - w / 2) * x_factor)
-                top = int((y - h / 2) * y_factor)
+                left = int((x - w / 2) * x_factor) + tile_x_offset  # Adjust x
+                top = int((y - h / 2) * y_factor) + tile_y_offset  # Adjust y
                 width = int(w * x_factor)
                 height = int(h * y_factor)
 
@@ -151,8 +151,7 @@ class YOLOv8:
         num_tiles_x = int(np.ceil((img_width - self.overlap) / (self.tile_size - self.overlap)))
         num_tiles_y = int(np.ceil((img_height - self.overlap) / (self.tile_size - self.overlap)))
         
-        output_img = np.zeros((img_height, img_width, 3), dtype=np.uint8)
-
+        output_img = img.copy()  # Use original img for drawing
         all_detections = []  # List to store all detected (x, y, class_name)
 
         for i in range(num_tiles_x):
@@ -166,14 +165,12 @@ class YOLOv8:
                 tile = img[y1:y2, x1:x2]
                 tile_data = self.preprocess(tile)
                 outputs = session.run(None, {model_inputs[0].name: tile_data})
-                detections, detections_from_tile = self.postprocess(tile, outputs)
+                detections, detections_from_tile = self.postprocess(tile, outputs, x1, y1)  # Pass offsets
 
-                output_img[y1:y2, x1:x2] = detections
-                
                 # Extend the list with detections from this tile
                 all_detections.extend(detections_from_tile)
 
-        cv2.imwrite("Output.png", output_img)
+        cv2.imwrite("Output.png", output_img)  # Save the output image
         cv2.waitKey(0)
 
         self.send_detections(all_detections)
