@@ -81,6 +81,9 @@ namespace ATEDNIULI
             }
         }
 
+        private Point previousNosePosition = new Point(0, 0);
+        private bool isFirstFrame = true; // To handle the very first frame where there's no previous data
+
         private void CameraLoop()
         {
             using (var detector = Dlib.GetFrontalFaceDetector())
@@ -98,9 +101,11 @@ namespace ATEDNIULI
                 int screenHeight = GetSystemMetrics(1);
                 int webcamWidth = 640;
                 int webcamHeight = 480;
-                double roiPercentage = 0.20;
+                double roiPercentage = 0.05;
                 int roiWidth = (int)(webcamWidth * roiPercentage);
                 int roiHeight = (int)(webcamHeight * roiPercentage);
+
+                // Set initial ROI position
                 int roiX = (webcamWidth - roiWidth) / 2;
                 int roiY = (webcamHeight - roiHeight) / 2;
 
@@ -121,6 +126,7 @@ namespace ATEDNIULI
                                 break;
                             }
 
+                            Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
                             Cv2.Flip(frame, frame, FlipMode.Y);
 
                             using (var gray = new Mat())
@@ -139,90 +145,81 @@ namespace ATEDNIULI
                                     }
 
                                     // Reference point for comparison (nose point)
-                                    var nosePoint = landmarksList[30];
+                                    var targetNosePoint = landmarksList[30];
 
-                                    // Measure distance between the nose and eyebrow points
-                                    bool eyebrowsRaised = false;
-                                    double threshold = 40.0; // Adjust threshold for raised eyebrows detection
-                                    double leftEyelidToBrowDistance = 0.0;
-                                    double rightEyelidToBrowDistance = 0.0;
-
-                                    // Draw left eyebrow and calculate distance to upper eyelid
-                                    for (int i = 17; i <= 21; i++)
+                                    if (isFirstFrame)
                                     {
-                                        var eyebrowPoint = landmarksList[i];
-                                        Cv2.Circle(frame, new OpenCvSharp.Point(eyebrowPoint.X, eyebrowPoint.Y), 3, Scalar.Blue, -1); // Draw blue dots for left eyebrow
+                                        // On the first frame, initialize the previousNosePosition with the target position
+                                        previousNosePosition = targetNosePoint;
+                                        isFirstFrame = false;
                                     }
 
-                                    // Draw right eyebrow and calculate distance to upper eyelid
-                                    for (int i = 22; i <= 26; i++)
-                                    {
-                                        var eyebrowPoint = landmarksList[i];
-                                        Cv2.Circle(frame, new OpenCvSharp.Point(eyebrowPoint.X, eyebrowPoint.Y), 3, Scalar.Green, -1); // Draw green dots for right eyebrow
-                                    }
+                                    // Smooth the movement using the method similar to SmoothMoveTo
+                                    int steps = 10; // Number of steps for smooth transition
+                                    double smoothingFactor = 0.5; // Adjust smoothing factor
 
-                                    // Calculate left upper eyelid to brow distance
-                                    for (int i = 37; i <= 38; i++)
+                                    // Gradually interpolate from previous nose position to the new target position
+                                    for (int i = 0; i <= steps; i++)
                                     {
-                                        var leftUpperEyelid = landmarksList[i];
-                                        Cv2.Circle(frame, new OpenCvSharp.Point(leftUpperEyelid.X, leftUpperEyelid.Y), 3, Scalar.Green, -1);
-                                        for (int j = 17; j <= 21; j++)
+                                        // Interpolated X and Y positions
+                                        int smoothedNoseX = (int)(previousNosePosition.X + (targetNosePoint.X - previousNosePosition.X) * (i / (double)steps) * (1 - smoothingFactor));
+                                        int smoothedNoseY = (int)(previousNosePosition.Y + (targetNosePoint.Y - previousNosePosition.Y) * (i / (double)steps) * (1 - smoothingFactor));
+
+                                        // Update the smoothed position of the nose
+                                        var smoothedNosePoint = new Point(smoothedNoseX, smoothedNoseY);
+
+                                        // Draw the smoothed nose point on the frame
+                                        Cv2.Circle(frame, new OpenCvSharp.Point(smoothedNosePoint.X, smoothedNosePoint.Y), 4, Scalar.Red, -1);
+
+                                        // Adjust the ROI based on the smoothed nose point's position
+                                        int edgeThreshold = 0;
+
+                                        if (smoothedNosePoint.X < roiX + edgeThreshold)
                                         {
-                                            var leftEyebrowPoint = landmarksList[j];
-                                            leftEyelidToBrowDistance += Math.Abs(leftUpperEyelid.Y - leftEyebrowPoint.Y); // Distance between upper eyelid and eyebrow
+                                            roiX = Clamp(roiX - (roiX + edgeThreshold - smoothedNosePoint.X), 0, webcamWidth - roiWidth);
                                         }
-                                    }
-                                    leftEyelidToBrowDistance /= 5; // Average distance for left side
-
-                                    // Calculate right upper eyelid to brow distance
-                                    for (int i = 43; i <= 44; i++)
-                                    {
-                                        var rightUpperEyelid = landmarksList[i];
-                                        Cv2.Circle(frame, new OpenCvSharp.Point(rightUpperEyelid.X, rightUpperEyelid.Y), 3, Scalar.Green, -1);
-                                        for (int j = 22; j <= 26; j++)
+                                        else if (smoothedNosePoint.X > roiX + roiWidth - edgeThreshold)
                                         {
-                                            var rightEyebrowPoint = landmarksList[j];
-                                            rightEyelidToBrowDistance += Math.Abs(rightUpperEyelid.Y - rightEyebrowPoint.Y); // Distance between upper eyelid and eyebrow
+                                            roiX = Clamp(roiX + (smoothedNosePoint.X - (roiX + roiWidth - edgeThreshold)), 0, webcamWidth - roiWidth);
                                         }
+
+                                        if (smoothedNosePoint.Y < roiY + edgeThreshold)
+                                        {
+                                            roiY = Clamp(roiY - (roiY + edgeThreshold - smoothedNosePoint.Y), 0, webcamHeight - roiHeight);
+                                        }
+                                        else if (smoothedNosePoint.Y > roiY + roiHeight - edgeThreshold)
+                                        {
+                                            roiY = Clamp(roiY + (smoothedNosePoint.Y - (roiY + roiHeight - edgeThreshold)), 0, webcamHeight - roiHeight);
+                                        }
+
+                                        // Update target position for the mouse if the smoothed nose is within the ROI
+                                        if (smoothedNosePoint.X >= roiX && smoothedNosePoint.X <= roiX + roiWidth &&
+                                            smoothedNosePoint.Y >= roiY && smoothedNosePoint.Y <= roiY + roiHeight)
+                                        {
+                                            lock (positionLock)
+                                            {
+                                                targetPosition = new TargetPosition(
+                                                    (int)((smoothedNosePoint.X - roiX) * scalingFactorX),
+                                                    (int)((smoothedNosePoint.Y - roiY) * scalingFactorY)
+                                                );
+                                            }
+                                        }
+
+                                        // Update the previous nose position with the current smoothed position
+                                        previousNosePosition = smoothedNosePoint;
+
+                                        // Draw the updated ROI rectangle
+                                        Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2);
                                     }
-                                    rightEyelidToBrowDistance /= 5; // Average distance for right side
 
-                                    // Update the distance text on the frame
-                                    Cv2.PutText(frame, $"Eyelid to brow distance - left: {leftEyelidToBrowDistance} right: {rightEyelidToBrowDistance}", new OpenCvSharp.Point(10, 20), HersheyFonts.HersheySimplex, 1, Scalar.White, 2);
-
-                                    // Check if the eyelid-to-eyebrow distances exceed the threshold
-                                    eyebrowsRaised = leftEyelidToBrowDistance > threshold || rightEyelidToBrowDistance > threshold;
-
-                                    // Indicate the result visually
-                                    if (eyebrowsRaised)
-                                    {
-                                        Cv2.PutText(frame, "Eyebrows Raised", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.White, 2);
-                                    }
-                                    else
-                                    {
-                                        Cv2.PutText(frame, "Eyebrows Normal", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.White, 2);
-                                    }
-
-                                    // Draw nose point
-                                    Cv2.Circle(frame, new OpenCvSharp.Point(nosePoint.X, nosePoint.Y), 4, Scalar.Red, -1);
-
-                                    // Update target position for the mouse
-                                    lock (positionLock) // Lock access to targetPosition
-                                    {
-                                        targetPosition = new TargetPosition(
-                                            (int)((nosePoint.X - roiX) * scalingFactorX),
-                                            (int)((nosePoint.Y - roiY) * scalingFactorY)
-                                        );
-                                    }
+                                    Cv2.ImShow("Camera", frame);
                                 }
-                                Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2); // Draw ROI rectangle
-                            }
-                            Cv2.ImShow("Camera", frame);
-                        }
 
-                        if (Cv2.WaitKey(1) == 27) // Exit if 'ESC' is pressed
-                        {
-                            break;
+                                if (Cv2.WaitKey(1) == 27) // Exit if 'ESC' is pressed
+                                {
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -231,6 +228,15 @@ namespace ATEDNIULI
                     Console.WriteLine($"Error in CameraLoop: {ex.Message}");
                 }
             }
+        }
+
+
+
+        private int Clamp(int value, int min, int max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
         }
 
         private void MouseMovementLoop()
