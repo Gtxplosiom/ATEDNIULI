@@ -61,7 +61,7 @@ class YOLOv8:
         x_factor, y_factor = w / self.model_input_size, h / self.model_input_size
 
         min_size = 10
-        max_size = 75
+        max_size = 200
 
         for row in outputs:
             classes_scores = row[4:]  # Assuming the first 4 elements are x, y, w, h

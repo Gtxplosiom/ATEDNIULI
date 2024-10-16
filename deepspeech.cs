@@ -126,7 +126,7 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta15.pbmm";
-    string scorer_path = @"assets\models\idrismunir.scorer";
+    string scorer_path = @"assets\models\demo_3.scorer";
     string ww_scorer_path = @"assets\models\wake_word.scorer";
 
     // importante para diri mag error an memory corrupt ha deepspeech model
@@ -198,7 +198,7 @@ class LiveTranscription
         // timers
         InitializeTimer();
 
-        DetectScreen();
+        //DetectScreen();
     }
 
     // zmq stuffs
@@ -494,157 +494,146 @@ class LiveTranscription
     // function kun may makalap na audio an mic
     private void OnDataAvailable(object sender, WaveInEventArgs e)
     {
-        if (!is_running) return;
-
-        try
+        if (!is_running || e.BytesRecorded <= 0)
         {
-            if (e.BytesRecorded > 0)
-            {
-                short[] short_buffer = new short[e.BytesRecorded / 2];
-                Buffer.BlockCopy(e.Buffer, 0, short_buffer, 0, e.BytesRecorded);
-
-                bool is_speech = vad.HasSpeech(short_buffer);
-
-                if (is_speech)
-                {
-                    lock (streamLock)
-                    {
-                        try
-                        {
-                            deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
-
-                            string partial_result = deep_speech_model.IntermediateDecode(deep_speech_stream).Trim();
-
-                            if (string.IsNullOrEmpty(partial_result)) return;
-
-                            current_partial = partial_result;
-
-                            if (!inactivity_timer.Enabled)
-                            {
-                                inactivity_timer.Start();
-                            }
-
-                            if (wake_word_required)
-                            {
-                                int new_click_count = partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1;
-                                if (new_click_count > click_command_count)
-                                {
-                                    int clicks_to_perform = new_click_count - click_command_count;
-                                    for (int i = 0; i < clicks_to_perform; i++)
-                                    {
-                                        SimulateMouseClick();
-                                    }
-                                    click_command_count = new_click_count;
-                                }
-
-                                if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
-                                {
-                                    wake_word_detected = true;
-
-                                    partial_result = RemoveWakeWord(partial_result, wake_word);
-                                    click_command_count = 0;
-
-                                    main_window.Dispatcher.Invoke(() => main_window.SetListeningIcon(true));
-
-                                    intent_window.Dispatcher.Invoke(() => intent_window.Show());
-
-                                    asr_window.Dispatcher.Invoke(() =>
-                                    {
-                                        if (!asr_window.IsVisible)
-                                        {
-                                            asr_window.Show();
-                                        }
-
-                                        asr_window.AppendText($"You said: {partial_result}", true);
-
-                                        ProcessCommand(partial_result);
-                                    });
-                                }
-
-                            }
-                            else // kun diri kailangan wake word
-                            {
-                                main_window.Dispatcher.Invoke(() =>
-                                {
-                                    main_window.SetListeningIcon(true);
-                                });
-
-                                intent_window.Dispatcher.Invoke(() => intent_window.Show());
-
-                                asr_window.Dispatcher.Invoke(() =>
-                                {
-                                    if (!asr_window.IsVisible)
-                                    {
-                                        asr_window.Show();
-                                    }
-
-                                    asr_window.AppendText("You said: " + partial_result, true);
-
-                                    ProcessCommand(partial_result);
-                                });
-                            }
-                        }
-                        catch (AccessViolationException ex)
-                        {
-                            Console.WriteLine($"AccessViolationException: {ex.Message}");
-                            deep_speech_model.FinishStream(deep_speech_stream);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"General Exception: {ex.Message}");
-                        }
-                    }
-                }
-                else
-                {
-                    asr_window.Dispatcher.Invoke(() =>
-                    {
-                        if (asr_window.IsVisible)
-                        {
-                            try
-                            {
-                                string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
-
-                                socket.SendFrame(final_result_from_stream);
-                                string receivedMessage = socket.ReceiveFrameString();
-
-
-                                intent_window.Dispatcher.Invoke(() =>
-                                {
-                                    intent_window.AppendText($"Intent: {receivedMessage}");
-                                });
-
-                                intent_window_timer.Start();
-                                asr_window.Hide();
-
-                                deep_speech_stream.Dispose();
-                                deep_speech_stream = deep_speech_model.CreateStream();
-
-                                wake_word_detected = false;
-                                ResetCommandCounts();
-                            }
-                            catch (Exception ex)
-                            {
-                                // Handle exceptions (log them, show error messages, etc.)
-                                Console.WriteLine($"Error: {ex.Message}");
-                            }
-                        }
-
-
-                    });
-
-                }
-            }
-            else
+            if (e.BytesRecorded <= 0)
             {
                 asr_window.Dispatcher.Invoke(() => asr_window.AppendText("No audio data recorded."));
             }
+            return;
         }
-        catch (Exception ex)
+
+        short[] short_buffer = new short[e.BytesRecorded / 2];
+        Buffer.BlockCopy(e.Buffer, 0, short_buffer, 0, e.BytesRecorded);
+
+        if (!vad.HasSpeech(short_buffer))
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"DataAvailable Error: {ex.Message}"));
+            HandleNoSpeechDetected();
+            return;
+        }
+
+        ProcessSpeech(short_buffer);
+    }
+
+    private void ProcessSpeech(short[] short_buffer)
+    {
+        lock (streamLock)
+        {
+            try
+            {
+                deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
+                string partial_result = deep_speech_model.IntermediateDecode(deep_speech_stream).Trim();
+
+                if (string.IsNullOrEmpty(partial_result)) return;
+
+                current_partial = partial_result;
+                ResetInactivityTimer();
+
+                if (wake_word_required)
+                {
+                    HandleWakeWord(partial_result);
+                }
+                else
+                {
+                    ShowTranscription(partial_result);
+                }
+            }
+            catch (AccessViolationException ex)
+            {
+                Console.WriteLine($"AccessViolationException: {ex.Message}");
+                deep_speech_model.FinishStream(deep_speech_stream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"General Exception: {ex.Message}");
+            }
         }
     }
+
+    private void HandleWakeWord(string partial_result)
+    {
+        int new_click_count = CountClicks(partial_result);
+
+        if (new_click_count > click_command_count)
+        {
+            SimulateMouseClicks(new_click_count);
+        }
+
+        if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            wake_word_detected = true;
+            partial_result = RemoveWakeWord(partial_result, wake_word);
+            click_command_count = 0;
+
+            main_window.Dispatcher.Invoke(() => main_window.SetListeningIcon(true));
+            ShowTranscription(partial_result);
+        }
+    }
+
+    private int CountClicks(string partial_result)
+    {
+        return partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1;
+    }
+
+    private void SimulateMouseClicks(int new_click_count)
+    {
+        for (int i = 0; i < new_click_count - click_command_count; i++)
+        {
+            SimulateMouseClick();
+        }
+        click_command_count = new_click_count;
+    }
+
+    private void ShowTranscription(string partial_result)
+    {
+        main_window.Dispatcher.Invoke(() => main_window.SetListeningIcon(true));
+        intent_window.Dispatcher.Invoke(() => intent_window.Show());
+
+        asr_window.Dispatcher.Invoke(() =>
+        {
+            if (!asr_window.IsVisible) asr_window.Show();
+            asr_window.AppendText($"You said: {partial_result}", true);
+            ProcessCommand(partial_result);
+        });
+    }
+
+    private void HandleNoSpeechDetected()
+    {
+        asr_window.Dispatcher.Invoke(() =>
+        {
+            if (!asr_window.IsVisible) return;
+
+            try
+            {
+                string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
+                socket.SendFrame(final_result_from_stream);
+                string receivedMessage = socket.ReceiveFrameString();
+
+                intent_window.Dispatcher.Invoke(() => intent_window.AppendText($"Intent: {receivedMessage}"));
+                intent_window_timer.Start();
+                asr_window.Hide();
+
+                deep_speech_stream.Dispose();
+                deep_speech_stream = deep_speech_model.CreateStream();
+
+                wake_word_detected = false;
+                ResetCommandCounts();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
+        });
+    }
+
+    private void ResetInactivityTimer()
+    {
+        if (!inactivity_timer.Enabled)
+        {
+            inactivity_timer.Start();
+        }
+    }
+
 
     public static void VolumeUp(float amount = 0.1f) // Adjust amount as needed
     {

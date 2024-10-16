@@ -1,8 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System.Diagnostics; // To use Debug.WriteLine
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Collections.Generic;
 
 namespace ATEDNIULI
 {
@@ -22,6 +23,9 @@ namespace ATEDNIULI
             Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
             Top = (SystemParameters.PrimaryScreenHeight - Height) / 2;
 
+            // Debugging output for screen resolution
+            Debug.WriteLine($"Screen Width: {Width}, Screen Height: {Height}");
+
             _items = items;
 
             AddTagsToCanvas();
@@ -29,8 +33,28 @@ namespace ATEDNIULI
 
         private void AddTagsToCanvas()
         {
+            // Get DPI scaling factors for the current display
+            var source = PresentationSource.FromVisual(this);
+            double dpiX = 1.0, dpiY = 1.0;
+
+            if (source != null)
+            {
+                dpiX = source.CompositionTarget.TransformToDevice.M11; // X DPI scaling factor
+                dpiY = source.CompositionTarget.TransformToDevice.M22; // Y DPI scaling factor
+            }
+
+            // Debugging output for DPI scaling factors
+            Debug.WriteLine($"DPI Scaling Factor - X: {dpiX}, Y: {dpiY}");
+
             foreach (var item in _items)
             {
+                // Adjust coordinates based on DPI scaling
+                double adjustedX = item.CenterX / dpiX;
+                double adjustedY = item.CenterY / dpiY;
+
+                // Debugging output for each tag's position
+                Debug.WriteLine($"Tag: {item.Tag}, Original X: {item.CenterX}, Original Y: {item.CenterY}, Adjusted X: {adjustedX}, Adjusted Y: {adjustedY}");
+
                 var textBlock = new TextBlock
                 {
                     Text = item.Tag,
@@ -42,8 +66,8 @@ namespace ATEDNIULI
                 };
 
                 // Set position on the Canvas
-                Canvas.SetLeft(textBlock, item.CenterX - 50); // Adjust for centering
-                Canvas.SetTop(textBlock, item.CenterY - 15);  // Adjust for centering
+                Canvas.SetLeft(textBlock, adjustedX - 50); // Adjust for centering
+                Canvas.SetTop(textBlock, adjustedY - 15);  // Adjust for centering
 
                 // Add mouse event handlers
                 textBlock.MouseDown += Tag_MouseDown;
