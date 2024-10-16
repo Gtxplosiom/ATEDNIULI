@@ -498,13 +498,20 @@ class LiveTranscription
         {
             if (e.BytesRecorded <= 0)
             {
-                asr_window.Dispatcher.Invoke(() => asr_window.AppendText("No audio data recorded."));
+                // Update UI with no audio data recorded
+                UpdateUI(() => asr_window.AppendText("No audio data recorded."));
             }
             return;
         }
 
-        short[] short_buffer = new short[e.BytesRecorded / 2];
-        Buffer.BlockCopy(e.Buffer, 0, short_buffer, 0, e.BytesRecorded);
+        // Process the audio data in a background task
+        Task.Run(() => ProcessAudioData(e.Buffer, e.BytesRecorded));
+    }
+
+    private void ProcessAudioData(byte[] buffer, int bytesRecorded)
+    {
+        short[] short_buffer = new short[bytesRecorded / 2];
+        Buffer.BlockCopy(buffer, 0, short_buffer, 0, bytesRecorded);
 
         if (!vad.HasSpeech(short_buffer))
         {
@@ -521,13 +528,18 @@ class LiveTranscription
         {
             try
             {
+                // Feed audio to the model
                 deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
                 string partial_result = deep_speech_model.IntermediateDecode(deep_speech_stream).Trim();
 
                 if (string.IsNullOrEmpty(partial_result)) return;
 
                 current_partial = partial_result;
-                ResetInactivityTimer();
+
+                if (!inactivity_timer.Enabled)
+                {
+                    inactivity_timer.Start();
+                }
 
                 if (wake_word_required)
                 {
@@ -535,7 +547,9 @@ class LiveTranscription
                 }
                 else
                 {
+                    // Show transcription without locking UI
                     ShowTranscription(partial_result);
+                    ProcessCommand(partial_result);
                 }
             }
             catch (AccessViolationException ex)
@@ -565,7 +579,8 @@ class LiveTranscription
             partial_result = RemoveWakeWord(partial_result, wake_word);
             click_command_count = 0;
 
-            main_window.Dispatcher.Invoke(() => main_window.SetListeningIcon(true));
+            // Update UI in a background task
+            UpdateUI(() => main_window.SetListeningIcon(true));
             ShowTranscription(partial_result);
         }
     }
@@ -586,54 +601,46 @@ class LiveTranscription
 
     private void ShowTranscription(string partial_result)
     {
-        main_window.Dispatcher.Invoke(() => main_window.SetListeningIcon(true));
-        intent_window.Dispatcher.Invoke(() => intent_window.Show());
-
-        asr_window.Dispatcher.Invoke(() =>
+        UpdateUI(() =>
         {
+            main_window.SetListeningIcon(true);
+            intent_window.Show();
+
             if (!asr_window.IsVisible) asr_window.Show();
             asr_window.AppendText($"You said: {partial_result}", true);
-            ProcessCommand(partial_result);
         });
     }
 
     private void HandleNoSpeechDetected()
     {
-        asr_window.Dispatcher.Invoke(() =>
+        UpdateUI(() =>
         {
             if (!asr_window.IsVisible) return;
 
-            try
-            {
-                string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
-                socket.SendFrame(final_result_from_stream);
-                string receivedMessage = socket.ReceiveFrameString();
-
-                intent_window.Dispatcher.Invoke(() => intent_window.AppendText($"Intent: {receivedMessage}"));
-                intent_window_timer.Start();
-                asr_window.Hide();
-
-                deep_speech_stream.Dispose();
-                deep_speech_stream = deep_speech_model.CreateStream();
-
-                wake_word_detected = false;
-                ResetCommandCounts();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {ex.Message}");
-            }
+            FinalizeStream(); // Finalize the stream when no speech is detected
         });
     }
 
+    // Reset inactivity timer and setup event to process commands after inactivity
     private void ResetInactivityTimer()
     {
-        if (!inactivity_timer.Enabled)
-        {
-            inactivity_timer.Start();
-        }
+        inactivity_timer.Stop(); // Stop the timer first
+
+        inactivity_timer.Start(); // Restart the timer
     }
 
+    // Helper method to update UI on the main thread
+    private void UpdateUI(Action action)
+    {
+        if (main_window.Dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            main_window.Dispatcher.Invoke(action);
+        }
+    }
 
     public static void VolumeUp(float amount = 0.1f) // Adjust amount as needed
     {
