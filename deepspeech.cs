@@ -126,7 +126,7 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta15.pbmm";
-    string scorer_path = @"assets\models\demo_3.scorer";
+    string scorer_path = @"assets\models\demo.scorer";
     string ww_scorer_path = @"assets\models\wake_word.scorer";
 
     // importante para diri mag error an memory corrupt ha deepspeech model
@@ -198,7 +198,7 @@ class LiveTranscription
         // timers
         InitializeTimer();
 
-        //DetectScreen();
+        //DetectScreen(); ## for testing
     }
 
     // zmq stuffs

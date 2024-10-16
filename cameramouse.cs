@@ -28,22 +28,45 @@ namespace ATEDNIULI
             }
         }
 
-        private volatile bool isRunning = false;
+        public struct TargetPosition // Define a struct to hold the target position
+        {
+            public int X { get; set; }
+            public int Y { get; set; }
+
+            public TargetPosition(int x, int y)
+            {
+                X = x;
+                Y = y;
+            }
+        }
+
+        private bool isRunning = false;
         private Thread cameraThread;
+        private Thread mouseThread;
         private VideoCapture capture;
+
+        // Store the target mouse position
+        private TargetPosition targetPosition;
+        private readonly object positionLock = new object(); // Lock object for thread safety
 
         public void StartCameraMouse()
         {
             isRunning = true;
+
             cameraThread = new Thread(CameraLoop);
             cameraThread.IsBackground = true;
             cameraThread.Start();
+
+            mouseThread = new Thread(MouseMovementLoop);
+            mouseThread.IsBackground = true;
+            mouseThread.Start();
         }
 
         public void StopCameraMouse()
         {
             isRunning = false;
-            cameraThread?.Join(); // Wait for the thread to finish
+            cameraThread?.Join(); // Wait for the camera thread to finish
+            mouseThread?.Join();   // Wait for the mouse thread to finish
 
             Cv2.DestroyAllWindows(); // Close any OpenCV windows
             capture?.Release(); // Release the webcam if it's still open
@@ -115,33 +138,113 @@ namespace ATEDNIULI
                                         landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
                                     }
 
-                                    // Draw nose point
+                                    // Reference point for comparison (nose point)
                                     var nosePoint = landmarksList[30];
+
+                                    // Measure distance between the nose and eyebrow points
+                                    bool eyebrowsRaised = false;
+                                    double threshold = 40.0; // Adjust threshold for raised eyebrows detection
+                                    double leftEyelidToBrowDistance = 0.0;
+                                    double rightEyelidToBrowDistance = 0.0;
+
+                                    // Draw left eyebrow and calculate distance to upper eyelid
+                                    for (int i = 17; i <= 21; i++)
+                                    {
+                                        var eyebrowPoint = landmarksList[i];
+                                        Cv2.Circle(frame, new OpenCvSharp.Point(eyebrowPoint.X, eyebrowPoint.Y), 3, Scalar.Blue, -1); // Draw blue dots for left eyebrow
+                                    }
+
+                                    // Draw right eyebrow and calculate distance to upper eyelid
+                                    for (int i = 22; i <= 26; i++)
+                                    {
+                                        var eyebrowPoint = landmarksList[i];
+                                        Cv2.Circle(frame, new OpenCvSharp.Point(eyebrowPoint.X, eyebrowPoint.Y), 3, Scalar.Green, -1); // Draw green dots for right eyebrow
+                                    }
+
+                                    // Calculate left upper eyelid to brow distance
+                                    for (int i = 37; i <= 38; i++)
+                                    {
+                                        var leftUpperEyelid = landmarksList[i];
+                                        Cv2.Circle(frame, new OpenCvSharp.Point(leftUpperEyelid.X, leftUpperEyelid.Y), 3, Scalar.Green, -1);
+                                        for (int j = 17; j <= 21; j++)
+                                        {
+                                            var leftEyebrowPoint = landmarksList[j];
+                                            leftEyelidToBrowDistance += Math.Abs(leftUpperEyelid.Y - leftEyebrowPoint.Y); // Distance between upper eyelid and eyebrow
+                                        }
+                                    }
+                                    leftEyelidToBrowDistance /= 5; // Average distance for left side
+
+                                    // Calculate right upper eyelid to brow distance
+                                    for (int i = 43; i <= 44; i++)
+                                    {
+                                        var rightUpperEyelid = landmarksList[i];
+                                        Cv2.Circle(frame, new OpenCvSharp.Point(rightUpperEyelid.X, rightUpperEyelid.Y), 3, Scalar.Green, -1);
+                                        for (int j = 22; j <= 26; j++)
+                                        {
+                                            var rightEyebrowPoint = landmarksList[j];
+                                            rightEyelidToBrowDistance += Math.Abs(rightUpperEyelid.Y - rightEyebrowPoint.Y); // Distance between upper eyelid and eyebrow
+                                        }
+                                    }
+                                    rightEyelidToBrowDistance /= 5; // Average distance for right side
+
+                                    // Update the distance text on the frame
+                                    Cv2.PutText(frame, $"Eyelid to brow distance - left: {leftEyelidToBrowDistance} right: {rightEyelidToBrowDistance}", new OpenCvSharp.Point(10, 20), HersheyFonts.HersheySimplex, 1, Scalar.White, 2);
+
+                                    // Check if the eyelid-to-eyebrow distances exceed the threshold
+                                    eyebrowsRaised = leftEyelidToBrowDistance > threshold || rightEyelidToBrowDistance > threshold;
+
+                                    // Indicate the result visually
+                                    if (eyebrowsRaised)
+                                    {
+                                        Cv2.PutText(frame, "Eyebrows Raised", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.White, 2);
+                                    }
+                                    else
+                                    {
+                                        Cv2.PutText(frame, "Eyebrows Normal", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.White, 2);
+                                    }
+
+                                    // Draw nose point
                                     Cv2.Circle(frame, new OpenCvSharp.Point(nosePoint.X, nosePoint.Y), 4, Scalar.Red, -1);
 
-                                    // Move cursor based on nose position
-                                    int targetX = (int)((nosePoint.X - roiX) * scalingFactorX);
-                                    int targetY = (int)((nosePoint.Y - roiY) * scalingFactorY);
-                                    SmoothMoveTo(targetX, targetY);
+                                    // Update target position for the mouse
+                                    lock (positionLock) // Lock access to targetPosition
+                                    {
+                                        targetPosition = new TargetPosition(
+                                            (int)((nosePoint.X - roiX) * scalingFactorX),
+                                            (int)((nosePoint.Y - roiY) * scalingFactorY)
+                                        );
+                                    }
                                 }
-                                Cv2.Rectangle(frame, new OpenCvSharp.Point(roiX, roiY), new OpenCvSharp.Point(roiX + roiWidth, roiY + roiHeight), new Scalar(0, 255, 0), 2);
+                                Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2); // Draw ROI rectangle
                             }
+                            Cv2.ImShow("Camera", frame);
+                        }
 
-                            Cv2.ImShow("preview", frame);
-
-                            // Break the loop if 'q' is pressed
-                            if (Cv2.WaitKey(1) == 'q')
-                            {
-                                StopCameraMouse();
-                            }
+                        if (Cv2.WaitKey(1) == 27) // Exit if 'ESC' is pressed
+                        {
+                            break;
                         }
                     }
                 }
-                finally
+                catch (Exception ex)
                 {
-                    Cv2.DestroyAllWindows();
-                    capture?.Release();
+                    Console.WriteLine($"Error in CameraLoop: {ex.Message}");
                 }
+            }
+        }
+
+        private void MouseMovementLoop()
+        {
+            while (isRunning)
+            {
+                // Get the current target position
+                TargetPosition currentTargetPosition;
+                lock (positionLock) // Lock access to targetPosition
+                {
+                    currentTargetPosition = targetPosition;
+                }
+                SmoothMoveTo(currentTargetPosition.X, currentTargetPosition.Y);
+                Thread.Sleep(50); // Adjust the delay to manage the mouse movement frequency
             }
         }
 
