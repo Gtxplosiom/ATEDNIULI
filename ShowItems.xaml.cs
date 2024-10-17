@@ -5,14 +5,20 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Automation;
 using System;
+using System.Collections.Generic;
+using System.Windows.Threading;
 
 namespace ATEDNIULI
 {
     public partial class ShowItems : Window
     {
+        private DispatcherTimer _tagRemovalTimer; // Timer for removing tags
+        private List<Label> _tags; // List to store tags
+
         public ShowItems()
         {
             InitializeComponent();
+            _tags = new List<Label>(); // Initialize the tag list
             Show();
         }
 
@@ -70,9 +76,13 @@ namespace ATEDNIULI
 
                             if (!boundingRect.IsEmpty)
                             {
+                                // Output the name of the control to the console
+                                string controlName = element.Current.Name;
+                                Console.WriteLine($"Clickable Item {counter}: {controlName}");
+
                                 Label tag = new Label
                                 {
-                                    Content = $"Tag {counter}",
+                                    Content = counter, // Set label content to the control's name
                                     Background = Brushes.Yellow,
                                     Foreground = Brushes.Black,
                                     Padding = new Thickness(5),
@@ -83,16 +93,51 @@ namespace ATEDNIULI
                                 Canvas.SetTop(tag, boundingRect.Top - 20);
                                 OverlayCanvas.Children.Add(tag);
 
+                                // Add the tag to the list
+                                _tags.Add(tag);
+
                                 counter++;
                             }
                         }
                     }
+
+                    // Start the timer to remove tags after 10 seconds
+                    //StartTagRemovalTimer();
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Error: {ex.Message}");
             }
+        }
+
+        private void StartTagRemovalTimer()
+        {
+            // Initialize the timer if it's not already initialized
+            if (_tagRemovalTimer == null)
+            {
+                _tagRemovalTimer = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(5) // Set timer for 10 seconds
+                };
+                _tagRemovalTimer.Tick += RemoveTags; // Attach the event handler
+            }
+
+            _tagRemovalTimer.Start(); // Start the timer
+        }
+
+        private void RemoveTags(object sender, EventArgs e)
+        {
+            // Stop the timer
+            _tagRemovalTimer.Stop();
+
+            // Remove tags from the overlay canvas
+            foreach (var tag in _tags)
+            {
+                OverlayCanvas.Children.Remove(tag);
+            }
+
+            _tags.Clear(); // Clear the list of tags
         }
 
         [DllImport("user32.dll")]

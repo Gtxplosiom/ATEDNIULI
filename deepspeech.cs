@@ -126,7 +126,7 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta15.pbmm";
-    string scorer_path = @"assets\models\demo.scorer";
+    string scorer_path = @"assets\models\commands.scorer";
     string ww_scorer_path = @"assets\models\wake_word.scorer";
 
     // importante para diri mag error an memory corrupt ha deepspeech model
@@ -294,11 +294,11 @@ class LiveTranscription
     // timer function
     private void InitializeTimer()
     {
-        inactivity_timer = new System.Timers.Timer(1000); // 2 seconds
+        inactivity_timer = new System.Timers.Timer(1500); // 1.5 seconds
         inactivity_timer.Elapsed += OnInactivityTimerElapsed;
         inactivity_timer.AutoReset = false; // Do not restart automatically
 
-        intent_window_timer = new System.Timers.Timer(3000); // 3 seconds
+        intent_window_timer = new System.Timers.Timer(1500); // 1.5 seconds
         intent_window_timer.Elapsed += OnIntentTimerElapsed;
         intent_window_timer.AutoReset = false;
     }
@@ -360,9 +360,7 @@ class LiveTranscription
             {
                 lock (streamLock)
                 {
-                    Console.WriteLine("Finalizing stream...");
                     string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
-                    Console.WriteLine("Stream finalized.");
 
                     // Perform socket operations in a background thread
                     socket.SendFrame(final_result_from_stream);
@@ -402,7 +400,6 @@ class LiveTranscription
                         catch (Exception ex)
                         {
                             Console.WriteLine($"Error updating UI: {ex.Message}");
-                            // Handle exceptions (log them, show error messages, etc.)
                         }
                     }
                 });
@@ -411,12 +408,9 @@ class LiveTranscription
         catch (Exception ex)
         {
             Console.WriteLine($"Error in FinalizeStream: {ex.Message}");
-            // Handle exceptions (log them, show error messages, etc.)
         }
     }
 
-
-    // function kun may makalap na audio an mic
     private void OnDataAvailable(object sender, WaveInEventArgs e)
     {
         if (!is_running || e.BytesRecorded <= 0)
@@ -429,8 +423,9 @@ class LiveTranscription
             return;
         }
 
-        // Process the audio data in a background task
-        Task.Run(() => ProcessAudioData(e.Buffer, e.BytesRecorded));
+        // Process the audio data immediately on the current thread
+        // Task.Run(() => ProcessAudioData(e.Buffer, e.BytesRecorded)); amo ngayan ini an na cause hin delay like an audio baga na queue
+        ProcessAudioData(e.Buffer, e.BytesRecorded);
     }
 
     private void ProcessAudioData(byte[] buffer, int bytesRecorded)
@@ -438,17 +433,20 @@ class LiveTranscription
         short[] short_buffer = new short[bytesRecorded / 2];
         Buffer.BlockCopy(buffer, 0, short_buffer, 0, bytesRecorded);
 
+        // Check for speech using VAD before processing
         if (!vad.HasSpeech(short_buffer))
         {
             HandleNoSpeechDetected();
             return;
         }
 
+        // Process the speech immediately without locking
         ProcessSpeech(short_buffer);
     }
 
     private void ProcessSpeech(short[] short_buffer)
     {
+        // Lock only around the critical section to minimize delay
         lock (streamLock)
         {
             try
@@ -461,18 +459,20 @@ class LiveTranscription
 
                 current_partial = partial_result;
 
+                // Start the inactivity timer only if not already started
                 if (!inactivity_timer.Enabled)
                 {
                     inactivity_timer.Start();
                 }
 
+                // Process wake word detection or regular transcription
                 if (wake_word_required)
                 {
                     HandleWakeWord(partial_result);
                 }
                 else
                 {
-                    // Show transcription without locking UI
+                    // Show transcription and process command immediately
                     ShowTranscription(partial_result);
                     ProcessCommand(partial_result);
                 }
@@ -531,7 +531,10 @@ class LiveTranscription
             main_window.SetListeningIcon(true);
             intent_window.Show();
 
-            if (!asr_window.IsVisible) asr_window.Show();
+            if (!asr_window.IsVisible)
+            {
+                asr_window.Show();
+            }
             asr_window.AppendText($"You said: {partial_result}", true);
         });
     }
@@ -550,7 +553,6 @@ class LiveTranscription
     private void ResetInactivityTimer()
     {
         inactivity_timer.Stop(); // Stop the timer first
-
         inactivity_timer.Start(); // Restart the timer
     }
 
@@ -566,6 +568,7 @@ class LiveTranscription
             main_window.Dispatcher.Invoke(action);
         }
     }
+
 
     public static void VolumeUp(float amount = 0.1f) // Adjust amount as needed
     {
@@ -643,7 +646,7 @@ class LiveTranscription
 
         // Handle other commands
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
-        HandleCommand("open", transcription, ref show_items_command_count, () => DetectScreen());
+        HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => CloseShowItemsWindow());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(Keys.ControlKey)); // Customize as needed

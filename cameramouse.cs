@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using OpenCvSharp;
 using DlibDotNet;
-using System.Windows.Automation;
 
 namespace ATEDNIULI
 {
@@ -49,6 +48,10 @@ namespace ATEDNIULI
         // Store the target mouse position
         private TargetPosition targetPosition;
         private readonly object positionLock = new object(); // Lock object for thread safety
+
+        // Declare webcamWidth and webcamHeight as class-level fields
+        private int webcamWidth = 640;
+        private int webcamHeight = 480;
 
         public void StartCameraMouse()
         {
@@ -100,8 +103,6 @@ namespace ATEDNIULI
 
                 int screenWidth = GetSystemMetrics(0);
                 int screenHeight = GetSystemMetrics(1);
-                int webcamWidth = 640;
-                int webcamHeight = 480;
                 double roiPercentage = 0.05;
                 int roiWidth = (int)(webcamWidth * roiPercentage);
                 int roiHeight = (int)(webcamHeight * roiPercentage);
@@ -117,7 +118,7 @@ namespace ATEDNIULI
                 {
                     while (isRunning)
                     {
-                        using (var frame = new Mat())
+                        using (var frame = new Mat()) // Ensure Mat is disposed properly
                         {
                             capture.Read(frame);
 
@@ -130,97 +131,36 @@ namespace ATEDNIULI
                             Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
                             Cv2.Flip(frame, frame, FlipMode.Y);
 
-                            using (var gray = new Mat())
+                            using (var gray = new Mat()) // Ensure Mat is disposed properly
                             {
                                 Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
-                                var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width);
-                                DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
 
-                                foreach (var face in faces)
+                                // Load the image into Dlib
+                                using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
                                 {
-                                    var landmarks = predictor.Detect(dlibImage, face);
-                                    var landmarksList = new List<Point>();
-                                    for (int i = 0; i < (int)landmarks.Parts; i++)
+                                    DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
+
+                                    foreach (var face in faces)
                                     {
-                                        landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
-                                    }
-
-                                    // Reference point for comparison (nose point)
-                                    var targetNosePoint = landmarksList[30];
-
-                                    if (isFirstFrame)
-                                    {
-                                        // On the first frame, initialize the previousNosePosition with the target position
-                                        previousNosePosition = targetNosePoint;
-                                        isFirstFrame = false;
-                                    }
-
-                                    // Smooth the movement using the method similar to SmoothMoveTo
-                                    int steps = 10; // Number of steps for smooth transition
-                                    double smoothingFactor = 0.5; // Adjust smoothing factor
-
-                                    // Gradually interpolate from previous nose position to the new target position
-                                    for (int i = 0; i <= steps; i++)
-                                    {
-                                        // Interpolated X and Y positions
-                                        int smoothedNoseX = (int)(previousNosePosition.X + (targetNosePoint.X - previousNosePosition.X) * (i / (double)steps) * (1 - smoothingFactor));
-                                        int smoothedNoseY = (int)(previousNosePosition.Y + (targetNosePoint.Y - previousNosePosition.Y) * (i / (double)steps) * (1 - smoothingFactor));
-
-                                        // Update the smoothed position of the nose
-                                        var smoothedNosePoint = new Point(smoothedNoseX, smoothedNoseY);
-
-                                        // Draw the smoothed nose point on the frame
-                                        Cv2.Circle(frame, new OpenCvSharp.Point(smoothedNosePoint.X, smoothedNosePoint.Y), 4, Scalar.Red, -1);
-
-                                        // Adjust the ROI based on the smoothed nose point's position
-                                        int edgeThreshold = 0;
-
-                                        if (smoothedNosePoint.X < roiX + edgeThreshold)
+                                        var landmarks = predictor.Detect(dlibImage, face);
+                                        var landmarksList = new List<Point>();
+                                        for (int i = 0; i < (int)landmarks.Parts; i++)
                                         {
-                                            roiX = Clamp(roiX - (roiX + edgeThreshold - smoothedNosePoint.X), 0, webcamWidth - roiWidth);
-                                        }
-                                        else if (smoothedNosePoint.X > roiX + roiWidth - edgeThreshold)
-                                        {
-                                            roiX = Clamp(roiX + (smoothedNosePoint.X - (roiX + roiWidth - edgeThreshold)), 0, webcamWidth - roiWidth);
+                                            landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
                                         }
 
-                                        if (smoothedNosePoint.Y < roiY + edgeThreshold)
-                                        {
-                                            roiY = Clamp(roiY - (roiY + edgeThreshold - smoothedNosePoint.Y), 0, webcamHeight - roiHeight);
-                                        }
-                                        else if (smoothedNosePoint.Y > roiY + roiHeight - edgeThreshold)
-                                        {
-                                            roiY = Clamp(roiY + (smoothedNosePoint.Y - (roiY + roiHeight - edgeThreshold)), 0, webcamHeight - roiHeight);
-                                        }
-
-                                        // Update target position for the mouse if the smoothed nose is within the ROI
-                                        if (smoothedNosePoint.X >= roiX && smoothedNosePoint.X <= roiX + roiWidth &&
-                                            smoothedNosePoint.Y >= roiY && smoothedNosePoint.Y <= roiY + roiHeight)
-                                        {
-                                            lock (positionLock)
-                                            {
-                                                targetPosition = new TargetPosition(
-                                                    (int)((smoothedNosePoint.X - roiX) * scalingFactorX),
-                                                    (int)((smoothedNosePoint.Y - roiY) * scalingFactorY)
-                                                );
-                                            }
-                                        }
-
-                                        // Update the previous nose position with the current smoothed position
-                                        previousNosePosition = smoothedNosePoint;
-
-                                        // Draw the updated ROI rectangle
-                                        Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2);
+                                        // Draw landmarks and process the nose position
+                                        ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
                                     }
 
                                     Cv2.ImShow("Camera", frame);
-                                }
+                                } // dlibImage is disposed here
+                            } // gray Mat is disposed here
+                        } // frame Mat is disposed here
 
-                                if (Cv2.WaitKey(1) == 27) // Exit if 'ESC' is pressed
-                                {
-                                    break;
-                                }
-                            }
+                        if (Cv2.WaitKey(1) == 27) // Exit if 'ESC' is pressed
+                        {
+                            break;
                         }
                     }
                 }
@@ -231,13 +171,72 @@ namespace ATEDNIULI
             }
         }
 
-
-
-        private int Clamp(int value, int min, int max)
+        private void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
-            if (value < min) return min;
-            if (value > max) return max;
-            return value;
+            var targetNosePoint = landmarksList[30];
+
+            if (isFirstFrame)
+            {
+                previousNosePosition = targetNosePoint;
+                isFirstFrame = false;
+            }
+
+            int steps = 10;
+            double smoothingFactor = 0.5;
+
+            for (int i = 0; i <= steps; i++)
+            {
+                int smoothedNoseX = (int)(previousNosePosition.X + (targetNosePoint.X - previousNosePosition.X) * (i / (double)steps) * (1 - smoothingFactor));
+                int smoothedNoseY = (int)(previousNosePosition.Y + (targetNosePoint.Y - previousNosePosition.Y) * (i / (double)steps) * (1 - smoothingFactor));
+
+                var smoothedNosePoint = new Point(smoothedNoseX, smoothedNoseY);
+                Cv2.Circle(frame, new OpenCvSharp.Point(smoothedNosePoint.X, smoothedNosePoint.Y), 4, Scalar.Red, -1);
+
+                UpdateRoi(smoothedNosePoint, ref roiX, ref roiY, roiWidth, roiHeight);
+                UpdateTargetPosition(smoothedNosePoint, roiX, roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+
+                previousNosePosition = smoothedNosePoint;
+            }
+
+            Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2);
+        }
+
+        private void UpdateRoi(Point smoothedNosePoint, ref int roiX, ref int roiY, int roiWidth, int roiHeight)
+        {
+            int edgeThreshold = 0;
+
+            if (smoothedNosePoint.X < roiX + edgeThreshold)
+            {
+                roiX = Clamp(roiX - (roiX + edgeThreshold - smoothedNosePoint.X), 0, webcamWidth - roiWidth);
+            }
+            else if (smoothedNosePoint.X > roiX + roiWidth - edgeThreshold)
+            {
+                roiX = Clamp(roiX + (smoothedNosePoint.X - (roiX + roiWidth - edgeThreshold)), 0, webcamWidth - roiWidth);
+            }
+
+            if (smoothedNosePoint.Y < roiY + edgeThreshold)
+            {
+                roiY = Clamp(roiY - (roiY + edgeThreshold - smoothedNosePoint.Y), 0, webcamHeight - roiHeight);
+            }
+            else if (smoothedNosePoint.Y > roiY + roiHeight - edgeThreshold)
+            {
+                roiY = Clamp(roiY + (smoothedNosePoint.Y - (roiY + roiHeight - edgeThreshold)), 0, webcamHeight - roiHeight);
+            }
+        }
+
+        private void UpdateTargetPosition(Point smoothedNosePoint, int roiX, int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
+        {
+            if (smoothedNosePoint.X >= roiX && smoothedNosePoint.X <= roiX + roiWidth &&
+                smoothedNosePoint.Y >= roiY && smoothedNosePoint.Y <= roiY + roiHeight)
+            {
+                lock (positionLock)
+                {
+                    targetPosition = new TargetPosition(
+                        (int)((smoothedNosePoint.X - roiX) * scalingFactorX),
+                        (int)((smoothedNosePoint.Y - roiY) * scalingFactorY)
+                    );
+                }
+            }
         }
 
         private void MouseMovementLoop()
@@ -276,7 +275,12 @@ namespace ATEDNIULI
             }
         }
 
+        private int Clamp(int value, int min, int max)
+        {
+            return Math.Max(min, Math.Min(max, value));
+        }
+
         [DllImport("user32.dll")]
-        static extern int GetSystemMetrics(int smIndex);
+        static extern int GetSystemMetrics(int nIndex);
     }
 }

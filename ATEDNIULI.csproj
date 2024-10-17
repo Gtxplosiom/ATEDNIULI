@@ -220,6 +220,9 @@
     <None Include="assets\models\best-640-train-7.onnx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="assets\models\commands.scorer">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="assets\models\demo.scorer">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
