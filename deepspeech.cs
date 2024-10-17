@@ -241,82 +241,7 @@ class LiveTranscription
 
     public void DetectScreen()
     {
-        // Ensure the socket is initialized
-        if (pullsocket == null)
-        {
-            pullsocket = new SubscriberSocket("tcp://localhost:4200");
-            pullsocket.Subscribe(""); // Subscribe to all messages
-        }
-
-        Task detectionTask = Task.Run(() =>
-        {
-            ProcessStartInfo start = new ProcessStartInfo
-            {
-                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe", // Your Python executable path
-                Arguments = @"C:\Users\super.admin\Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\python\tiled_inference_optimized_screenshot_c.py", // Your Python script path
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-
-            using (Process process = Process.Start(start))
-            {
-                using (var reader = process.StandardOutput)
-                {
-                    string result = reader.ReadToEnd();
-                    Console.WriteLine(result);
-                }
-
-                using (var errorReader = process.StandardError)
-                {
-                    string error = errorReader.ReadToEnd();
-                    if (!string.IsNullOrEmpty(error))
-                    {
-                        Console.WriteLine($"Error: {error}");
-                    }
-                }
-            }
-        });
-
-        detectionTask.Wait();
-
-        Console.WriteLine("Waiting for detection results...");
-
-        try
-        {
-            string receivedMessage = pullsocket.ReceiveFrameString(); // Receiving the list of detected objects
-
-            // Parse the received JSON message
-            var detectionResults = JsonConvert.DeserializeObject<List<DetectionResult>>(receivedMessage);
-
-            // Create tag items based on detection results
-            List<TagItem> tagItems = new List<TagItem>();
-            int counter = 1;
-
-            foreach (var detectionResult in detectionResults)
-            {
-                foreach (var detection in detectionResult.Detections)
-                {
-                    tagItems.Add(new TagItem
-                    {
-                        Tag = $"{counter++} - {detection.ClassName}",
-                        CenterX = detection.X,
-                        CenterY = detection.Y
-                    });
-                }
-            }
-
-            // Open the ShowItems window with the detected tag items
-            show_items.Dispatcher.Invoke(() =>
-            {
-                ShowItems showItemsWindow = new ShowItems(tagItems);
-                showItemsWindow.Show();
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error receiving detection results: {ex.Message}");
-        }
+        show_items.ListClickableItemsInCurrentWindow();
     }
 
 
@@ -718,7 +643,7 @@ class LiveTranscription
 
         // Handle other commands
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
-        HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
+        HandleCommand("open", transcription, ref show_items_command_count, () => DetectScreen());
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => CloseShowItemsWindow());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(Keys.ControlKey)); // Customize as needed

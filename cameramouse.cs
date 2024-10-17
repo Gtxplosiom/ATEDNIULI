@@ -29,47 +29,6 @@ namespace ATEDNIULI
             }
         }
 
-        public void ListClickableItemsInCurrentWindow()
-        {
-            // Get the current window handle (HWND)
-            IntPtr windowHandle = GetForegroundWindow();
-
-            // Get the AutomationElement for the current window
-            AutomationElement currentWindow = AutomationElement.FromHandle(windowHandle);
-
-            if (currentWindow != null)
-            {
-                // Define a condition to find clickable elements (Buttons, Hyperlinks, etc.)
-                Condition clickableCondition = new OrCondition(
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem)
-                );
-
-                // Find all clickable elements within the current window
-                AutomationElementCollection clickableElements = currentWindow.FindAll(TreeScope.Subtree, clickableCondition);
-
-                Console.WriteLine("Clickable items in the current window:");
-
-                foreach (AutomationElement element in clickableElements)
-                {
-                    // Check if the element is visible
-                    if (element.Current.IsOffscreen == false)
-                    {
-                        // Output the clickable item's name or control type
-                        Console.WriteLine($"Name: {element.Current.Name}, Control Type: {element.Current.ControlType.ProgrammaticName}");
-                    }
-                }
-            }
-            else
-            {
-                Console.WriteLine("Error: Could not retrieve the current window.");
-            }
-        }
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
         public struct TargetPosition // Define a struct to hold the target position
         {
             public int X { get; set; }
@@ -156,8 +115,6 @@ namespace ATEDNIULI
 
                 try
                 {
-                    ListClickableItemsInCurrentWindow();
-
                     while (isRunning)
                     {
                         using (var frame = new Mat())

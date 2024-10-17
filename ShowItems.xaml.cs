@@ -1,106 +1,101 @@
-﻿using System.Diagnostics; // To use Debug.WriteLine
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Windows.Automation;
+using System;
 
 namespace ATEDNIULI
 {
     public partial class ShowItems : Window
     {
-        private readonly List<TagItem> _items;
-
-        public ShowItems(List<TagItem> items)
+        public ShowItems()
         {
             InitializeComponent();
-
-            // Set the size of the window to match the screen dimensions
-            Width = SystemParameters.PrimaryScreenWidth;
-            Height = SystemParameters.PrimaryScreenHeight;
-
-            // Center the window on the screen
-            Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
-            Top = (SystemParameters.PrimaryScreenHeight - Height) / 2;
-
-            // Debugging output for screen resolution
-            Debug.WriteLine($"Screen Width: {Width}, Screen Height: {Height}");
-
-            _items = items;
-
-            AddTagsToCanvas();
+            Show();
         }
 
-        private void AddTagsToCanvas()
+        private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            // Get DPI scaling factors for the current display
-            var source = PresentationSource.FromVisual(this);
-            double dpiX = 1.0, dpiY = 1.0;
+            // Set the window size to cover the entire screen
+            var primaryScreenWidth = SystemParameters.PrimaryScreenWidth;
+            var primaryScreenHeight = SystemParameters.PrimaryScreenHeight;
 
-            if (source != null)
+            // Set window position to the top-left corner (0, 0)
+            this.Left = 0;
+            this.Top = 0;
+
+            // Set the window size to fill the entire screen
+            this.Width = primaryScreenWidth;
+            this.Height = primaryScreenHeight;
+
+            // Make sure the canvas stretches to fill the window
+            OverlayCanvas.Width = this.Width;
+            OverlayCanvas.Height = this.Height;
+        }
+
+        public void ListClickableItemsInCurrentWindow()
+        {
+            if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
             {
-                dpiX = source.CompositionTarget.TransformToDevice.M11; // X DPI scaling factor
-                dpiY = source.CompositionTarget.TransformToDevice.M22; // Y DPI scaling factor
-            }
-
-            // Debugging output for DPI scaling factors
-            Debug.WriteLine($"DPI Scaling Factor - X: {dpiX}, Y: {dpiY}");
-
-            foreach (var item in _items)
-            {
-                // Adjust coordinates based on DPI scaling
-                double adjustedX = item.CenterX / dpiX;
-                double adjustedY = item.CenterY / dpiY;
-
-                // Debugging output for each tag's position
-                Debug.WriteLine($"Tag: {item.Tag}, Original X: {item.CenterX}, Original Y: {item.CenterY}, Adjusted X: {adjustedX}, Adjusted Y: {adjustedY}");
-
-                var textBlock = new TextBlock
+                Dispatcher.Invoke(() =>
                 {
-                    Text = item.Tag,
-                    FontSize = 12,
-                    Background = Brushes.LightGray,
-                    Padding = new Thickness(5),
-                    Cursor = Cursors.Hand,
-                    Foreground = Brushes.Black // Ensure text is visible
-                };
+                    ListClickableItemsInCurrentWindow();
+                });
+                return;
+            }
 
-                // Set position on the Canvas
-                Canvas.SetLeft(textBlock, adjustedX - 50); // Adjust for centering
-                Canvas.SetTop(textBlock, adjustedY - 15);  // Adjust for centering
+            try
+            {
+                IntPtr windowHandle = GetForegroundWindow();
+                var currentWindow = AutomationElement.FromHandle(windowHandle);
 
-                // Add mouse event handlers
-                textBlock.MouseDown += Tag_MouseDown;
-                textBlock.MouseEnter += Tag_MouseEnter;
-                textBlock.MouseLeave += Tag_MouseLeave;
+                if (currentWindow != null)
+                {
+                    var clickableCondition = new OrCondition(
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem)
+                    );
 
-                // Add the TextBlock to the Canvas
-                OverlayCanvas.Children.Add(textBlock);
+                    var clickableElements = currentWindow.FindAll(TreeScope.Subtree, clickableCondition);
+                    int counter = 1;
+
+                    foreach (AutomationElement element in clickableElements)
+                    {
+                        if (!element.Current.IsOffscreen)
+                        {
+                            var boundingRect = element.Current.BoundingRectangle;
+
+                            if (!boundingRect.IsEmpty)
+                            {
+                                Label tag = new Label
+                                {
+                                    Content = $"Tag {counter}",
+                                    Background = Brushes.Yellow,
+                                    Foreground = Brushes.Black,
+                                    Padding = new Thickness(5),
+                                    Opacity = 0.7
+                                };
+
+                                Canvas.SetLeft(tag, boundingRect.Left);
+                                Canvas.SetTop(tag, boundingRect.Top - 20);
+                                OverlayCanvas.Children.Add(tag);
+
+                                counter++;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: {ex.Message}");
             }
         }
 
-        private void Tag_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            var tag = ((TextBlock)sender).Text;
-            MessageBox.Show($"You clicked on {tag}");
-        }
-
-        private void Tag_MouseEnter(object sender, MouseEventArgs e)
-        {
-            ((TextBlock)sender).Background = Brushes.Yellow;
-        }
-
-        private void Tag_MouseLeave(object sender, MouseEventArgs e)
-        {
-            ((TextBlock)sender).Background = Brushes.LightGray;
-        }
-    }
-
-    // Class to represent items with tags and coordinates
-    public class TagItem
-    {
-        public string Tag { get; set; }
-        public int CenterX { get; set; }
-        public int CenterY { get; set; }
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
     }
 }

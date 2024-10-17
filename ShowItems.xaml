@@ -1,15 +1,16 @@
 ﻿<Window x:Class="ATEDNIULI.ShowItems"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Screen Overlay" 
-        WindowStyle="None" 
-        AllowsTransparency="True" 
-        Background="Transparent" 
-        Topmost="True" 
+        Title="Screen Overlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
         SizeToContent="Manual"
-        WindowStartupLocation="CenterScreen">
-        <!-- Added this line -->
-    <Canvas x:Name="OverlayCanvas">
-        <!-- You can place your elements here directly -->
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        Loaded="Window_Loaded">
+    <Canvas x:Name="OverlayCanvas"
+            Background="Transparent">
     </Canvas>
 </Window>
