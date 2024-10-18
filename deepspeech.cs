@@ -21,6 +21,8 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using System.Threading;
 using OpenCvSharp;
+using static ATEDNIULI.ShowItems;
+using System.Linq;
 
 class LiveTranscription
 {
@@ -128,6 +130,8 @@ class LiveTranscription
     string model_path = @"assets\models\delta15.pbmm";
     string scorer_path = @"assets\models\commands.scorer";
     string ww_scorer_path = @"assets\models\wake_word.scorer";
+
+    int deepspeech_confidence = -30;
 
     // importante para diri mag error an memory corrupt ha deepspeech model
     private readonly object streamLock = new object();
@@ -242,6 +246,7 @@ class LiveTranscription
     public void DetectScreen()
     {
         show_items.ListClickableItemsInCurrentWindow();
+        var clickable_items = show_items.GetClickableItems();
     }
 
 
@@ -453,7 +458,14 @@ class LiveTranscription
             {
                 // Feed audio to the model
                 deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
-                string partial_result = deep_speech_model.IntermediateDecode(deep_speech_stream).Trim();
+
+                // Get intermediate decoding with metadata (confidence values)
+                var metadata = deep_speech_model.IntermediateDecodeWithMetadata(deep_speech_stream, 1);
+
+                if (metadata == null || metadata.Transcripts.Length == 0) return;
+
+                var partial_result = metadata.Transcripts[0].Tokens.Select(t => t.Text).Aggregate((a, b) => a + b).Trim();
+                float confidence = (float)metadata.Transcripts[0].Confidence;
 
                 if (string.IsNullOrEmpty(partial_result)) return;
 
@@ -472,9 +484,20 @@ class LiveTranscription
                 }
                 else
                 {
-                    // Show transcription and process command immediately
-                    ShowTranscription(partial_result);
-                    ProcessCommand(partial_result);
+                    if (confidence > deepspeech_confidence)
+                    {
+                        // Proceed with transcription handling
+                        ShowTranscription(partial_result);
+                        ProcessCommand(partial_result);
+                    }
+                    else
+                    {
+                        // Handle low confidence case (e.g., log, retry, prompt user)
+                        Console.WriteLine("Low confidence in transcription. Please repeat.");
+                    }
+
+                    // Optionally log or display the confidence score
+                    Console.WriteLine($"Confidence: {confidence}");
                 }
             }
             catch (AccessViolationException ex)
@@ -488,6 +511,7 @@ class LiveTranscription
             }
         }
     }
+
 
     private void HandleWakeWord(string partial_result)
     {
@@ -644,6 +668,56 @@ class LiveTranscription
             }
         }
 
+        HandleCommand("one", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("1");
+        });
+
+        HandleCommand("two", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("2");
+        });
+
+        HandleCommand("three", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("3");
+        });
+
+        HandleCommand("four", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("4");
+        });
+
+        HandleCommand("five", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("5");
+        });
+
+        HandleCommand("six", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("6");
+        });
+
+        HandleCommand("seven", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("7");
+        });
+
+        HandleCommand("eight", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("8");
+        });
+
+        HandleCommand("nine", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("9");
+        });
+
+        HandleCommand("ten", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("10");
+        });
+
         // Handle other commands
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
         HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
@@ -670,18 +744,6 @@ class LiveTranscription
         HandleCommand("volume up", transcription, ref volume_up_command_count, () => VolumeUp());
         HandleCommand("volume down", transcription, ref volume_down_command_count, () => VolumeDown());
         HandleCommand("open settings", transcription, ref settings_command_count, () => StartProcess("ms-settings:"));
-
-        // TODO - possibly ig dictionary an mga pan replace stuffs kay kadadamo
-        //        ayda ini possibly gamit hin flags or pag add hin another window na ma indicate na hain an current na gingagamit na app kaysa ig display ha asrwindow kay kakasalipod
-        //if (IsActiveWindow("Calculator"))
-        //{
-        //    asr_window.Dispatcher.Invoke(() => asr_window.AppendText("You are in Calculator.", true)); // ini kakasalipod ha transcription
-
-        //    transcription = transcription.Replace("one", "1")
-        //                                .Replace("plus", "+")
-        //                                .Replace("two", "2");
-        //    TypeText(transcription);
-        //}
     }
 
     private void HandleCommand(string commandText, string transcription, ref int commandCount, Action action) // ini an pan prevent hin pan execute command like opening hin utro utro
@@ -697,6 +759,63 @@ class LiveTranscription
             }
             commandCount = new_command_count;
         }
+    }
+
+    private void ProcessSpokenTag(string spokenTag)
+    {
+        var clickableItems = show_items.GetClickableItems();
+
+        if (clickableItems == null || clickableItems.Count == 0)
+        {
+            Console.WriteLine("No clickable items found.");
+            return; // Exit early since there are no items to process
+        }
+
+        if (int.TryParse(spokenTag, out int tagNumber))
+        {
+            clickableItems = show_items.GetClickableItems();
+            if (tagNumber > 0 && tagNumber <= clickableItems.Count)
+            {
+                var selectedItem = clickableItems[tagNumber - 1]; // 0-based index
+
+                // Convert System.Windows.Rect to OpenCvSharp.Rect
+                var convertedRect = ConvertToOpenCvRect(selectedItem.BoundingRectangle);
+
+                ClickItem(convertedRect); // Perform click on item
+            }
+            else
+            {
+                Console.WriteLine("Invalid tag number");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Could not recognize a valid tag number");
+        }
+    }
+
+    // Method to convert System.Windows.Rect to OpenCvSharp.Rect
+    private OpenCvSharp.Rect ConvertToOpenCvRect(System.Windows.Rect rect)
+    {
+        return new OpenCvSharp.Rect((int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
+    }
+
+    private void ClickItem(Rect boundingRect)
+    {
+        // Simulate a mouse click at the center of the bounding rectangle
+        double x = boundingRect.Left + boundingRect.Width / 2;
+        double y = boundingRect.Top + boundingRect.Height / 2;
+
+        // Use the method to simulate the mouse click (you may need to implement this)
+        ClickMouseAt(x, y);
+    }
+
+    private void ClickMouseAt(double x, double y)
+    {
+        // Simulate the mouse movement and click event at the specified coordinates
+        System.Windows.Forms.Cursor.Position = new System.Drawing.Point((int)x, (int)y);
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
     }
 
     private void TypeText(string text) // pan type - wip

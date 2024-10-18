@@ -223,6 +223,9 @@
     <None Include="assets\models\commands.scorer">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="assets\models\delta13.pbmm">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="assets\models\demo.scorer">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

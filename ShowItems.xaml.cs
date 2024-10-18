@@ -22,6 +22,12 @@ namespace ATEDNIULI
             Show();
         }
 
+        public class ClickableItem
+        {
+            public string Name { get; set; }
+            public Rect BoundingRectangle { get; set; } // This holds the coordinates
+        }
+
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             // Set the window size to cover the entire screen
@@ -41,8 +47,13 @@ namespace ATEDNIULI
             OverlayCanvas.Height = this.Height;
         }
 
+        private List<ClickableItem> _clickableItems; // List to store clickable items
+
         public void ListClickableItemsInCurrentWindow()
         {
+            // Initialize the list of clickable items
+            _clickableItems = new List<ClickableItem>();
+
             if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
             {
                 Dispatcher.Invoke(() =>
@@ -76,13 +87,12 @@ namespace ATEDNIULI
 
                             if (!boundingRect.IsEmpty)
                             {
-                                // Output the name of the control to the console
                                 string controlName = element.Current.Name;
                                 Console.WriteLine($"Clickable Item {counter}: {controlName}");
 
                                 Label tag = new Label
                                 {
-                                    Content = counter, // Set label content to the control's name
+                                    Content = counter,
                                     Background = Brushes.Yellow,
                                     Foreground = Brushes.Black,
                                     Padding = new Thickness(5),
@@ -95,6 +105,13 @@ namespace ATEDNIULI
 
                                 // Add the tag to the list
                                 _tags.Add(tag);
+
+                                // Create and store the clickable item
+                                _clickableItems.Add(new ClickableItem
+                                {
+                                    Name = controlName,
+                                    BoundingRectangle = boundingRect
+                                });
 
                                 counter++;
                             }
@@ -109,6 +126,11 @@ namespace ATEDNIULI
             {
                 MessageBox.Show($"Error: {ex.Message}");
             }
+        }
+
+        public List<ClickableItem> GetClickableItems()
+        {
+            return _clickableItems;
         }
 
         private void StartTagRemovalTimer()
