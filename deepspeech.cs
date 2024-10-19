@@ -305,6 +305,10 @@ class LiveTranscription
         intent_window_timer = new System.Timers.Timer(1500); // 1.5 seconds
         intent_window_timer.Elapsed += OnIntentTimerElapsed;
         intent_window_timer.AutoReset = false;
+
+        input_timer = new System.Timers.Timer(3000); // 3 seconds
+        input_timer.Elapsed += OnIntentTimerElapsed;
+        input_timer.AutoReset = false;
     }
 
     // timer stuff kun mag timeout
@@ -344,18 +348,10 @@ class LiveTranscription
     {
         try
         {
-            // Check if the partial result has at least 5 words
-            if (current_partial.Split(' ').Length >= 5)
+            asr_window.Dispatcher.Invoke(() =>
             {
-                asr_window.Dispatcher.Invoke(() =>
-                {
-                    FinalizeStream();
-                });
-            }
-            else
-            {
-                Console.WriteLine("Partial result does not meet word count requirement.");
-            }
+                FinalizeStream();
+            });
         }
         catch (Exception ex)
         {
@@ -484,6 +480,11 @@ class LiveTranscription
                 current_partial = partial_result;
 
                 ResetInactivityTimer();
+
+                if (!input_timer.Enabled)
+                {
+                    input_timer.Start();
+                }
 
                 // Process wake word detection or regular transcription
                 if (wake_word_required)
