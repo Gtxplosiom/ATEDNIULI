@@ -88,7 +88,7 @@ class LiveTranscription
     private System.Timers.Timer wake_word_reset_timer;
 
     private const int inactivity_timeout = 3000;
-    private const int intent_window_timeout = 3000;
+    private const int intent_window_timeout = 1500;
     private const int input_timeout = 7000;
     private const int wake_word_timeout = 7000; // 10 seconds timeout for no wake word detection
 
@@ -332,8 +332,6 @@ class LiveTranscription
         try
         {
             Console.WriteLine("Inactivity detected");
-            input_timer.Stop();
-            wake_word_reset_timer.Stop();
             if (current_partial == previous_partial)
             {
                 Console.WriteLine("Finalizing...");
@@ -356,6 +354,7 @@ class LiveTranscription
     private void OnWakeWordTimeout(object sender, System.Timers.ElapsedEventArgs e)
     {
         // No wake word detected within timeout, finalize and reset stream
+        inactivity_timer.Stop();
         Console.WriteLine("Wake word not detected within timeout, resetting stream.");
         FinalizeStream();
     }
@@ -369,6 +368,7 @@ class LiveTranscription
     {
         try
         {
+            Console.WriteLine("Input is too long resetting stream");
             inactivity_timer.Stop();
             asr_window.Dispatcher.Invoke(() =>
             {
@@ -518,15 +518,16 @@ class LiveTranscription
 
                 ResetInactivityTimer();
 
-                if (!input_timer.Enabled)
-                {
-                    input_timer.Start();
-                }
-
                 if (!wake_word_reset_timer.Enabled)
                 {
                     wake_word_reset_timer.Stop(); // Stop the previous timer
                     wake_word_reset_timer.Start(); // Restart the timer for the next wake word detection
+                }
+
+                if (!input_timer.Enabled)
+                {
+                    input_timer.Stop();
+                    input_timer.Start();
                 }
 
                 // Process wake word detection or regular transcription
@@ -577,6 +578,7 @@ class LiveTranscription
         if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0 && confidence > deepspeech_confidence)
         {
             wake_word_reset_timer.Stop();
+
             wake_word_detected = true;
             partial_result = RemoveWakeWord(partial_result, wake_word);
             click_command_count = 0;
