@@ -39,7 +39,7 @@ class LiveTranscription
     private bool wake_word_detected = false;
     private bool is_running;
 
-    private string wake_word = "hello";
+    private string wake_word = "thermal";
 
     private int click_command_count = 0;
     private int calculator_command_count = 0;
@@ -75,7 +75,7 @@ class LiveTranscription
     private string lastTypedPhrase = string.Empty;
     private bool typing_mode = false;
 
-    private bool wake_word_required = false; // Default to requiring the wake word
+    private bool wake_word_required = true; // Default to requiring the wake word
 
     string app_directory = Directory.GetCurrentDirectory(); // possible gamiton labi pag reference hin assets kay para robust hiya ha iba iba na systems
 
@@ -131,7 +131,7 @@ class LiveTranscription
     string scorer_path = @"assets\models\commands.scorer";
     string ww_scorer_path = @"assets\models\wake_word.scorer";
 
-    int deepspeech_confidence = -40;
+    int deepspeech_confidence = -50;
 
     // importante para diri mag error an memory corrupt ha deepspeech model
     private readonly object streamLock = new object();
@@ -218,17 +218,6 @@ class LiveTranscription
         socket = new RequestSocket("tcp://localhost:6969");
     }
 
-    public void load_model(string model_path, string scorer_path)
-    {
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Loading model..."));
-        deep_speech_model = new DeepSpeech(model_path);
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Model loaded"));
-
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Loading scorer..."));
-        deep_speech_model.EnableExternalScorer(scorer_path);
-        deep_speech_model.AddHotWord("hello", 7);
-    }
-
     public class DetectionResult
     {
         public int TileX { get; set; }
@@ -248,6 +237,25 @@ class LiveTranscription
         show_items.ListClickableItemsInCurrentWindow();
         var clickable_items = show_items.GetClickableItems();
     }
+
+    public void load_model(string model_path, string scorer_path)
+    {
+        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Loading model..."));
+        deep_speech_model = new DeepSpeech(model_path);
+        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Model loaded"));
+
+        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Loading scorer..."));
+        deep_speech_model.EnableExternalScorer(scorer_path);
+    }
+
+    // Fields for stream rate limiting
+    private DateTime last_stream_finalize_time = DateTime.MinValue;
+    private const int stream_finalize_cooldown = 5000; // 5 seconds cooldown between finalizations
+
+    // Fields for long-running session without wake word detection
+    private System.Timers.Timer wake_word_reset_timer;
+    private const int wake_word_timeout = 7000; // 10 seconds timeout for no wake word detection
+
 
     // transcfiption function
     public void StartTranscription()
@@ -298,17 +306,23 @@ class LiveTranscription
     // timer function
     private void InitializeTimer()
     {
-        inactivity_timer = new System.Timers.Timer(1500); // 1.5 seconds
+        inactivity_timer = new System.Timers.Timer(2000); // 2 seconds
         inactivity_timer.Elapsed += OnInactivityTimerElapsed;
         inactivity_timer.AutoReset = false; // Do not restart automatically
 
-        intent_window_timer = new System.Timers.Timer(1500); // 1.5 seconds
+        intent_window_timer = new System.Timers.Timer(2000); // 2 seconds
         intent_window_timer.Elapsed += OnIntentTimerElapsed;
         intent_window_timer.AutoReset = false;
 
         input_timer = new System.Timers.Timer(3000); // 3 seconds
         input_timer.Elapsed += OnIntentTimerElapsed;
         input_timer.AutoReset = false;
+
+        // Initialize wake word reset timer
+        wake_word_reset_timer = new System.Timers.Timer(wake_word_timeout);
+        wake_word_reset_timer.Elapsed += OnWakeWordTimeout;
+        wake_word_reset_timer.AutoReset = false; // Timer will only trigger once
+
     }
 
     // timer stuff kun mag timeout
@@ -320,10 +334,8 @@ class LiveTranscription
             if (current_partial == previous_partial)
             {
                 Console.WriteLine("Finalizing...");
-                asr_window.Dispatcher.Invoke(() =>
-                {
-                    FinalizeStream();
-                });
+                FinalizeStream();
+                UpdateUI(() => main_window.SetListeningIcon(false));
             }
             else
             {
@@ -338,6 +350,12 @@ class LiveTranscription
         }
     }
 
+    private void OnWakeWordTimeout(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        // No wake word detected within timeout, finalize and reset stream
+        Console.WriteLine("Wake word not detected within timeout, resetting stream.");
+        FinalizeStream();
+    }
 
     private void OnIntentTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
@@ -366,6 +384,14 @@ class LiveTranscription
     {
         try
         {
+            // Check if cooldown period has passed
+            if ((DateTime.Now - last_stream_finalize_time).TotalMilliseconds < stream_finalize_cooldown)
+            {
+                Console.WriteLine("Stream finalization cooldown active, skipping finalization.");
+                return; // Skip finalization if cooldown is active
+            }
+
+            last_stream_finalize_time = DateTime.Now;
             // Offload work to a background task
             Task.Run(() =>
             {
@@ -437,25 +463,32 @@ class LiveTranscription
         });
     }
 
-
+    private bool is_stream_ready = true;
     private void ProcessAudioData(byte[] buffer, int bytesRecorded)
     {
+        if (deep_speech_stream == null || !is_stream_ready) return; // Avoid feeding if stream is not ready
+
         short[] short_buffer = new short[bytesRecorded / 2];
         Buffer.BlockCopy(buffer, 0, short_buffer, 0, bytesRecorded);
 
-        // Run VAD detection asynchronously
         Task.Run(() =>
         {
-            if (!vad.HasSpeech(short_buffer))
+            lock (streamLock)
             {
-                HandleNoSpeechDetected();
-                return;
+                if (vad.HasSpeech(short_buffer))
+                {
+                    is_stream_ready = false; // Block further feeds during processing
+                    ProcessSpeech(short_buffer);
+                    is_stream_ready = true; // Ready for next audio feed
+                }
+                else
+                {
+                    HandleNoSpeechDetected(); // Finalizes stream if no speech is detected
+                }
             }
-
-            // Offload to DeepSpeech processing if VAD confirms speech
-            Task.Run(() => ProcessSpeech(short_buffer));
         });
     }
+
 
     private void ProcessSpeech(short[] short_buffer)
     {
@@ -486,10 +519,16 @@ class LiveTranscription
                     input_timer.Start();
                 }
 
+                if (!wake_word_reset_timer.Enabled)
+                {
+                    wake_word_reset_timer.Stop(); // Stop the previous timer
+                    wake_word_reset_timer.Start(); // Restart the timer for the next wake word detection
+                }
+
                 // Process wake word detection or regular transcription
                 if (wake_word_required)
                 {
-                    HandleWakeWord(partial_result);
+                    HandleWakeWord(partial_result, confidence);
                 }
                 else
                 {
@@ -522,7 +561,7 @@ class LiveTranscription
     }
 
 
-    private void HandleWakeWord(string partial_result)
+    private void HandleWakeWord(string partial_result, double confidence)
     {
         int new_click_count = CountClicks(partial_result);
 
@@ -531,15 +570,14 @@ class LiveTranscription
             SimulateMouseClicks(new_click_count);
         }
 
-        if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
+        if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0 && confidence > deepspeech_confidence)
         {
             wake_word_detected = true;
             partial_result = RemoveWakeWord(partial_result, wake_word);
             click_command_count = 0;
 
-            // Update UI in a background task
-            UpdateUI(() => main_window.SetListeningIcon(true));
             ShowTranscription(partial_result);
+            ProcessCommand(partial_result);
         }
     }
 
@@ -564,11 +602,18 @@ class LiveTranscription
             main_window.SetListeningIcon(true);
             intent_window.Show();
 
-            if (!asr_window.IsVisible)
+            try
             {
-                asr_window.Show();
+                if (!asr_window.IsVisible)
+                {
+                    asr_window.Show();
+                }
+                asr_window.AppendText($"You said: {partial_result}", true);
             }
-            asr_window.AppendText($"You said: {partial_result}", true);
+            catch (Exception ex)
+            {
+                return; 
+            }
         });
     }
 
