@@ -131,7 +131,7 @@ class LiveTranscription
     string scorer_path = @"assets\models\commands.scorer";
     string ww_scorer_path = @"assets\models\wake_word.scorer";
 
-    int deepspeech_confidence = -30;
+    int deepspeech_confidence = -40;
 
     // importante para diri mag error an memory corrupt ha deepspeech model
     private readonly object streamLock = new object();
@@ -147,7 +147,7 @@ class LiveTranscription
         {
             SampleRate = WebRtcVadSharp.SampleRate.Is16kHz,
             FrameLength = WebRtcVadSharp.FrameLength.Is20ms,
-            OperatingMode = OperatingMode.Aggressive
+            OperatingMode = OperatingMode.VeryAggressive
         };
 
         // initialize python
@@ -249,7 +249,6 @@ class LiveTranscription
         var clickable_items = show_items.GetClickableItems();
     }
 
-
     // transcfiption function
     public void StartTranscription()
     {
@@ -311,19 +310,30 @@ class LiveTranscription
     // timer stuff kun mag timeout
     private void OnInactivityTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
-        if (current_partial == previous_partial)
+        try
         {
-            asr_window.Dispatcher.Invoke(() =>
+            Console.WriteLine("Inactivity detected");
+            if (current_partial == previous_partial)
             {
-                FinalizeStream();
-            });
+                Console.WriteLine("Finalizing...");
+                asr_window.Dispatcher.Invoke(() =>
+                {
+                    FinalizeStream();
+                });
+            }
+            else
+            {
+                Console.WriteLine("Restarting...");
+                previous_partial = current_partial; // Update previous partial
+                inactivity_timer.Start(); // Restart timer for further inactivity
+            }
         }
-        else
+        catch (Exception ex)
         {
-            previous_partial = current_partial;
-            inactivity_timer.Start(); // Restart timer
+            Console.WriteLine($"Error in OnInactivityTimerElapsed: {ex.Message}");
         }
     }
+
 
     private void OnIntentTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
@@ -473,11 +483,7 @@ class LiveTranscription
 
                 current_partial = partial_result;
 
-                // Start the inactivity timer only if not already started
-                if (!inactivity_timer.Enabled)
-                {
-                    inactivity_timer.Start();
-                }
+                ResetInactivityTimer();
 
                 // Process wake word detection or regular transcription
                 if (wake_word_required)
@@ -578,8 +584,12 @@ class LiveTranscription
     // Reset inactivity timer and setup event to process commands after inactivity
     private void ResetInactivityTimer()
     {
-        inactivity_timer.Stop(); // Stop the timer first
-        inactivity_timer.Start(); // Restart the timer
+        if (!inactivity_timer.Enabled)
+        {
+            inactivity_timer.Stop(); // Stop the timer first
+            inactivity_timer.Start(); // Restart the timer
+            Console.WriteLine("started the inactivity timer");
+        }
     }
 
     // Helper method to update UI on the main thread
@@ -591,7 +601,7 @@ class LiveTranscription
         }
         else
         {
-            main_window.Dispatcher.BeginInvoke(action);
+            main_window.Dispatcher.Invoke(action);
         }
     }
 
