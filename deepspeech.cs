@@ -39,7 +39,7 @@ class LiveTranscription
     private bool wake_word_detected = false;
     private bool is_running;
 
-    private string wake_word = "hello";
+    private string wake_word = "thermal";
 
     private int click_command_count = 0;
     private int calculator_command_count = 0;
@@ -75,7 +75,7 @@ class LiveTranscription
     private string lastTypedPhrase = string.Empty;
     private bool typing_mode = false;
 
-    private bool wake_word_required = false; // Default to requiring the wake word
+    private bool wake_word_required = true; // Default to requiring the wake word
 
     string app_directory = Directory.GetCurrentDirectory(); // possible gamiton labi pag reference hin assets kay para robust hiya ha iba iba na systems
 
@@ -84,7 +84,6 @@ class LiveTranscription
 
     private System.Timers.Timer inactivity_timer;
     private System.Timers.Timer intent_window_timer;
-    private System.Timers.Timer input_timer;
 
     // pag store han current result and previous
     private string previous_partial = string.Empty;
@@ -249,7 +248,6 @@ class LiveTranscription
         var clickable_items = show_items.GetClickableItems();
     }
 
-
     // transcfiption function
     public void StartTranscription()
     {
@@ -299,7 +297,7 @@ class LiveTranscription
     // timer function
     private void InitializeTimer()
     {
-        inactivity_timer = new System.Timers.Timer(1500); // 1.5 seconds
+        inactivity_timer = new System.Timers.Timer(3000); // 1.5 seconds
         inactivity_timer.Elapsed += OnInactivityTimerElapsed;
         inactivity_timer.AutoReset = false; // Do not restart automatically
 
@@ -308,20 +306,18 @@ class LiveTranscription
         intent_window_timer.AutoReset = false;
     }
 
-    // timer stuff kun mag timeout
     private void OnInactivityTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
-        if (current_partial == previous_partial)
-        {
-            asr_window.Dispatcher.Invoke(() =>
-            {
-                FinalizeStream();
-            });
-        }
-        else
+        if (current_partial == previous_partial && !wake_word_detected)
         {
             previous_partial = current_partial;
             inactivity_timer.Start(); // Restart timer
+        }
+        else
+        {
+            // If wake word is detected and there's no new input, finalize the stream
+            asr_window.Dispatcher.Invoke(() => FinalizeStream());
+            UpdateUI(() => main_window.SetListeningIcon(false));
         }
     }
 
@@ -358,63 +354,60 @@ class LiveTranscription
     // Forcefully end the stream
     private void FinalizeStream()
     {
+        if (!wake_word_detected)
+        {
+            return; // Do not finalize if wake word hasn't been detected yet
+        }
+
         try
         {
-            // Offload work to a background task
+            // Use Task.Run for background processing
             Task.Run(() =>
             {
+                string final_result_from_stream = null;
+
                 lock (streamLock)
                 {
-                    string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
-
-                    // Perform socket operations in a background thread
-                    socket.SendFrame(final_result_from_stream);
-                    string receivedMessage = socket.ReceiveFrameString();
-                    received = receivedMessage;
-
-                    // Dispose and reset the stream
-                    deep_speech_stream.Dispose();
-                    deep_speech_stream = deep_speech_model.CreateStream();
+                    // Check if stream is valid before finalizing
+                    if (deep_speech_stream != null)
+                    {
+                        final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
+                        deep_speech_stream = null; // Reset the stream after finalizing
+                    }
                 }
-            }).ContinueWith(t =>
-            {
-                // Check if an exception was thrown in the Task
-                if (t.Exception != null)
+
+                if (string.IsNullOrEmpty(final_result_from_stream))
                 {
-                    Console.WriteLine($"Error finalizing stream: {t.Exception.InnerException.Message}");
-                    // Handle exceptions (log them, show error messages, etc.)
-                    return;
+                    Console.WriteLine("No final result from stream. Exiting FinalizeStream.");
+                    return; // Exit if there are no results to process
                 }
 
-                // Update the UI on the UI thread
+                // Perform socket operations in a background thread
+                socket.SendFrame(final_result_from_stream);
+                string receivedMessage = socket.ReceiveFrameString();
+
+                // Ensure this runs on the UI thread using Dispatcher
                 asr_window.Dispatcher.Invoke(() =>
                 {
                     if (asr_window.IsVisible)
                     {
-                        try
-                        {
-                            intent_window.AppendText($"Intent: {received}");
-                            intent_window_timer.Start();
-                            asr_window.Hide();
+                        intent_window.AppendText($"Intent: {receivedMessage}");
+                        intent_window_timer.Start();
+                        asr_window.Hide();
+                        wake_word_detected = false;
+                        ResetCommandCounts();
 
-                            wake_word_detected = false;
-                            ResetCommandCounts();
-
-                            Console.WriteLine("Stream finalized successfully.");
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error updating UI: {ex.Message}");
-                        }
+                        Console.WriteLine("Stream finalized successfully.");
                     }
                 });
-            }, TaskScheduler.FromCurrentSynchronizationContext()); // Ensure the continuation runs on the UI thread context
+            });
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error in FinalizeStream: {ex.Message}");
         }
     }
+
 
     private void OnDataAvailable(object sender, WaveInEventArgs e)
     {
@@ -434,42 +427,68 @@ class LiveTranscription
 
     private void ProcessAudioData(byte[] buffer, int bytesRecorded)
     {
+        if (bytesRecorded <= 0)
+        {
+            Console.WriteLine("No audio data recorded.");
+            return;
+        }
+
         short[] short_buffer = new short[bytesRecorded / 2];
         Buffer.BlockCopy(buffer, 0, short_buffer, 0, bytesRecorded);
 
-        // Run VAD detection asynchronously
-        Task.Run(() =>
+        if (short_buffer.All(sample => sample == 0))
         {
-            if (!vad.HasSpeech(short_buffer))
-            {
-                HandleNoSpeechDetected();
-                return;
-            }
+            Console.WriteLine("Silent audio detected. Skipping processing...");
+            return;
+        }
 
-            // Offload to DeepSpeech processing if VAD confirms speech
-            Task.Run(() => ProcessSpeech(short_buffer));
-        });
+        Task.Run(() => ProcessSpeech(short_buffer));
     }
+
+    private int audioChunkCounter = 0;
+    private const int MaxAudioChunks = 10;
 
     private void ProcessSpeech(short[] short_buffer)
     {
         // Lock only around the critical section to minimize delay
         lock (streamLock)
         {
+            if (deep_speech_stream == null)
+            {
+                Console.WriteLine("DeepSpeech stream is null, cannot process audio.");
+                deep_speech_stream = deep_speech_model.CreateStream();
+            }
+
             try
             {
-                // Feed audio to the model
-                deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
+                try
+                {
+                    // Feed audio to the model
+                    deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
+                }
+                catch (System.AccessViolationException ex)
+                {
+                    Console.WriteLine($"AccessViolationException: {ex.Message}");
+                    deep_speech_model.FinishStream(deep_speech_stream);
+                }
 
                 // Get intermediate decoding with metadata (confidence values)
                 var metadata = deep_speech_model.IntermediateDecodeWithMetadata(deep_speech_stream, 1);
 
-                if (metadata == null || metadata.Transcripts.Length == 0) return;
+                if (metadata == null || metadata.Transcripts.Length == 0)
+                {
+                    Console.WriteLine("No transcript available. Skipping...");
+                    return; // Skip further processing
+                }
 
                 var partial_result = metadata.Transcripts[0].Tokens.Select(t => t.Text).Aggregate((a, b) => a + b).Trim();
                 float confidence = (float)metadata.Transcripts[0].Confidence;
 
-                if (string.IsNullOrEmpty(partial_result)) return;
+                if (string.IsNullOrEmpty(partial_result))
+                {
+                    Console.WriteLine("Received an empty partial result.");
+                    return;
+                }
 
                 current_partial = partial_result;
 
@@ -482,7 +501,14 @@ class LiveTranscription
                 // Process wake word detection or regular transcription
                 if (wake_word_required)
                 {
+                    if (audioChunkCounter > MaxAudioChunks)
+                    {
+                        FinalizeStream();
+                        audioChunkCounter = 0; // Reset the counter
+                        Console.WriteLine("Maxxed out the audio chunks");
+                    }
                     HandleWakeWord(partial_result);
+                    audioChunkCounter++;
                 }
                 else
                 {
@@ -513,7 +539,6 @@ class LiveTranscription
             }
         }
     }
-
 
     private void HandleWakeWord(string partial_result)
     {
@@ -571,9 +596,18 @@ class LiveTranscription
         {
             if (!asr_window.IsVisible) return;
 
-            FinalizeStream(); // Finalize the stream when no speech is detected
+            // Do not finalize if the wake word hasn't been detected
+            if (!wake_word_detected)
+            {
+                ResetInactivityTimer(); // Reset and keep listening
+            }
+            else
+            {
+                FinalizeStream(); // Finalize only if the wake word was already detected
+            }
         });
     }
+
 
     // Reset inactivity timer and setup event to process commands after inactivity
     private void ResetInactivityTimer()
@@ -587,14 +621,13 @@ class LiveTranscription
     {
         if (main_window.Dispatcher.CheckAccess())
         {
-            action();
+            action(); // If already on UI thread, perform the action
         }
         else
         {
-            main_window.Dispatcher.Invoke(action);
+            main_window.Dispatcher.BeginInvoke(action); // Asynchronous non-blocking UI update
         }
     }
-
 
     public static void VolumeUp(float amount = 0.1f) // Adjust amount as needed
     {
@@ -608,15 +641,17 @@ class LiveTranscription
         device.AudioEndpointVolume.MasterVolumeLevelScalar = newVolume;
     }
 
-    private string RemoveWakeWord(string transcription, string wake_word) // pan remove hin wake word ha partial para diri ma output
+    private string RemoveWakeWord(string transcription, string wake_word)
     {
         int index = transcription.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase);
         if (index >= 0)
         {
-            return transcription.Remove(index, wake_word.Length).Trim();
+            // Only return the part of the transcription after the wake word
+            return transcription.Substring(index + wake_word.Length).Trim();
         }
         return transcription;
     }
+
 
     // TODO - himua an tanan na commands na gamiton an HandleCommand function
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
