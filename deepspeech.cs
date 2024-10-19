@@ -85,6 +85,12 @@ class LiveTranscription
     private System.Timers.Timer inactivity_timer;
     private System.Timers.Timer intent_window_timer;
     private System.Timers.Timer input_timer;
+    private System.Timers.Timer wake_word_reset_timer;
+
+    private const int inactivity_timeout = 3000;
+    private const int intent_window_timeout = 3000;
+    private const int input_timeout = 7000;
+    private const int wake_word_timeout = 7000; // 10 seconds timeout for no wake word detection
 
     // pag store han current result and previous
     private string previous_partial = string.Empty;
@@ -252,11 +258,6 @@ class LiveTranscription
     private DateTime last_stream_finalize_time = DateTime.MinValue;
     private const int stream_finalize_cooldown = 5000; // 5 seconds cooldown between finalizations
 
-    // Fields for long-running session without wake word detection
-    private System.Timers.Timer wake_word_reset_timer;
-    private const int wake_word_timeout = 7000; // 10 seconds timeout for no wake word detection
-
-
     // transcfiption function
     public void StartTranscription()
     {
@@ -306,15 +307,15 @@ class LiveTranscription
     // timer function
     private void InitializeTimer()
     {
-        inactivity_timer = new System.Timers.Timer(2000); // 2 seconds
+        inactivity_timer = new System.Timers.Timer(inactivity_timeout); // 3 seconds
         inactivity_timer.Elapsed += OnInactivityTimerElapsed;
         inactivity_timer.AutoReset = false; // Do not restart automatically
 
-        intent_window_timer = new System.Timers.Timer(2000); // 2 seconds
+        intent_window_timer = new System.Timers.Timer(intent_window_timeout); // 3 seconds
         intent_window_timer.Elapsed += OnIntentTimerElapsed;
         intent_window_timer.AutoReset = false;
 
-        input_timer = new System.Timers.Timer(3000); // 3 seconds
+        input_timer = new System.Timers.Timer(input_timeout); // 7 seconds
         input_timer.Elapsed += OnIntentTimerElapsed;
         input_timer.AutoReset = false;
 
@@ -331,10 +332,12 @@ class LiveTranscription
         try
         {
             Console.WriteLine("Inactivity detected");
+            input_timer.Stop();
+            wake_word_reset_timer.Stop();
             if (current_partial == previous_partial)
             {
                 Console.WriteLine("Finalizing...");
-                FinalizeStream();
+                asr_window.Dispatcher.Invoke(() => FinalizeStream());
                 UpdateUI(() => main_window.SetListeningIcon(false));
             }
             else
@@ -366,6 +369,7 @@ class LiveTranscription
     {
         try
         {
+            inactivity_timer.Stop();
             asr_window.Dispatcher.Invoke(() =>
             {
                 FinalizeStream();
@@ -572,6 +576,7 @@ class LiveTranscription
 
         if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0 && confidence > deepspeech_confidence)
         {
+            wake_word_reset_timer.Stop();
             wake_word_detected = true;
             partial_result = RemoveWakeWord(partial_result, wake_word);
             click_command_count = 0;
