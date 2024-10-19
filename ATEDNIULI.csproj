@@ -262,6 +262,9 @@
     <None Include="assets\models\official-train-1-best-640.onnx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="assets\models\official-train-1-best-640.pt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="assets\models\please_work\intent_labels.pickle">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -320,10 +323,10 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Resource>
     <Content Include="assets\models\please_work\pleasework.py" />
-    <Content Include="python\intent.py">
+    <Content Include="python\grid_inference_optimized.py">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Content Include="python\intent_recognition.py">
+    <Content Include="python\intent.py">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="python\tiled_inference_optimized_screenshot_c.py">
