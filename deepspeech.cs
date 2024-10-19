@@ -147,7 +147,7 @@ class LiveTranscription
         {
             SampleRate = WebRtcVadSharp.SampleRate.Is16kHz,
             FrameLength = WebRtcVadSharp.FrameLength.Is20ms,
-            OperatingMode = OperatingMode.VeryAggressive
+            OperatingMode = OperatingMode.Aggressive
         };
 
         // initialize python
@@ -260,7 +260,7 @@ class LiveTranscription
             wave_in_event = new WaveInEvent
             {
                 WaveFormat = new WaveFormat(16000, 1),
-                BufferMilliseconds = 300 // buffer size, mas guti mas malaksi
+                BufferMilliseconds = 400 // no this doesnt affect my problem
             };
 
             deep_speech_stream = deep_speech_model.CreateStream();
@@ -420,33 +420,35 @@ class LiveTranscription
     {
         if (!is_running || e.BytesRecorded <= 0)
         {
-            if (e.BytesRecorded <= 0)
-            {
-                // Update UI with no audio data recorded
-                UpdateUI(() => asr_window.AppendText("No audio data recorded."));
-            }
+            UpdateUI(() => asr_window.AppendText("No audio data recorded."));
             return;
         }
 
-        // Process the audio data immediately on the current thread
-        // Task.Run(() => ProcessAudioData(e.Buffer, e.BytesRecorded)); amo ngayan ini an na cause hin delay like an audio baga na queue
-        ProcessAudioData(e.Buffer, e.BytesRecorded);
+        // Offload audio processing to avoid blocking the main thread
+        Task.Run(() =>
+        {
+            ProcessAudioData(e.Buffer, e.BytesRecorded);
+        });
     }
+
 
     private void ProcessAudioData(byte[] buffer, int bytesRecorded)
     {
         short[] short_buffer = new short[bytesRecorded / 2];
         Buffer.BlockCopy(buffer, 0, short_buffer, 0, bytesRecorded);
 
-        // Check for speech using VAD before processing
-        if (!vad.HasSpeech(short_buffer))
+        // Run VAD detection asynchronously
+        Task.Run(() =>
         {
-            HandleNoSpeechDetected();
-            return;
-        }
+            if (!vad.HasSpeech(short_buffer))
+            {
+                HandleNoSpeechDetected();
+                return;
+            }
 
-        // Process the speech immediately without locking
-        ProcessSpeech(short_buffer);
+            // Offload to DeepSpeech processing if VAD confirms speech
+            Task.Run(() => ProcessSpeech(short_buffer));
+        });
     }
 
     private void ProcessSpeech(short[] short_buffer)

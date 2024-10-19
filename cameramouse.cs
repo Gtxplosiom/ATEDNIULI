@@ -15,6 +15,20 @@ namespace ATEDNIULI
         [DllImport("user32.dll")]
         static extern bool GetCursorPos(out Point point);
 
+        // dlls kanan mouse variables
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, int dwExtraInfo);
+        private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+        private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+
+        [DllImport("user32.dll")]
+        static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+
         [StructLayout(LayoutKind.Sequential)]
         public struct Point
         {
@@ -52,6 +66,24 @@ namespace ATEDNIULI
         // Declare webcamWidth and webcamHeight as class-level fields
         private int webcamWidth = 640;
         private int webcamHeight = 480;
+
+        private void SetWindowAlwaysOnTopAndPosition(string windowName, int screenWidth, int screenHeight)
+        {
+            // Retrieve the window handle for the OpenCV window
+            IntPtr hWnd = Cv2.GetWindowHandle(windowName);
+
+            // Define window size and position for the right side of the screen
+            int windowWidth = 640;  // Visually reduce width by 50%
+            int windowHeight = 480; // Visually reduce height by 50%
+            int posX = screenWidth - windowWidth; // X position for right alignment
+            int posY = (screenHeight - windowHeight) / 2; // Centered vertically
+
+            // Resize the window (display size only, not affecting the resolution)
+            Cv2.ResizeWindow(windowName, windowWidth, windowHeight);
+
+            // Set the window to always be on top and position it on the right side
+            SetWindowPos(hWnd, HWND_TOPMOST, posX, posY, windowWidth, windowHeight, SWP_SHOWWINDOW);
+        }
 
         public void StartCameraMouse()
         {
@@ -154,6 +186,7 @@ namespace ATEDNIULI
                                     }
 
                                     Cv2.ImShow("Camera", frame);
+                                    SetWindowAlwaysOnTopAndPosition("Camera", screenWidth, screenHeight);
                                 } // dlibImage is disposed here
                             } // gray Mat is disposed here
                         } // frame Mat is disposed here
@@ -173,8 +206,14 @@ namespace ATEDNIULI
 
         private void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
+            // Step 1: Define key landmarks
             var targetNosePoint = landmarksList[30];
+            var leftBrowPoint = landmarksList[19];
+            var rightBrowPoint = landmarksList[24];
+            var leftUpperEyelidPoint = landmarksList[37];
+            var rightUpperEyelidPoint = landmarksList[44];
 
+            // Step 2: Check for first frame
             if (isFirstFrame)
             {
                 previousNosePosition = targetNosePoint;
@@ -184,6 +223,7 @@ namespace ATEDNIULI
             int steps = 10;
             double smoothingFactor = 0.5;
 
+            // Step 3: Process smoothing for nose movement
             for (int i = 0; i <= steps; i++)
             {
                 int smoothedNoseX = (int)(previousNosePosition.X + (targetNosePoint.X - previousNosePosition.X) * (i / (double)steps) * (1 - smoothingFactor));
@@ -198,8 +238,50 @@ namespace ATEDNIULI
                 previousNosePosition = smoothedNosePoint;
             }
 
+            // Step 4: Detect if brows are raised
+            // Calculate distances between the brow and the upper eyelid for both left and right sides
+            double leftBrowToEyelidDist = Math.Abs(leftBrowPoint.Y - leftUpperEyelidPoint.Y);
+            double rightBrowToEyelidDist = Math.Abs(rightBrowPoint.Y - rightUpperEyelidPoint.Y);
+
+            // Define a threshold for determining if the brow is raised (you can tweak this value based on your tests)
+            double browRaiseThreshold = 35.0;
+
+            bool isLeftBrowRaised = leftBrowToEyelidDist > browRaiseThreshold;
+            bool isRightBrowRaised = rightBrowToEyelidDist > browRaiseThreshold;
+
+            // Step 5: Draw rectangles or markers to visualize the brow status
             Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2);
+
+            Cv2.Circle(frame, new OpenCvSharp.Point(leftBrowPoint.X, leftBrowPoint.Y), 3, Scalar.Blue, -1); // Left Brow Point
+            Cv2.Circle(frame, new OpenCvSharp.Point(rightBrowPoint.X, rightBrowPoint.Y), 3, Scalar.Blue, -1); // Right Brow Point
+            Cv2.Circle(frame, new OpenCvSharp.Point(leftUpperEyelidPoint.X, leftUpperEyelidPoint.Y), 3, Scalar.Green, -1); // Left Upper Eyelid Point
+            Cv2.Circle(frame, new OpenCvSharp.Point(rightUpperEyelidPoint.X, rightUpperEyelidPoint.Y), 3, Scalar.Green, -1); // Right Upper Eyelid Point
+
+            // Optionally, you can draw lines to better visualize the connections
+            Cv2.Line(frame, new OpenCvSharp.Point(leftBrowPoint.X, leftBrowPoint.Y), new OpenCvSharp.Point(leftUpperEyelidPoint.X, leftUpperEyelidPoint.Y), Scalar.White, 1); // Left side connection
+            Cv2.Line(frame, new OpenCvSharp.Point(rightBrowPoint.X, rightBrowPoint.Y), new OpenCvSharp.Point(rightUpperEyelidPoint.X, rightUpperEyelidPoint.Y), Scalar.White, 1); // Right side connection
+
+            // Step 6: Display if the brows are raised
+            if (isLeftBrowRaised)
+            {
+                Cv2.PutText(frame, "Left Brow Raised", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
+            }
+
+            if (isRightBrowRaised)
+            {
+                Cv2.PutText(frame, "Right Brow Raised", new OpenCvSharp.Point(10, 60), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
+            }
+
+            if (isLeftBrowRaised || isRightBrowRaised)
+            {
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+            }
+            else
+            {
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+            }
         }
+
 
         private void UpdateRoi(Point smoothedNosePoint, ref int roiX, ref int roiY, int roiWidth, int roiHeight)
         {
