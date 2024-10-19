@@ -591,7 +591,7 @@ class LiveTranscription
         }
         else
         {
-            main_window.Dispatcher.Invoke(action);
+            main_window.Dispatcher.BeginInvoke(action);
         }
     }
 
