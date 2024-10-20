@@ -75,7 +75,7 @@ class LiveTranscription
     private string lastTypedPhrase = string.Empty;
     private bool typing_mode = false;
 
-    private bool wake_word_required = false; // Default to requiring the wake word
+    private bool wake_word_required = true; // Default to requiring the wake word
 
     string app_directory = Directory.GetCurrentDirectory(); // possible gamiton labi pag reference hin assets kay para robust hiya ha iba iba na systems
 
@@ -87,7 +87,7 @@ class LiveTranscription
     private System.Timers.Timer inactivity_timer;
     private System.Timers.Timer intent_window_timer;
     private System.Timers.Timer input_timer;
-    private System.Timers.Timer wake_word_reset_timer;
+    private System.Timers.Timer wake_word_timer;
 
     private const int input_timeout = 7000;
     private const int wake_word_timeout = 7000; // 10 seconds timeout for no wake word detection
@@ -247,11 +247,11 @@ class LiveTranscription
 
     public void load_model(string model_path, string scorer_path)
     {
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Loading model..."));
+        UpdateUI(() => asr_window.AppendText("Loading model..."));
         deep_speech_model = new DeepSpeech(model_path);
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Model loaded"));
+        UpdateUI(() => asr_window.AppendText("Model loaded"));
 
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Loading scorer..."));
+        UpdateUI(() => asr_window.AppendText("Loading scorer..."));
         deep_speech_model.EnableExternalScorer(scorer_path);
     }
 
@@ -278,17 +278,17 @@ class LiveTranscription
             wave_in_event.DataAvailable += OnDataAvailable;
             wave_in_event.RecordingStopped += OnRecordingStopped;
 
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Starting microphone..."));
+            UpdateUI(() => asr_window.AppendText("Starting microphone..."));
             wave_in_event.StartRecording();
 
-            asr_window.Dispatcher.Invoke(() =>
+            UpdateUI(() =>
             {
                 asr_window.Hide();
             });
         }
         catch (Exception ex)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Error: {ex.Message}"));
+            UpdateUI(() => asr_window.AppendText($"Error: {ex.Message}"));
         }
     }
 
@@ -296,7 +296,7 @@ class LiveTranscription
     {
         if (e.Exception != null)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Recording Stopped Error: {e.Exception.Message}"));
+            UpdateUI(() => asr_window.AppendText($"Recording Stopped Error: {e.Exception.Message}"));
         }
 
         if (is_running)
@@ -321,9 +321,9 @@ class LiveTranscription
         input_timer.AutoReset = false;
 
         // Initialize wake word reset timer
-        wake_word_reset_timer = new System.Timers.Timer(wake_word_timeout);
-        wake_word_reset_timer.Elapsed += OnWakeWordTimeout;
-        wake_word_reset_timer.AutoReset = false; // Timer will only trigger once
+        wake_word_timer = new System.Timers.Timer(wake_word_timeout);
+        wake_word_timer.Elapsed += OnWakeWordTimeout;
+        wake_word_timer.AutoReset = false; // Timer will only trigger once
 
     }
 
@@ -336,8 +336,7 @@ class LiveTranscription
             if (current_partial == previous_partial)
             {
                 Console.WriteLine("Finalizing...");
-                asr_window.Dispatcher.Invoke(() => FinalizeStream());
-                UpdateUI(() => main_window.SetListeningIcon(false));
+                UpdateUI(() => FinalizeStream());
             }
             else
             {
@@ -362,7 +361,7 @@ class LiveTranscription
 
     private void OnIntentTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
-        intent_window.Dispatcher.Invoke(() => intent_window.Hide());
+        UpdateUI(() => intent_window.Hide());
     }
 
     private void OnInputTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
@@ -371,7 +370,7 @@ class LiveTranscription
         {
             Console.WriteLine("Input is too long resetting stream");
             inactivity_timer.Stop();
-            asr_window.Dispatcher.Invoke(() =>
+            UpdateUI(() =>
             {
                 FinalizeStream();
             });
@@ -424,7 +423,7 @@ class LiveTranscription
                 }
 
                 // Update the UI on the UI thread
-                asr_window.Dispatcher.Invoke(() =>
+                UpdateUI(() =>
                 {
                     if (asr_window.IsVisible)
                     {
@@ -432,6 +431,7 @@ class LiveTranscription
                         {
                             intent_window.AppendText($"Intent: {received}");
                             intent_window_timer.Start();
+                            main_window.SetListeningIcon(false);
                             asr_window.Hide();
 
                             wake_word_detected = false;
@@ -460,6 +460,12 @@ class LiveTranscription
             UpdateUI(() => asr_window.AppendText("No audio data recorded."));
             return;
         }
+
+        StartInactivityTimer();
+
+        StartWakeWordTimer();
+
+        StartInputTimer();
 
         // Offload audio processing to avoid blocking the main thread
         Task.Run(() =>
@@ -517,20 +523,6 @@ class LiveTranscription
 
                 current_partial = partial_result;
 
-                ResetInactivityTimer();
-
-                if (!wake_word_reset_timer.Enabled)
-                {
-                    wake_word_reset_timer.Stop(); // Stop the previous timer
-                    wake_word_reset_timer.Start(); // Restart the timer for the next wake word detection
-                }
-
-                if (!input_timer.Enabled)
-                {
-                    input_timer.Stop();
-                    input_timer.Start();
-                }
-
                 // Process wake word detection or regular transcription
                 if (wake_word_required)
                 {
@@ -576,9 +568,12 @@ class LiveTranscription
             SimulateMouseClicks(new_click_count);
         }
 
-        if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0 && confidence > deepspeech_confidence)
+        if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            wake_word_reset_timer.Stop();
+            if (wake_word_timer.Enabled)
+            {
+                wake_word_timer.Close();
+            }
 
             wake_word_detected = true;
             partial_result = RemoveWakeWord(partial_result, wake_word);
@@ -605,11 +600,12 @@ class LiveTranscription
 
     private void ShowTranscription(string partial_result)
     {
+        UpdateUI(() => intent_window.Show());
+
+        UpdateUI(() => main_window.SetListeningIcon(true));
+
         UpdateUI(() =>
         {
-            main_window.SetListeningIcon(true);
-            intent_window.Show();
-
             try
             {
                 if (!asr_window.IsVisible)
@@ -620,9 +616,9 @@ class LiveTranscription
             }
             catch (Exception ex)
             {
-                return; 
+                return;
             }
-        });
+        }); 
     }
 
     private void HandleNoSpeechDetected()
@@ -636,13 +632,33 @@ class LiveTranscription
     }
 
     // Reset inactivity timer and setup event to process commands after inactivity
-    private void ResetInactivityTimer()
+    private void StartInactivityTimer()
     {
         if (!inactivity_timer.Enabled)
         {
             inactivity_timer.Stop(); // Stop the timer first
             inactivity_timer.Start(); // Restart the timer
             Console.WriteLine("started the inactivity timer");
+        }
+    }
+
+    private void StartWakeWordTimer()
+    {
+        if (!wake_word_timer.Enabled)
+        {
+            wake_word_timer.Stop(); // Stop the timer first
+            wake_word_timer.Start(); // Restart the timer
+            Console.WriteLine("started the wake word timer");
+        }
+    }
+
+    private void StartInputTimer()
+    {
+        if (!input_timer.Enabled)
+        {
+            input_timer.Stop(); // Stop the timer first
+            input_timer.Start(); // Restart the timer
+            Console.WriteLine("started the input timer");
         }
     }
 
@@ -658,7 +674,6 @@ class LiveTranscription
             main_window.Dispatcher.Invoke(action);
         }
     }
-
 
     public static void VolumeUp(float amount = 0.1f) // Adjust amount as needed
     {
@@ -692,7 +707,7 @@ class LiveTranscription
         if (new_click_count > click_command_count)
         {
             int clicks_to_perform = new_click_count - click_command_count;
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Performing {clicks_to_perform} click(s)...", true));
+            UpdateUI(() => asr_window.AppendText($"Performing {clicks_to_perform} click(s)...", true));
             for (int i = 0; i < clicks_to_perform; i++)
             {
                 SimulateMouseClick();
@@ -818,7 +833,7 @@ class LiveTranscription
         if (new_command_count > commandCount)
         {
             int commands_to_perform = new_command_count - commandCount;
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Performing {commands_to_perform} {commandText} command(s)...", true));
+            UpdateUI(() => asr_window.AppendText($"Performing {commands_to_perform} {commandText} command(s)...", true));
             for (int i = 0; i < commands_to_perform; i++)
             {
                 action.Invoke();
@@ -1003,7 +1018,7 @@ class LiveTranscription
         }
         catch (Exception ex)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Failed to start {processName}: {ex.Message}", true));
+            UpdateUI(() => asr_window.AppendText($"Failed to start {processName}: {ex.Message}", true));
         }
     }
 
@@ -1014,7 +1029,7 @@ class LiveTranscription
         {
             SendMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
         }
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Closing current window...", true));
+        UpdateUI(() => asr_window.AppendText("Closing current window...", true));
     }
 
     private void CloseApplication(string processName) // pag close hin app - wip
@@ -1028,7 +1043,7 @@ class LiveTranscription
         }
         catch (Exception ex)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Error closing process {processName}: {ex.Message}"));
+            UpdateUI(() => asr_window.AppendText($"Error closing process {processName}: {ex.Message}"));
         }
     }
 
@@ -1077,7 +1092,7 @@ class LiveTranscription
         try
         {
             string final_result = deep_speech_model.FinishStream(deep_speech_stream);
-            asr_window.Dispatcher.Invoke(() =>
+            UpdateUI(() =>
             {
                 asr_window.AppendText("Final Transcription: " + final_result);
                 if (asr_window.IsVisible)
@@ -1088,14 +1103,14 @@ class LiveTranscription
         }
         catch (Exception ex)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Error finishing stream: {ex.Message}"));
+            UpdateUI(() => asr_window.AppendText($"Error finishing stream: {ex.Message}"));
         }
         finally
         {
             deep_speech_stream.Dispose();
             deep_speech_model.Dispose();
             vad.Dispose();
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Transcription stopped."));
+            UpdateUI(() => asr_window.AppendText("Transcription stopped."));
         }
     }
 
@@ -1109,7 +1124,7 @@ class LiveTranscription
             {
                 // Assuming you have a method StartCameraMouse in your cameramouse class
                 camera_mouse.StartCameraMouse();
-                asr_window.Dispatcher.Invoke(() =>
+                UpdateUI(() =>
                 {
                     asr_window.AppendText("Camera mouse activated.");
                 });
@@ -1123,7 +1138,7 @@ class LiveTranscription
         camera_mouse_opened = false;
         // Assuming you have a method StopCameraMouse in your cameramouse class to stop the mouse functionality
         camera_mouse.StopCameraMouse(); // Implement this in cameramouse.cs
-        asr_window.Dispatcher.Invoke(() =>
+        UpdateUI(() =>
         {
             asr_window.AppendText("Camera mouse deactivated.");
         });
