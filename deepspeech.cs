@@ -461,6 +461,8 @@ class LiveTranscription
             return;
         }
 
+        // timers start everytime audio is detedted
+
         StartInactivityTimer();
 
         StartWakeWordTimer();
