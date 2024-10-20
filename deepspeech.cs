@@ -75,20 +75,20 @@ class LiveTranscription
     private string lastTypedPhrase = string.Empty;
     private bool typing_mode = false;
 
-    private bool wake_word_required = true; // Default to requiring the wake word
+    private bool wake_word_required = false; // Default to requiring the wake word
 
     string app_directory = Directory.GetCurrentDirectory(); // possible gamiton labi pag reference hin assets kay para robust hiya ha iba iba na systems
 
     private RequestSocket socket;
     private SubscriberSocket pullsocket;
+    private const int inactivity_timeout = 3000;
+    private const int intent_window_timeout = 1500;
 
     private System.Timers.Timer inactivity_timer;
     private System.Timers.Timer intent_window_timer;
     private System.Timers.Timer input_timer;
     private System.Timers.Timer wake_word_reset_timer;
 
-    private const int inactivity_timeout = 3000;
-    private const int intent_window_timeout = 1500;
     private const int input_timeout = 7000;
     private const int wake_word_timeout = 7000; // 10 seconds timeout for no wake word detection
 
@@ -102,6 +102,7 @@ class LiveTranscription
     private const int KEYEVENTF_KEYUP = 0x0002;
 
     //mga keys ig map didi
+
     private const byte VK_LWIN = 0x5B;
     private const byte VK_SNAPSHOT = 0x2C;
 

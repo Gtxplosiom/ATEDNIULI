@@ -101,13 +101,16 @@ namespace ATEDNIULI
         public void StopCameraMouse()
         {
             isRunning = false;
-            cameraThread?.Join(); // Wait for the camera thread to finish
-            mouseThread?.Join();   // Wait for the mouse thread to finish
 
-            Cv2.DestroyAllWindows(); // Close any OpenCV windows
-            capture?.Release(); // Release the webcam if it's still open
-            capture = null; // Clear reference to avoid using old instance
+            // Signal threads to stop and wait for them to finish
+            cameraThread?.Join(500); // Give threads a maximum of 500ms to finish gracefully
+            mouseThread?.Join(500);
+
+            Cv2.DestroyAllWindows();
+            capture?.Release();
+            capture = null;
         }
+
 
         private bool IsCameraAvailable(int index)
         {
@@ -148,48 +151,45 @@ namespace ATEDNIULI
 
                 try
                 {
+                    var frame = new Mat();
+                    var gray = new Mat();
+
                     while (isRunning)
                     {
-                        using (var frame = new Mat()) // Ensure Mat is disposed properly
-                        {
-                            capture.Read(frame);
+                        capture.Read(frame);
 
-                            if (frame.Empty())
+                        if (frame.Empty())
+                        {
+                            Console.WriteLine("Error: Failed to grab frame.");
+                            break;
+                        }
+
+                        Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
+                        Cv2.Flip(frame, frame, FlipMode.Y);
+
+                        Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
+
+                        // Load the image into Dlib
+                        using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
+                        {
+                            DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
+
+                            foreach (var face in faces)
                             {
-                                Console.WriteLine("Error: Failed to grab frame.");
-                                break;
+                                var landmarks = predictor.Detect(dlibImage, face);
+                                var landmarksList = new List<Point>();
+                                for (int i = 0; i < (int)landmarks.Parts; i++)
+                                {
+                                    landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
+                                }
+
+                                // Draw landmarks and process the nose position
+                                ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
                             }
 
-                            Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
-                            Cv2.Flip(frame, frame, FlipMode.Y);
-
-                            using (var gray = new Mat()) // Ensure Mat is disposed properly
-                            {
-                                Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
-
-                                // Load the image into Dlib
-                                using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
-                                {
-                                    DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
-
-                                    foreach (var face in faces)
-                                    {
-                                        var landmarks = predictor.Detect(dlibImage, face);
-                                        var landmarksList = new List<Point>();
-                                        for (int i = 0; i < (int)landmarks.Parts; i++)
-                                        {
-                                            landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
-                                        }
-
-                                        // Draw landmarks and process the nose position
-                                        ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
-                                    }
-
-                                    Cv2.ImShow("Camera", frame);
-                                    SetWindowAlwaysOnTopAndPosition("Camera", screenWidth, screenHeight);
-                                } // dlibImage is disposed here
-                            } // gray Mat is disposed here
-                        } // frame Mat is disposed here
+                            Cv2.ImShow("Camera", frame);
+                            SetWindowAlwaysOnTopAndPosition("Camera", screenWidth, screenHeight);
+                        }
 
                         if (Cv2.WaitKey(1) == 27) // Exit if 'ESC' is pressed
                         {
