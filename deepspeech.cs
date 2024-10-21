@@ -618,6 +618,7 @@ class LiveTranscription
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex);
                 return;
             }
         }); 
