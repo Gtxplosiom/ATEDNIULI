@@ -39,45 +39,6 @@ namespace ATEDNIULI
             _tags = new List<Label>(); // Initialize the tag list
             ScalingFactor = GetScalingFactor();
             Show();
-            SetupTaskbarAutomation();
-        }
-
-        private void SetupTaskbarAutomation()
-        {
-            var taskbarCondition = new PropertyCondition(AutomationElement.AutomationIdProperty, "Taskbar");
-            _taskbarElement = AutomationElement.RootElement.FindFirst(TreeScope.Children, taskbarCondition);
-
-            if (_taskbarElement != null)
-            {
-                // Subscribe to the property change event
-                Automation.AddAutomationEventHandler(
-                    WindowPattern.WindowOpenedEvent,
-                    _taskbarElement,
-                    TreeScope.Element,
-                    (sender, e) => OnTaskbarChanged()
-                );
-
-                Automation.AddAutomationEventHandler(
-                    WindowPattern.WindowClosedEvent,
-                    _taskbarElement,
-                    TreeScope.Element,
-                    (sender, e) => OnTaskbarChanged()
-                );
-
-                // Initially list clickable items
-                ListClickableItemsInTaskbar();
-            }
-            else
-            {
-                Console.WriteLine("Taskbar not found");
-            }
-        }
-
-        private void OnTaskbarChanged()
-        {
-            // Clear existing clickable items and re-list them
-            _clickableItems.Clear();
-            ListClickableItemsInTaskbar();
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -175,7 +136,9 @@ namespace ATEDNIULI
                             }
                         }
                     }
-                    ListClickableItemsInTaskbar();
+
+                    StartTagRemovalTimer();
+                    ListTaskbarItems();
                 }
             }
             catch (Exception ex)
@@ -184,93 +147,84 @@ namespace ATEDNIULI
             }
         }
 
-        public void ListClickableItemsInTaskbar()
+        public void ListTaskbarItems()
         {
-            if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
-            {
-                Dispatcher.Invoke(() => ListClickableItemsInTaskbar());
-                return;
-            }
+            // Initialize the list of clickable items on the taskbar
+            var taskbarItems = new List<ClickableItem>();
 
             try
             {
-                // If taskbarElement is null, find it again
-                if (_taskbarElement == null)
+                // Find the handle of the taskbar
+                IntPtr taskbarHandle = FindWindow("Shell_TrayWnd", null);
+
+                if (taskbarHandle != IntPtr.Zero)
                 {
-                    var taskbarCondition = new PropertyCondition(AutomationElement.AutomationIdProperty, "Taskbar");
-                    _taskbarElement = AutomationElement.RootElement.FindFirst(TreeScope.Children, taskbarCondition);
-                }
+                    var taskbarElement = AutomationElement.FromHandle(taskbarHandle);
 
-                if (_taskbarElement != null)
-                {
-                    // Modify the clickable condition to target pinned items (buttons)
-                    var clickableCondition = new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button);
-                    var taskbarButtons = _taskbarElement.FindAll(TreeScope.Children, clickableCondition); // Search only in the immediate children of the taskbar
-
-                    // Temporarily hold labels to add them all at once
-                    List<Label> tagsToAdd = new List<Label>();
-                    List<ClickableItem> itemsToAdd = new List<ClickableItem>();
-
-                    foreach (AutomationElement button in taskbarButtons)
+                    if (taskbarElement != null)
                     {
-                        if (!button.Current.IsOffscreen)
+                        var clickableCondition = new OrCondition(
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink)
+                        );
+
+                        var clickableElements = taskbarElement.FindAll(TreeScope.Subtree, clickableCondition);
+                        int counter = 1;
+
+                        foreach (AutomationElement element in clickableElements)
                         {
-                            var boundingRect = button.Current.BoundingRectangle;
-                            if (!boundingRect.IsEmpty)
+                            if (!element.Current.IsOffscreen)
                             {
-                                string controlName = button.Current.Name;
+                                var boundingRect = element.Current.BoundingRectangle;
 
-                                // Adjust for scaling
-                                Rect adjustedBoundingRect = new Rect(
-                                    boundingRect.Left / ScalingFactor,
-                                    boundingRect.Top / ScalingFactor,
-                                    boundingRect.Width / ScalingFactor,
-                                    boundingRect.Height / ScalingFactor
-                                );
-
-                                Label tag = new Label
+                                if (!boundingRect.IsEmpty)
                                 {
-                                    Content = controlName,  // Use the control name for the tag
-                                    Background = Brushes.Yellow,
-                                    Foreground = Brushes.Black,
-                                    Padding = new Thickness(5),
-                                    Opacity = 0.7
-                                };
+                                    // Adjust the bounding rectangle coordinates for scaling
+                                    Rect adjustedBoundingRect = new Rect(
+                                        boundingRect.Left / ScalingFactor,
+                                        boundingRect.Top / ScalingFactor,
+                                        boundingRect.Width / ScalingFactor,
+                                        boundingRect.Height / ScalingFactor
+                                    );
 
-                                Canvas.SetLeft(tag, adjustedBoundingRect.Left);
-                                Canvas.SetTop(tag, adjustedBoundingRect.Top - 20);
+                                    string controlName = element.Current.Name;
+                                    Console.WriteLine($"Taskbar Item {counter}: {controlName}");
 
-                                tagsToAdd.Add(tag);  // Add the tag to the temporary list
-                                _tags.Add(tag);  // Keep track of tags for later removal
+                                    // Create and store the taskbar item
+                                    taskbarItems.Add(new ClickableItem
+                                    {
+                                        Name = controlName,
+                                        BoundingRectangle = boundingRect
+                                    });
 
-                                itemsToAdd.Add(new ClickableItem
-                                {
-                                    Name = controlName,
-                                    BoundingRectangle = boundingRect
-                                });
+                                    // Create a label (tag) for the taskbar item
+                                    Label tag = new Label
+                                    {
+                                        Content = "T-" + counter, // Prefix with 'T' for taskbar items
+                                        Background = Brushes.Green,
+                                        Foreground = Brushes.White,
+                                        Padding = new Thickness(5),
+                                        Opacity = 0.7
+                                    };
+
+                                    // Set the adjusted position based on the bounding rectangle
+                                    Canvas.SetLeft(tag, adjustedBoundingRect.Left);
+                                    Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
+                                    OverlayCanvas.Children.Add(tag);
+
+                                    // Add the tag to the list
+                                    _tags.Add(tag);
+
+                                    counter++;
+                                }
                             }
                         }
                     }
-
-                    // Add the tags to the canvas and update the clickable items list
-                    foreach (var tag in tagsToAdd)
-                    {
-                        OverlayCanvas.Children.Add(tag);  // Add the tag to the canvas
-                    }
-
-                    foreach (var item in itemsToAdd)
-                    {
-                        _clickableItems.Add(item);  // Add the clickable item to the list
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("Taskbar not found");
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error: {ex.Message}");
+                MessageBox.Show($"Error listing taskbar items: {ex.Message}");
             }
         }
 
@@ -278,6 +232,21 @@ namespace ATEDNIULI
         public List<ClickableItem> GetClickableItems()
         {
             return _clickableItems;
+        }
+
+        private void StartTagRemovalTimer()
+        {
+            // Initialize the timer if it's not already initialized
+            if (_tagRemovalTimer == null)
+            {
+                _tagRemovalTimer = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(5) // Set timer for 10 seconds
+                };
+                _tagRemovalTimer.Tick += RemoveTags; // Attach the event handler
+            }
+
+            _tagRemovalTimer.Start(); // Start the timer
         }
 
         private void RemoveTags(object sender, EventArgs e)
@@ -296,5 +265,8 @@ namespace ATEDNIULI
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
     }
 }

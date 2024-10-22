@@ -72,13 +72,15 @@ namespace ATEDNIULI
         // precision mode stuff
         private static int initialPrecisionRadius = 250; // Initial size of the precision area
         private static int reducedPrecisionRadius = 50; // Reduced size of the precision area
+        private double precisionFactor = 1.0;
         private static DateTime precisionStartTime;
+        private static DateTime preparePrecisionTime;
         private static DateTime reductionStartTime;
         private static bool isInPrecisionMode = false;
+        private static bool preparingPrecision = false;
         private static bool precisionActivated = false;
         private static bool isRadiusReduced = false; // To track if the radius has been reduced
         private static (int X, int Y) lastMousePosition;
-        double precisionFactor;
 
         private void SetWindowAlwaysOnTopAndPosition(string windowName, int screenWidth, int screenHeight)
         {
@@ -364,24 +366,35 @@ namespace ATEDNIULI
             //precisionFactor = precisionActivated ? 0.1 : 1.0; // Reduce target movement in precision mode
 
             // Use a low-pass filter to smooth the movement
-            double smoothingFactor = 0.5;
+            double smoothingFactor = 0.6;
 
             for (int i = 0; i <= steps; i++)
             {
                 int newX = 0;
                 int newY = 0;
 
+                double elapsedTime = (DateTime.Now - precisionStartTime).TotalMilliseconds;
+
+                if (elapsedTime <= 3000)
+                {
+                    precisionFactor = 1.0 - (0.95 * (elapsedTime / 3000.0)); // Linear transition
+                }
+                else
+                {
+                    precisionFactor = 0.075; // Cap at 0.05 after 3 seconds
+                }
+
                 if (precisionActivated)
                 {
-                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * 0.05); // 5% of the movement
-                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * 0.05);
+                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor); // 10% of the movement
+                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
                     SetCursorPos(newX, newY);
                     Thread.Sleep(duration / steps); // Wait between steps
                 }
                 else // when not in precision mode
                 {
-                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * 0.5); // 50% of the movement
-                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * 0.5);
+                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor); // 100% of the movement
+                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
                     SetCursorPos(newX, newY);
                     Thread.Sleep(duration / steps); // Wait between steps
                 }
@@ -434,7 +447,7 @@ namespace ATEDNIULI
                         Console.WriteLine("Updated Precision Area");
                     }
 
-                    // Check for the 3-second threshold to enter precision mode
+                    // Check for the 2-second threshold to enter precision mode
                     if ((DateTime.Now - precisionStartTime).TotalMilliseconds >= 2000)
                     {
                         Console.WriteLine("Mouse is now in Precision Mode");
@@ -465,7 +478,9 @@ namespace ATEDNIULI
                     if (isInPrecisionMode)
                     {
                         isInPrecisionMode = false; // Exit precision mode
+                        preparingPrecision = false;
                         precisionActivated = false;
+                        precisionFactor = 1.0;
                         isRadiusReduced = false; // Reset the radius reduction flag
                         reductionStartTime = default; // Reset the reduction start time
                         lastMousePosition = (0, 0); // Optionally reset last mouse position
