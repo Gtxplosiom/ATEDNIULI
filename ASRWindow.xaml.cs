@@ -22,9 +22,7 @@ namespace ATEDNIULI
 
             camera_mouse = new cameramouse();
 
-            var tagItems = new List<TagItem>();
-
-            show_items = new ShowItems(tagItems);
+            show_items = new ShowItems();
 
             // Initialize IntentWindow
             intent_window = new IntentWindow(mainWindow);

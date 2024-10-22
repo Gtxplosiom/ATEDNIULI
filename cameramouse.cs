@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using OpenCvSharp;
 using DlibDotNet;
+using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace ATEDNIULI
 {
@@ -14,6 +16,20 @@ namespace ATEDNIULI
 
         [DllImport("user32.dll")]
         static extern bool GetCursorPos(out Point point);
+
+        // dlls kanan mouse variables
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, int dwExtraInfo);
+        private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+        private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+
+        [DllImport("user32.dll")]
+        static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_SHOWWINDOW = 0x0040;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct Point
@@ -28,27 +44,88 @@ namespace ATEDNIULI
             }
         }
 
-        private volatile bool isRunning = false;
+        public struct TargetPosition // Define a struct to hold the target position
+        {
+            public int X { get; set; }
+            public int Y { get; set; }
+
+            public TargetPosition(int x, int y)
+            {
+                X = x;
+                Y = y;
+            }
+        }
+
+        private bool isRunning = false;
         private Thread cameraThread;
+        private Thread mouseThread;
         private VideoCapture capture;
+
+        // Store the target mouse position
+        private TargetPosition targetPosition;
+        private readonly object positionLock = new object(); // Lock object for thread safety
+
+        // Declare webcamWidth and webcamHeight as class-level fields
+        private int webcamWidth = 640;
+        private int webcamHeight = 480;
+        
+        // precision mode stuff
+        private static int initialPrecisionRadius = 250; // Initial size of the precision area
+        private static int reducedPrecisionRadius = 50; // Reduced size of the precision area
+        private double precisionFactor = 1.0;
+        private static DateTime precisionStartTime;
+        private static DateTime preparePrecisionTime;
+        private static DateTime reductionStartTime;
+        private static bool isInPrecisionMode = false;
+        private static bool preparingPrecision = false;
+        private static bool precisionActivated = false;
+        private static bool isRadiusReduced = false; // To track if the radius has been reduced
+        private static (int X, int Y) lastMousePosition;
+
+        private void SetWindowAlwaysOnTopAndPosition(string windowName, int screenWidth, int screenHeight)
+        {
+            // Retrieve the window handle for the OpenCV window
+            IntPtr hWnd = Cv2.GetWindowHandle(windowName);
+
+            // Define window size and position for the right side of the screen
+            int windowWidth = 640;  // Visually reduce width by 50%
+            int windowHeight = 480; // Visually reduce height by 50%
+            int posX = screenWidth - windowWidth; // X position for right alignment
+            int posY = (screenHeight - windowHeight) / 2; // Centered vertically
+
+            // Resize the window (display size only, not affecting the resolution)
+            Cv2.ResizeWindow(windowName, windowWidth, windowHeight);
+
+            // Set the window to always be on top and position it on the right side
+            SetWindowPos(hWnd, HWND_TOPMOST, posX, posY, windowWidth, windowHeight, SWP_SHOWWINDOW);
+        }
 
         public void StartCameraMouse()
         {
             isRunning = true;
+
             cameraThread = new Thread(CameraLoop);
             cameraThread.IsBackground = true;
             cameraThread.Start();
+
+            mouseThread = new Thread(MouseMovementLoop);
+            mouseThread.IsBackground = true;
+            mouseThread.Start();
         }
 
         public void StopCameraMouse()
         {
             isRunning = false;
-            cameraThread?.Join(); // Wait for the thread to finish
 
-            Cv2.DestroyAllWindows(); // Close any OpenCV windows
-            capture?.Release(); // Release the webcam if it's still open
-            capture = null; // Clear reference to avoid using old instance
+            // Signal threads to stop and wait for them to finish
+            cameraThread?.Join(500); // Give threads a maximum of 500ms to finish gracefully
+            mouseThread?.Join(500);
+
+            Cv2.DestroyAllWindows();
+            capture?.Release();
+            capture = null;
         }
+
 
         private bool IsCameraAvailable(int index)
         {
@@ -57,6 +134,9 @@ namespace ATEDNIULI
                 return testCapture.IsOpened();
             }
         }
+
+        private Point previousNosePosition = new Point(0, 0);
+        private bool isFirstFrame = true; // To handle the very first frame where there's no previous data
 
         private void CameraLoop()
         {
@@ -73,11 +153,11 @@ namespace ATEDNIULI
 
                 int screenWidth = GetSystemMetrics(0);
                 int screenHeight = GetSystemMetrics(1);
-                int webcamWidth = 640;
-                int webcamHeight = 480;
-                double roiPercentage = 0.20;
+                double roiPercentage = 0.05;
                 int roiWidth = (int)(webcamWidth * roiPercentage);
                 int roiHeight = (int)(webcamHeight * roiPercentage);
+
+                // Set initial ROI position
                 int roiX = (webcamWidth - roiWidth) / 2;
                 int roiY = (webcamHeight - roiHeight) / 2;
 
@@ -86,62 +166,190 @@ namespace ATEDNIULI
 
                 try
                 {
+                    var frame = new Mat();
+                    var gray = new Mat();
+
+                    Task.Run(() => PrecisionMode());
+
                     while (isRunning)
                     {
-                        using (var frame = new Mat())
+                        capture.Read(frame);
+
+                        if (frame.Empty())
                         {
-                            capture.Read(frame);
+                            Console.WriteLine("Error: Failed to grab frame.");
+                            break;
+                        }
 
-                            if (frame.Empty())
+                        Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
+                        Cv2.Flip(frame, frame, FlipMode.Y);
+
+                        Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
+
+                        // Load the image into Dlib
+                        using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
+                        {
+                            DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
+
+                            foreach (var face in faces)
                             {
-                                Console.WriteLine("Error: Failed to grab frame.");
-                                break;
-                            }
-
-                            Cv2.Flip(frame, frame, FlipMode.Y);
-
-                            using (var gray = new Mat())
-                            {
-                                Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
-                                var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width);
-                                DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
-
-                                foreach (var face in faces)
+                                var landmarks = predictor.Detect(dlibImage, face);
+                                var landmarksList = new List<Point>();
+                                for (int i = 0; i < (int)landmarks.Parts; i++)
                                 {
-                                    var landmarks = predictor.Detect(dlibImage, face);
-                                    var landmarksList = new List<Point>();
-                                    for (int i = 0; i < (int)landmarks.Parts; i++)
-                                    {
-                                        landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
-                                    }
-
-                                    // Draw nose point
-                                    var nosePoint = landmarksList[30];
-                                    Cv2.Circle(frame, new OpenCvSharp.Point(nosePoint.X, nosePoint.Y), 4, Scalar.Red, -1);
-
-                                    // Move cursor based on nose position
-                                    int targetX = (int)((nosePoint.X - roiX) * scalingFactorX);
-                                    int targetY = (int)((nosePoint.Y - roiY) * scalingFactorY);
-                                    SmoothMoveTo(targetX, targetY);
+                                    landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
                                 }
-                                Cv2.Rectangle(frame, new OpenCvSharp.Point(roiX, roiY), new OpenCvSharp.Point(roiX + roiWidth, roiY + roiHeight), new Scalar(0, 255, 0), 2);
+
+                                // Draw landmarks and process the nose position
+                                ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
                             }
 
-                            Cv2.ImShow("preview", frame);
+                            Cv2.ImShow("Camera", frame);
+                            SetWindowAlwaysOnTopAndPosition("Camera", screenWidth, screenHeight);
+                        }
 
-                            // Break the loop if 'q' is pressed
-                            if (Cv2.WaitKey(1) == 'q')
-                            {
-                                StopCameraMouse();
-                            }
+                        if (Cv2.WaitKey(1) == 27) // Exit if 'ESC' is pressed
+                        {
+                            break;
                         }
                     }
                 }
-                finally
+                catch (Exception ex)
                 {
-                    Cv2.DestroyAllWindows();
-                    capture?.Release();
+                    Console.WriteLine($"Error in CameraLoop: {ex.Message}");
                 }
+            }
+        }
+
+        private void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
+        {
+            // Step 1: Define key landmarks
+            var targetNosePoint = landmarksList[30];
+            var leftBrowPoint = landmarksList[19];
+            var rightBrowPoint = landmarksList[24];
+            var leftUpperEyelidPoint = landmarksList[37];
+            var rightUpperEyelidPoint = landmarksList[44];
+
+            // Step 2: Check for first frame
+            if (isFirstFrame)
+            {
+                previousNosePosition = targetNosePoint;
+                isFirstFrame = false;
+            }
+
+            int steps = 10;
+            double smoothingFactor = 0.5;
+
+            // Step 3: Process smoothing for nose movement
+            for (int i = 0; i <= steps; i++)
+            {
+                int smoothedNoseX = (int)(previousNosePosition.X + (targetNosePoint.X - previousNosePosition.X) * (i / (double)steps) * (1 - smoothingFactor));
+                int smoothedNoseY = (int)(previousNosePosition.Y + (targetNosePoint.Y - previousNosePosition.Y) * (i / (double)steps) * (1 - smoothingFactor));
+
+                var smoothedNosePoint = new Point(smoothedNoseX, smoothedNoseY);
+                Cv2.Circle(frame, new OpenCvSharp.Point(smoothedNosePoint.X, smoothedNosePoint.Y), 4, Scalar.Red, -1);
+
+                UpdateRoi(smoothedNosePoint, ref roiX, ref roiY, roiWidth, roiHeight);
+                UpdateTargetPosition(smoothedNosePoint, roiX, roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+
+                previousNosePosition = smoothedNosePoint;
+            }
+
+            // Step 4: Detect if brows are raised
+            // Calculate distances between the brow and the upper eyelid for both left and right sides
+            double leftBrowToEyelidDist = Math.Abs(leftBrowPoint.Y - leftUpperEyelidPoint.Y);
+            double rightBrowToEyelidDist = Math.Abs(rightBrowPoint.Y - rightUpperEyelidPoint.Y);
+
+            // Define a threshold for determining if the brow is raised (you can tweak this value based on your tests)
+            double browRaiseThreshold = 35.0;
+
+            bool isLeftBrowRaised = leftBrowToEyelidDist > browRaiseThreshold;
+            bool isRightBrowRaised = rightBrowToEyelidDist > browRaiseThreshold;
+
+            // Step 5: Draw rectangles or markers to visualize the brow status
+            Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2);
+
+            Cv2.Circle(frame, new OpenCvSharp.Point(leftBrowPoint.X, leftBrowPoint.Y), 3, Scalar.Blue, -1); // Left Brow Point
+            Cv2.Circle(frame, new OpenCvSharp.Point(rightBrowPoint.X, rightBrowPoint.Y), 3, Scalar.Blue, -1); // Right Brow Point
+            Cv2.Circle(frame, new OpenCvSharp.Point(leftUpperEyelidPoint.X, leftUpperEyelidPoint.Y), 3, Scalar.Green, -1); // Left Upper Eyelid Point
+            Cv2.Circle(frame, new OpenCvSharp.Point(rightUpperEyelidPoint.X, rightUpperEyelidPoint.Y), 3, Scalar.Green, -1); // Right Upper Eyelid Point
+
+            // Optionally, you can draw lines to better visualize the connections
+            Cv2.Line(frame, new OpenCvSharp.Point(leftBrowPoint.X, leftBrowPoint.Y), new OpenCvSharp.Point(leftUpperEyelidPoint.X, leftUpperEyelidPoint.Y), Scalar.White, 1); // Left side connection
+            Cv2.Line(frame, new OpenCvSharp.Point(rightBrowPoint.X, rightBrowPoint.Y), new OpenCvSharp.Point(rightUpperEyelidPoint.X, rightUpperEyelidPoint.Y), Scalar.White, 1); // Right side connection
+
+            // Step 6: Display if the brows are raised
+            if (isLeftBrowRaised)
+            {
+                Cv2.PutText(frame, "Left Brow Raised", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
+            }
+
+            if (isRightBrowRaised)
+            {
+                Cv2.PutText(frame, "Right Brow Raised", new OpenCvSharp.Point(10, 60), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
+            }
+
+            if (isLeftBrowRaised || isRightBrowRaised)
+            {
+                //mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+            }
+            else
+            {
+                //mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+            }
+        }
+
+
+        private void UpdateRoi(Point smoothedNosePoint, ref int roiX, ref int roiY, int roiWidth, int roiHeight)
+        {
+            int edgeThreshold = 0;
+
+            if (smoothedNosePoint.X < roiX + edgeThreshold)
+            {
+                roiX = Clamp(roiX - (roiX + edgeThreshold - smoothedNosePoint.X), 0, webcamWidth - roiWidth);
+            }
+            else if (smoothedNosePoint.X > roiX + roiWidth - edgeThreshold)
+            {
+                roiX = Clamp(roiX + (smoothedNosePoint.X - (roiX + roiWidth - edgeThreshold)), 0, webcamWidth - roiWidth);
+            }
+
+            if (smoothedNosePoint.Y < roiY + edgeThreshold)
+            {
+                roiY = Clamp(roiY - (roiY + edgeThreshold - smoothedNosePoint.Y), 0, webcamHeight - roiHeight);
+            }
+            else if (smoothedNosePoint.Y > roiY + roiHeight - edgeThreshold)
+            {
+                roiY = Clamp(roiY + (smoothedNosePoint.Y - (roiY + roiHeight - edgeThreshold)), 0, webcamHeight - roiHeight);
+            }
+        }
+
+        private void UpdateTargetPosition(Point smoothedNosePoint, int roiX, int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
+        {
+            if (smoothedNosePoint.X >= roiX && smoothedNosePoint.X <= roiX + roiWidth &&
+                smoothedNosePoint.Y >= roiY && smoothedNosePoint.Y <= roiY + roiHeight)
+            {
+                lock (positionLock)
+                {
+                    targetPosition = new TargetPosition(
+                        (int)((smoothedNosePoint.X - roiX) * scalingFactorX),
+                        (int)((smoothedNosePoint.Y - roiY) * scalingFactorY)
+                    );
+                }
+            }
+        }
+
+        private void MouseMovementLoop()
+        {
+            while (isRunning)
+            {
+                // Get the current target position
+                TargetPosition currentTargetPosition;
+                lock (positionLock) // Lock access to targetPosition
+                {
+                    currentTargetPosition = targetPosition;
+                }
+                SmoothMoveTo(currentTargetPosition.X, currentTargetPosition.Y);
+                Thread.Sleep(50); // Adjust the delay to manage the mouse movement frequency
             }
         }
 
@@ -154,19 +362,155 @@ namespace ATEDNIULI
             double deltaX = targetX - startX;
             double deltaY = targetY - startY;
 
+            // Adjust movement range in precision mode
+            //precisionFactor = precisionActivated ? 0.1 : 1.0; // Reduce target movement in precision mode
+
             // Use a low-pass filter to smooth the movement
-            double smoothingFactor = 0.5;
+            double smoothingFactor = 0.6;
 
             for (int i = 0; i <= steps; i++)
             {
-                int newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor));
-                int newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor));
-                SetCursorPos(newX, newY);
-                Thread.Sleep(duration / steps); // Wait between steps
+                int newX = 0;
+                int newY = 0;
+
+                double elapsedTime = (DateTime.Now - precisionStartTime).TotalMilliseconds;
+
+                if (elapsedTime <= 3000)
+                {
+                    precisionFactor = 1.0 - (0.95 * (elapsedTime / 3000.0)); // Linear transition
+                }
+                else
+                {
+                    precisionFactor = 0.075; // Cap at 0.05 after 3 seconds
+                }
+
+                if (precisionActivated)
+                {
+                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor); // 10% of the movement
+                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
+                    SetCursorPos(newX, newY);
+                    Thread.Sleep(duration / steps); // Wait between steps
+                }
+                else // when not in precision mode
+                {
+                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor); // 100% of the movement
+                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
+                    SetCursorPos(newX, newY);
+                    Thread.Sleep(duration / steps); // Wait between steps
+                }
+                
             }
         }
 
+        private void PrecisionMode()
+        {
+            Console.WriteLine("Precision Mode Test. Press 'Ctrl+C' to exit.");
+            int currentPrecisionRadius = 0;
+            double distanceToTarget;
+
+            while (true)
+            {
+                // Get the current mouse position
+                var currentMousePosition = GetMousePosition();
+
+                // Check if we are already in precision mode
+                if (isInPrecisionMode)
+                {
+                    // Use the last known position as the target when in precision mode
+                    distanceToTarget = CalculateDistance(currentMousePosition, lastMousePosition);
+
+                    if (!isRadiusReduced)
+                    {
+                        currentPrecisionRadius = initialPrecisionRadius;
+                    }
+                    else if (isRadiusReduced && currentPrecisionRadius == initialPrecisionRadius)
+                    {
+                        currentPrecisionRadius = reducedPrecisionRadius;
+                    }
+                }
+                else
+                {
+                    // If not in precision mode, use the current position as the new target
+                    currentPrecisionRadius = initialPrecisionRadius;
+                    lastMousePosition = currentMousePosition;
+                    distanceToTarget = 0; // No distance calculation needed when just entering
+                }
+
+                // Check if the cursor is in the precision area
+                if (distanceToTarget < currentPrecisionRadius)
+                {
+                    if (!isInPrecisionMode)
+                    {
+                        precisionStartTime = DateTime.Now; // Start time for entering precision mode
+                        isInPrecisionMode = true;
+                        isRadiusReduced = false; // Reset the radius reduction flag
+                        Console.WriteLine("Updated Precision Area");
+                    }
+
+                    // Check for the 2-second threshold to enter precision mode
+                    if ((DateTime.Now - precisionStartTime).TotalMilliseconds >= 2000)
+                    {
+                        Console.WriteLine("Mouse is now in Precision Mode");
+
+                        precisionActivated = true;
+
+                        // Start the reduction timer only after entering precision mode
+                        if (!isRadiusReduced)
+                        {
+                            if (reductionStartTime == default) // Only set if it hasn't been set yet
+                            {
+                                //reductionStartTime = DateTime.Now; // Start timer for radius reduction
+                            }
+
+                            // Check if we need to reduce the radius
+                            if ((DateTime.Now - reductionStartTime).TotalMilliseconds >= 1000)
+                            {
+                                // Reduce the precision radius after 2 seconds
+                                Console.WriteLine("Reducing precision radius.");
+                                isRadiusReduced = true; // Mark that the radius has been reduced
+                                lastMousePosition = GetMousePosition();
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if (isInPrecisionMode)
+                    {
+                        isInPrecisionMode = false; // Exit precision mode
+                        preparingPrecision = false;
+                        precisionActivated = false;
+                        precisionFactor = 1.0;
+                        isRadiusReduced = false; // Reset the radius reduction flag
+                        reductionStartTime = default; // Reset the reduction start time
+                        lastMousePosition = (0, 0); // Optionally reset last mouse position
+                        currentPrecisionRadius = initialPrecisionRadius; // Reset to initial radius
+                        Console.WriteLine("Exited Precision Area.");
+                    }
+                }
+
+                Thread.Sleep(100); // Delay to avoid excessive CPU usage
+            }
+        }
+
+        private static (int X, int Y) GetMousePosition()
+        {
+            // Get the current mouse position using Cursor.Position
+            var mousePosition = Cursor.Position;
+            return (mousePosition.X, mousePosition.Y);
+        }
+
+        private static double CalculateDistance((int X, int Y) point1, (int X, int Y) point2)
+        {
+            return Math.Sqrt(Math.Pow(point1.X - point2.X, 2) + Math.Pow(point1.Y - point2.Y, 2));
+        }
+
+        private int Clamp(int value, int min, int max)
+        {
+            return Math.Max(min, Math.Min(max, value));
+        }
+
         [DllImport("user32.dll")]
-        static extern int GetSystemMetrics(int smIndex);
+        static extern int GetSystemMetrics(int nIndex);
     }
 }

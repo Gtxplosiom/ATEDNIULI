@@ -21,6 +21,8 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using System.Threading;
 using OpenCvSharp;
+using static ATEDNIULI.ShowItems;
+using System.Linq;
 
 class LiveTranscription
 {
@@ -37,7 +39,7 @@ class LiveTranscription
     private bool wake_word_detected = false;
     private bool is_running;
 
-    private string wake_word = "hello";
+    private string wake_word = "thermal";
 
     private int click_command_count = 0;
     private int calculator_command_count = 0;
@@ -73,16 +75,22 @@ class LiveTranscription
     private string lastTypedPhrase = string.Empty;
     private bool typing_mode = false;
 
-    private bool wake_word_required = false; // Default to requiring the wake word
+    private bool wake_word_required = true; // Default to requiring the wake word
 
     string app_directory = Directory.GetCurrentDirectory(); // possible gamiton labi pag reference hin assets kay para robust hiya ha iba iba na systems
 
     private RequestSocket socket;
     private SubscriberSocket pullsocket;
+    private const int inactivity_timeout = 3000;
+    private const int intent_window_timeout = 1500;
 
     private System.Timers.Timer inactivity_timer;
     private System.Timers.Timer intent_window_timer;
     private System.Timers.Timer input_timer;
+    private System.Timers.Timer wake_word_timer;
+
+    private const int input_timeout = 7000;
+    private const int wake_word_timeout = 7000; // 10 seconds timeout for no wake word detection
 
     // pag store han current result and previous
     private string previous_partial = string.Empty;
@@ -94,6 +102,7 @@ class LiveTranscription
     private const int KEYEVENTF_KEYUP = 0x0002;
 
     //mga keys ig map didi
+
     private const byte VK_LWIN = 0x5B;
     private const byte VK_SNAPSHOT = 0x2C;
 
@@ -126,8 +135,10 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta15.pbmm";
-    string scorer_path = @"assets\models\idrismunir.scorer";
+    string scorer_path = @"assets\models\commands.scorer";
     string ww_scorer_path = @"assets\models\wake_word.scorer";
+
+    int deepspeech_confidence = -50;
 
     // importante para diri mag error an memory corrupt ha deepspeech model
     private readonly object streamLock = new object();
@@ -198,7 +209,7 @@ class LiveTranscription
         // timers
         InitializeTimer();
 
-        DetectScreen();
+        //DetectScreen(); ## for testing
     }
 
     // zmq stuffs
@@ -212,17 +223,6 @@ class LiveTranscription
 
         // Create a new socket instance
         socket = new RequestSocket("tcp://localhost:6969");
-    }
-
-    public void load_model(string model_path, string scorer_path)
-    {
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Loading model..."));
-        deep_speech_model = new DeepSpeech(model_path);
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Model loaded"));
-
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Loading scorer..."));
-        deep_speech_model.EnableExternalScorer(scorer_path);
-        deep_speech_model.AddHotWord("hello", 7);
     }
 
     public class DetectionResult
@@ -241,84 +241,23 @@ class LiveTranscription
 
     public void DetectScreen()
     {
-        // Ensure the socket is initialized
-        if (pullsocket == null)
-        {
-            pullsocket = new SubscriberSocket("tcp://localhost:4200");
-            pullsocket.Subscribe(""); // Subscribe to all messages
-        }
-
-        Task detectionTask = Task.Run(() =>
-        {
-            ProcessStartInfo start = new ProcessStartInfo
-            {
-                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe", // Your Python executable path
-                Arguments = @"C:\Users\super.admin\Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\python\tiled_inference_optimized_screenshot_c.py", // Your Python script path
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-
-            using (Process process = Process.Start(start))
-            {
-                using (var reader = process.StandardOutput)
-                {
-                    string result = reader.ReadToEnd();
-                    Console.WriteLine(result);
-                }
-
-                using (var errorReader = process.StandardError)
-                {
-                    string error = errorReader.ReadToEnd();
-                    if (!string.IsNullOrEmpty(error))
-                    {
-                        Console.WriteLine($"Error: {error}");
-                    }
-                }
-            }
-        });
-
-        detectionTask.Wait();
-
-        Console.WriteLine("Waiting for detection results...");
-
-        try
-        {
-            string receivedMessage = pullsocket.ReceiveFrameString(); // Receiving the list of detected objects
-
-            // Parse the received JSON message
-            var detectionResults = JsonConvert.DeserializeObject<List<DetectionResult>>(receivedMessage);
-
-            // Create tag items based on detection results
-            List<TagItem> tagItems = new List<TagItem>();
-            int counter = 1;
-
-            foreach (var detectionResult in detectionResults)
-            {
-                foreach (var detection in detectionResult.Detections)
-                {
-                    tagItems.Add(new TagItem
-                    {
-                        Tag = $"{counter++} - {detection.ClassName}",
-                        CenterX = detection.X,
-                        CenterY = detection.Y
-                    });
-                }
-            }
-
-            // Open the ShowItems window with the detected tag items
-            show_items.Dispatcher.Invoke(() =>
-            {
-                ShowItems showItemsWindow = new ShowItems(tagItems);
-                showItemsWindow.Show();
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error receiving detection results: {ex.Message}");
-        }
+        show_items.ListClickableItemsInCurrentWindow();
+        var clickable_items = show_items.GetClickableItems();
     }
 
+    public void load_model(string model_path, string scorer_path)
+    {
+        UpdateUI(() => asr_window.AppendText("Loading model..."));
+        deep_speech_model = new DeepSpeech(model_path);
+        UpdateUI(() => asr_window.AppendText("Model loaded"));
+
+        UpdateUI(() => asr_window.AppendText("Loading scorer..."));
+        deep_speech_model.EnableExternalScorer(scorer_path);
+    }
+
+    // Fields for stream rate limiting
+    private DateTime last_stream_finalize_time = DateTime.MinValue;
+    private const int stream_finalize_cooldown = 5000; // 5 seconds cooldown between finalizations
 
     // transcfiption function
     public void StartTranscription()
@@ -330,7 +269,7 @@ class LiveTranscription
             wave_in_event = new WaveInEvent
             {
                 WaveFormat = new WaveFormat(16000, 1),
-                BufferMilliseconds = 300 // buffer size, mas guti mas malaksi
+                BufferMilliseconds = 400 // no this doesnt affect my problem
             };
 
             deep_speech_stream = deep_speech_model.CreateStream();
@@ -339,17 +278,17 @@ class LiveTranscription
             wave_in_event.DataAvailable += OnDataAvailable;
             wave_in_event.RecordingStopped += OnRecordingStopped;
 
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Starting microphone..."));
+            UpdateUI(() => asr_window.AppendText("Starting microphone..."));
             wave_in_event.StartRecording();
 
-            asr_window.Dispatcher.Invoke(() =>
+            UpdateUI(() =>
             {
                 asr_window.Hide();
             });
         }
         catch (Exception ex)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Error: {ex.Message}"));
+            UpdateUI(() => asr_window.AppendText($"Error: {ex.Message}"));
         }
     }
 
@@ -357,7 +296,7 @@ class LiveTranscription
     {
         if (e.Exception != null)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Recording Stopped Error: {e.Exception.Message}"));
+            UpdateUI(() => asr_window.AppendText($"Recording Stopped Error: {e.Exception.Message}"));
         }
 
         if (is_running)
@@ -369,53 +308,72 @@ class LiveTranscription
     // timer function
     private void InitializeTimer()
     {
-        inactivity_timer = new System.Timers.Timer(1000); // 2 seconds
+        inactivity_timer = new System.Timers.Timer(inactivity_timeout); // 3 seconds
         inactivity_timer.Elapsed += OnInactivityTimerElapsed;
         inactivity_timer.AutoReset = false; // Do not restart automatically
 
-        intent_window_timer = new System.Timers.Timer(3000); // 3 seconds
+        intent_window_timer = new System.Timers.Timer(intent_window_timeout); // 3 seconds
         intent_window_timer.Elapsed += OnIntentTimerElapsed;
         intent_window_timer.AutoReset = false;
+
+        input_timer = new System.Timers.Timer(input_timeout); // 7 seconds
+        input_timer.Elapsed += OnIntentTimerElapsed;
+        input_timer.AutoReset = false;
+
+        // Initialize wake word reset timer
+        wake_word_timer = new System.Timers.Timer(wake_word_timeout);
+        wake_word_timer.Elapsed += OnWakeWordTimeout;
+        wake_word_timer.AutoReset = false; // Timer will only trigger once
+
     }
 
     // timer stuff kun mag timeout
     private void OnInactivityTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
-        if (current_partial == previous_partial)
+        try
         {
-            asr_window.Dispatcher.Invoke(() =>
+            Console.WriteLine("Inactivity detected");
+            if (current_partial == previous_partial)
             {
-                FinalizeStream();
-            });
+                Console.WriteLine("Finalizing...");
+                UpdateUI(() => FinalizeStream());
+            }
+            else
+            {
+                Console.WriteLine("Restarting...");
+                previous_partial = current_partial; // Update previous partial
+                inactivity_timer.Start(); // Restart timer for further inactivity
+            }
         }
-        else
+        catch (Exception ex)
         {
-            previous_partial = current_partial;
-            inactivity_timer.Start(); // Restart timer
+            Console.WriteLine($"Error in OnInactivityTimerElapsed: {ex.Message}");
         }
+    }
+
+    private void OnWakeWordTimeout(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        // No wake word detected within timeout, finalize and reset stream
+        inactivity_timer.Stop();
+        Console.WriteLine("Wake word not detected within timeout, resetting stream.");
+        FinalizeStream();
     }
 
     private void OnIntentTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
-        intent_window.Dispatcher.Invoke(() => intent_window.Hide());
+        UpdateUI(() => intent_window.Hide());
     }
 
     private void OnInputTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
         try
         {
-            // Check if the partial result has at least 5 words
-            if (current_partial.Split(' ').Length >= 5)
+            Console.WriteLine("Input is too long resetting stream");
+            inactivity_timer.Stop();
+            UpdateUI(() =>
             {
-                asr_window.Dispatcher.Invoke(() =>
-                {
-                    FinalizeStream();
-                });
-            }
-            else
-            {
-                Console.WriteLine("Partial result does not meet word count requirement.");
-            }
+                FinalizeStream();
+            });
         }
         catch (Exception ex)
         {
@@ -430,14 +388,20 @@ class LiveTranscription
     {
         try
         {
+            // Check if cooldown period has passed
+            if ((DateTime.Now - last_stream_finalize_time).TotalMilliseconds < stream_finalize_cooldown)
+            {
+                Console.WriteLine("Stream finalization cooldown active, skipping finalization.");
+                return; // Skip finalization if cooldown is active
+            }
+
+            last_stream_finalize_time = DateTime.Now;
             // Offload work to a background task
             Task.Run(() =>
             {
                 lock (streamLock)
                 {
-                    Console.WriteLine("Finalizing stream...");
                     string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
-                    Console.WriteLine("Stream finalized.");
 
                     // Perform socket operations in a background thread
                     socket.SendFrame(final_result_from_stream);
@@ -459,7 +423,7 @@ class LiveTranscription
                 }
 
                 // Update the UI on the UI thread
-                asr_window.Dispatcher.Invoke(() =>
+                UpdateUI(() =>
                 {
                     if (asr_window.IsVisible)
                     {
@@ -467,6 +431,7 @@ class LiveTranscription
                         {
                             intent_window.AppendText($"Intent: {received}");
                             intent_window_timer.Start();
+                            main_window.SetListeningIcon(false);
                             asr_window.Hide();
 
                             wake_word_detected = false;
@@ -477,7 +442,6 @@ class LiveTranscription
                         catch (Exception ex)
                         {
                             Console.WriteLine($"Error updating UI: {ex.Message}");
-                            // Handle exceptions (log them, show error messages, etc.)
                         }
                     }
                 });
@@ -486,163 +450,231 @@ class LiveTranscription
         catch (Exception ex)
         {
             Console.WriteLine($"Error in FinalizeStream: {ex.Message}");
-            // Handle exceptions (log them, show error messages, etc.)
+        }
+    }
+
+    private void OnDataAvailable(object sender, WaveInEventArgs e)
+    {
+        if (!is_running || e.BytesRecorded <= 0)
+        {
+            UpdateUI(() => asr_window.AppendText("No audio data recorded."));
+            return;
+        }
+
+        // timers start everytime audio is detedted
+
+        StartInactivityTimer();
+
+        StartWakeWordTimer();
+
+        StartInputTimer();
+
+        // Offload audio processing to avoid blocking the main thread
+        Task.Run(() =>
+        {
+            ProcessAudioData(e.Buffer, e.BytesRecorded);
+        });
+    }
+
+    private bool is_stream_ready = true;
+    private void ProcessAudioData(byte[] buffer, int bytesRecorded)
+    {
+        if (deep_speech_stream == null || !is_stream_ready) return; // Avoid feeding if stream is not ready
+
+        short[] short_buffer = new short[bytesRecorded / 2];
+        Buffer.BlockCopy(buffer, 0, short_buffer, 0, bytesRecorded);
+
+        Task.Run(() =>
+        {
+            lock (streamLock)
+            {
+                if (vad.HasSpeech(short_buffer))
+                {
+                    is_stream_ready = false; // Block further feeds during processing
+                    ProcessSpeech(short_buffer);
+                    is_stream_ready = true; // Ready for next audio feed
+                }
+                else
+                {
+                    HandleNoSpeechDetected(); // Finalizes stream if no speech is detected
+                }
+            }
+        });
+    }
+
+
+    private void ProcessSpeech(short[] short_buffer)
+    {
+        // Lock only around the critical section to minimize delay
+        lock (streamLock)
+        {
+            try
+            {
+                // Feed audio to the model
+                deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
+
+                // Get intermediate decoding with metadata (confidence values)
+                var metadata = deep_speech_model.IntermediateDecodeWithMetadata(deep_speech_stream, 1);
+
+                if (metadata == null || metadata.Transcripts.Length == 0) return;
+
+                var partial_result = metadata.Transcripts[0].Tokens.Select(t => t.Text).Aggregate((a, b) => a + b).Trim();
+                float confidence = (float)metadata.Transcripts[0].Confidence;
+
+                if (string.IsNullOrEmpty(partial_result)) return;
+
+                current_partial = partial_result;
+
+                // Process wake word detection or regular transcription
+                if (wake_word_required)
+                {
+                    HandleWakeWord(partial_result, confidence);
+                }
+                else
+                {
+                    if (confidence > deepspeech_confidence)
+                    {
+                        // Proceed with transcription handling
+                        ShowTranscription(partial_result);
+                        ProcessCommand(partial_result);
+                    }
+                    else
+                    {
+                        // Handle low confidence case (e.g., log, retry, prompt user)
+                        Console.WriteLine("Low confidence in transcription. Please repeat.");
+                    }
+
+                    // Optionally log or display the confidence score
+                    Console.WriteLine($"Confidence: {confidence}");
+                }
+            }
+            catch (AccessViolationException ex)
+            {
+                Console.WriteLine($"AccessViolationException: {ex.Message}");
+                deep_speech_model.FinishStream(deep_speech_stream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"General Exception: {ex.Message}");
+            }
         }
     }
 
 
-    // function kun may makalap na audio an mic
-    private void OnDataAvailable(object sender, WaveInEventArgs e)
+    private void HandleWakeWord(string partial_result, double confidence)
     {
-        if (!is_running) return;
+        int new_click_count = CountClicks(partial_result);
 
-        try
+        if (new_click_count > click_command_count)
         {
-            if (e.BytesRecorded > 0)
-            {
-                short[] short_buffer = new short[e.BytesRecorded / 2];
-                Buffer.BlockCopy(e.Buffer, 0, short_buffer, 0, e.BytesRecorded);
-
-                bool is_speech = vad.HasSpeech(short_buffer);
-
-                if (is_speech)
-                {
-                    lock (streamLock)
-                    {
-                        try
-                        {
-                            deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
-
-                            string partial_result = deep_speech_model.IntermediateDecode(deep_speech_stream).Trim();
-
-                            if (string.IsNullOrEmpty(partial_result)) return;
-
-                            current_partial = partial_result;
-
-                            if (!inactivity_timer.Enabled)
-                            {
-                                inactivity_timer.Start();
-                            }
-
-                            if (wake_word_required)
-                            {
-                                int new_click_count = partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1;
-                                if (new_click_count > click_command_count)
-                                {
-                                    int clicks_to_perform = new_click_count - click_command_count;
-                                    for (int i = 0; i < clicks_to_perform; i++)
-                                    {
-                                        SimulateMouseClick();
-                                    }
-                                    click_command_count = new_click_count;
-                                }
-
-                                if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
-                                {
-                                    wake_word_detected = true;
-
-                                    partial_result = RemoveWakeWord(partial_result, wake_word);
-                                    click_command_count = 0;
-
-                                    main_window.Dispatcher.Invoke(() => main_window.SetListeningIcon(true));
-
-                                    intent_window.Dispatcher.Invoke(() => intent_window.Show());
-
-                                    asr_window.Dispatcher.Invoke(() =>
-                                    {
-                                        if (!asr_window.IsVisible)
-                                        {
-                                            asr_window.Show();
-                                        }
-
-                                        asr_window.AppendText($"You said: {partial_result}", true);
-
-                                        ProcessCommand(partial_result);
-                                    });
-                                }
-
-                            }
-                            else // kun diri kailangan wake word
-                            {
-                                main_window.Dispatcher.Invoke(() =>
-                                {
-                                    main_window.SetListeningIcon(true);
-                                });
-
-                                intent_window.Dispatcher.Invoke(() => intent_window.Show());
-
-                                asr_window.Dispatcher.Invoke(() =>
-                                {
-                                    if (!asr_window.IsVisible)
-                                    {
-                                        asr_window.Show();
-                                    }
-
-                                    asr_window.AppendText("You said: " + partial_result, true);
-
-                                    ProcessCommand(partial_result);
-                                });
-                            }
-                        }
-                        catch (AccessViolationException ex)
-                        {
-                            Console.WriteLine($"AccessViolationException: {ex.Message}");
-                            deep_speech_model.FinishStream(deep_speech_stream);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"General Exception: {ex.Message}");
-                        }
-                    }
-                }
-                else
-                {
-                    asr_window.Dispatcher.Invoke(() =>
-                    {
-                        if (asr_window.IsVisible)
-                        {
-                            try
-                            {
-                                string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
-
-                                socket.SendFrame(final_result_from_stream);
-                                string receivedMessage = socket.ReceiveFrameString();
-
-
-                                intent_window.Dispatcher.Invoke(() =>
-                                {
-                                    intent_window.AppendText($"Intent: {receivedMessage}");
-                                });
-
-                                intent_window_timer.Start();
-                                asr_window.Hide();
-
-                                deep_speech_stream.Dispose();
-                                deep_speech_stream = deep_speech_model.CreateStream();
-
-                                wake_word_detected = false;
-                                ResetCommandCounts();
-                            }
-                            catch (Exception ex)
-                            {
-                                // Handle exceptions (log them, show error messages, etc.)
-                                Console.WriteLine($"Error: {ex.Message}");
-                            }
-                        }
-
-
-                    });
-
-                }
-            }
-            else
-            {
-                asr_window.Dispatcher.Invoke(() => asr_window.AppendText("No audio data recorded."));
-            }
+            SimulateMouseClicks(new_click_count);
         }
-        catch (Exception ex)
+
+        if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"DataAvailable Error: {ex.Message}"));
+            if (wake_word_timer.Enabled)
+            {
+                wake_word_timer.Close();
+            }
+
+            wake_word_detected = true;
+            partial_result = RemoveWakeWord(partial_result, wake_word);
+            click_command_count = 0;
+
+            ShowTranscription(partial_result);
+            ProcessCommand(partial_result);
+        }
+    }
+
+    private int CountClicks(string partial_result)
+    {
+        return partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1;
+    }
+
+    private void SimulateMouseClicks(int new_click_count)
+    {
+        for (int i = 0; i < new_click_count - click_command_count; i++)
+        {
+            SimulateMouseClick();
+        }
+        click_command_count = new_click_count;
+    }
+
+    private void ShowTranscription(string partial_result)
+    {
+        UpdateUI(() => intent_window.Show());
+
+        UpdateUI(() => main_window.SetListeningIcon(true));
+
+        UpdateUI(() =>
+        {
+            try
+            {
+                if (!asr_window.IsVisible)
+                {
+                    asr_window.Show();
+                }
+                asr_window.AppendText($"You said: {partial_result}", true);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return;
+            }
+        }); 
+    }
+
+    private void HandleNoSpeechDetected()
+    {
+        UpdateUI(() =>
+        {
+            if (!asr_window.IsVisible) return;
+
+            FinalizeStream(); // Finalize the stream when no speech is detected
+        });
+    }
+
+    // Reset inactivity timer and setup event to process commands after inactivity
+    private void StartInactivityTimer()
+    {
+        if (!inactivity_timer.Enabled)
+        {
+            inactivity_timer.Stop(); // Stop the timer first
+            inactivity_timer.Start(); // Restart the timer
+            Console.WriteLine("started the inactivity timer");
+        }
+    }
+
+    private void StartWakeWordTimer()
+    {
+        if (!wake_word_timer.Enabled)
+        {
+            wake_word_timer.Stop(); // Stop the timer first
+            wake_word_timer.Start(); // Restart the timer
+            Console.WriteLine("started the wake word timer");
+        }
+    }
+
+    private void StartInputTimer()
+    {
+        if (!input_timer.Enabled)
+        {
+            input_timer.Stop(); // Stop the timer first
+            input_timer.Start(); // Restart the timer
+            Console.WriteLine("started the input timer");
+        }
+    }
+
+    // Helper method to update UI on the main thread
+    private void UpdateUI(Action action)
+    {
+        if (main_window.Dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            main_window.Dispatcher.Invoke(action);
         }
     }
 
@@ -678,7 +710,7 @@ class LiveTranscription
         if (new_click_count > click_command_count)
         {
             int clicks_to_perform = new_click_count - click_command_count;
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Performing {clicks_to_perform} click(s)...", true));
+            UpdateUI(() => asr_window.AppendText($"Performing {clicks_to_perform} click(s)...", true));
             for (int i = 0; i < clicks_to_perform; i++)
             {
                 SimulateMouseClick();
@@ -720,6 +752,56 @@ class LiveTranscription
             }
         }
 
+        HandleCommand("one", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("1");
+        });
+
+        HandleCommand("two", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("2");
+        });
+
+        HandleCommand("three", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("3");
+        });
+
+        HandleCommand("four", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("4");
+        });
+
+        HandleCommand("five", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("5");
+        });
+
+        HandleCommand("six", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("6");
+        });
+
+        HandleCommand("seven", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("7");
+        });
+
+        HandleCommand("eight", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("8");
+        });
+
+        HandleCommand("nine", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("9");
+        });
+
+        HandleCommand("ten", transcription, ref show_items_command_count, () =>
+        {
+            ProcessSpokenTag("10");
+        });
+
         // Handle other commands
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
         HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
@@ -746,18 +828,6 @@ class LiveTranscription
         HandleCommand("volume up", transcription, ref volume_up_command_count, () => VolumeUp());
         HandleCommand("volume down", transcription, ref volume_down_command_count, () => VolumeDown());
         HandleCommand("open settings", transcription, ref settings_command_count, () => StartProcess("ms-settings:"));
-
-        // TODO - possibly ig dictionary an mga pan replace stuffs kay kadadamo
-        //        ayda ini possibly gamit hin flags or pag add hin another window na ma indicate na hain an current na gingagamit na app kaysa ig display ha asrwindow kay kakasalipod
-        //if (IsActiveWindow("Calculator"))
-        //{
-        //    asr_window.Dispatcher.Invoke(() => asr_window.AppendText("You are in Calculator.", true)); // ini kakasalipod ha transcription
-
-        //    transcription = transcription.Replace("one", "1")
-        //                                .Replace("plus", "+")
-        //                                .Replace("two", "2");
-        //    TypeText(transcription);
-        //}
     }
 
     private void HandleCommand(string commandText, string transcription, ref int commandCount, Action action) // ini an pan prevent hin pan execute command like opening hin utro utro
@@ -766,13 +836,70 @@ class LiveTranscription
         if (new_command_count > commandCount)
         {
             int commands_to_perform = new_command_count - commandCount;
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Performing {commands_to_perform} {commandText} command(s)...", true));
+            UpdateUI(() => asr_window.AppendText($"Performing {commands_to_perform} {commandText} command(s)...", true));
             for (int i = 0; i < commands_to_perform; i++)
             {
                 action.Invoke();
             }
             commandCount = new_command_count;
         }
+    }
+
+    private void ProcessSpokenTag(string spokenTag)
+    {
+        var clickableItems = show_items.GetClickableItems();
+
+        if (clickableItems == null || clickableItems.Count == 0)
+        {
+            Console.WriteLine("No clickable items found.");
+            return; // Exit early since there are no items to process
+        }
+
+        if (int.TryParse(spokenTag, out int tagNumber))
+        {
+            clickableItems = show_items.GetClickableItems();
+            if (tagNumber > 0 && tagNumber <= clickableItems.Count)
+            {
+                var selectedItem = clickableItems[tagNumber - 1]; // 0-based index
+
+                // Convert System.Windows.Rect to OpenCvSharp.Rect
+                var convertedRect = ConvertToOpenCvRect(selectedItem.BoundingRectangle);
+
+                ClickItem(convertedRect); // Perform click on item
+            }
+            else
+            {
+                Console.WriteLine("Invalid tag number");
+            }
+        }
+        else
+        {
+            Console.WriteLine("Could not recognize a valid tag number");
+        }
+    }
+
+    // Method to convert System.Windows.Rect to OpenCvSharp.Rect
+    private OpenCvSharp.Rect ConvertToOpenCvRect(System.Windows.Rect rect)
+    {
+        return new OpenCvSharp.Rect((int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
+    }
+
+    private void ClickItem(Rect boundingRect)
+    {
+        // Simulate a mouse click at the center of the bounding rectangle
+        double x = boundingRect.Left + boundingRect.Width / 2;
+        double y = boundingRect.Top + boundingRect.Height / 2;
+
+        // Use the method to simulate the mouse click (you may need to implement this)
+        ClickMouseAt(x, y);
+    }
+
+    private void ClickMouseAt(double x, double y)
+    {
+        // Simulate the mouse movement and click event at the specified coordinates
+        System.Windows.Forms.Cursor.Position = new System.Drawing.Point((int)x, (int)y);
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
     }
 
     private void TypeText(string text) // pan type - wip
@@ -894,7 +1021,7 @@ class LiveTranscription
         }
         catch (Exception ex)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Failed to start {processName}: {ex.Message}", true));
+            UpdateUI(() => asr_window.AppendText($"Failed to start {processName}: {ex.Message}", true));
         }
     }
 
@@ -905,7 +1032,7 @@ class LiveTranscription
         {
             SendMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
         }
-        asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Closing current window...", true));
+        UpdateUI(() => asr_window.AppendText("Closing current window...", true));
     }
 
     private void CloseApplication(string processName) // pag close hin app - wip
@@ -919,7 +1046,7 @@ class LiveTranscription
         }
         catch (Exception ex)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Error closing process {processName}: {ex.Message}"));
+            UpdateUI(() => asr_window.AppendText($"Error closing process {processName}: {ex.Message}"));
         }
     }
 
@@ -968,7 +1095,7 @@ class LiveTranscription
         try
         {
             string final_result = deep_speech_model.FinishStream(deep_speech_stream);
-            asr_window.Dispatcher.Invoke(() =>
+            UpdateUI(() =>
             {
                 asr_window.AppendText("Final Transcription: " + final_result);
                 if (asr_window.IsVisible)
@@ -979,14 +1106,14 @@ class LiveTranscription
         }
         catch (Exception ex)
         {
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText($"Error finishing stream: {ex.Message}"));
+            UpdateUI(() => asr_window.AppendText($"Error finishing stream: {ex.Message}"));
         }
         finally
         {
             deep_speech_stream.Dispose();
             deep_speech_model.Dispose();
             vad.Dispose();
-            asr_window.Dispatcher.Invoke(() => asr_window.AppendText("Transcription stopped."));
+            UpdateUI(() => asr_window.AppendText("Transcription stopped."));
         }
     }
 
@@ -1000,7 +1127,7 @@ class LiveTranscription
             {
                 // Assuming you have a method StartCameraMouse in your cameramouse class
                 camera_mouse.StartCameraMouse();
-                asr_window.Dispatcher.Invoke(() =>
+                UpdateUI(() =>
                 {
                     asr_window.AppendText("Camera mouse activated.");
                 });
@@ -1014,7 +1141,7 @@ class LiveTranscription
         camera_mouse_opened = false;
         // Assuming you have a method StopCameraMouse in your cameramouse class to stop the mouse functionality
         camera_mouse.StopCameraMouse(); // Implement this in cameramouse.cs
-        asr_window.Dispatcher.Invoke(() =>
+        UpdateUI(() =>
         {
             asr_window.AppendText("Camera mouse deactivated.");
         });
