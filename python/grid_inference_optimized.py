@@ -1,3 +1,4 @@
+import zmq
 import pyautogui
 import numpy as np
 import cv2
@@ -6,7 +7,12 @@ import time
 from ultralytics import YOLO
 
 # Load the YOLO model
-model = YOLO('official-train-1-best-640.pt')
+model = YOLO(r'C:\Users\super.admin\Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\assets\models\official-train-1-best-640.pt')
+
+# Set up ZMQ for sending detections to C#
+context = zmq.Context()
+socket = context.socket(zmq.PUB)  # Publisher socket
+socket.bind("tcp://*:5555")  # Binding on port 5555
 
 # Get screen dimensions
 screen_width, screen_height = pyautogui.size()
@@ -20,18 +26,17 @@ bounding_boxes = []
 bounding_boxes_lock = threading.Lock()
 
 def get_current_quadrant(x, y):
-    # Calculate the column and row for the current mouse position
-    col = min(5, x // quadrant_width)  # Ensure col is within bounds (0 to 5)
-    row = min(5, y // quadrant_height)  # Ensure row is within bounds (0 to 5)
-    return row * 6 + col  # Return the quadrant index (0 to 35)
+    col = min(5, x // quadrant_width)
+    row = min(5, y // quadrant_height)
+    return row * 6 + col
 
 def screenshot_quadrant(quadrant):
     col = quadrant % 6
     row = quadrant // 6
-    left = max(0, col * quadrant_width - 10)  # Add overlap
-    top = max(0, row * quadrant_height - 10)   # Add overlap
-    width = min(screen_width, quadrant_width + 20)  # Add overlap
-    height = min(screen_height, quadrant_height + 20)  # Add overlap
+    left = max(0, col * quadrant_width - 10)
+    top = max(0, row * quadrant_height - 10)
+    width = min(screen_width, quadrant_width + 20)
+    height = min(screen_height, quadrant_height + 20)
     screenshot = pyautogui.screenshot(region=(left, top, width, height))
     return np.array(screenshot), left, top
 
@@ -41,7 +46,7 @@ def perform_inference_on_quadrant(quadrant):
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     results = model(image)
     new_bounding_boxes = []
-    
+
     for result in results:
         for box in result.boxes.xyxy:
             x1, y1, x2, y2 = map(int, box[:4])
@@ -52,9 +57,8 @@ def perform_inference_on_quadrant(quadrant):
             label = model.names[int(result.boxes.cls[0])]
             new_bounding_boxes.append((x1, y1, x2, y2, label))
     
-    # Limit the number of bounding boxes to a maximum of 100
     with bounding_boxes_lock:
-        bounding_boxes = new_bounding_boxes[:100]  # Only keep the first 100 boxes
+        bounding_boxes = new_bounding_boxes[:100]
 
 def run_inference_thread(quadrant):
     perform_inference_on_quadrant(quadrant)
@@ -71,13 +75,23 @@ def check_mouse_position():
             inference_thread_obj = threading.Thread(target=run_inference_thread, args=(current_quadrant,))
             inference_thread_obj.start()
 
+        found_match = False  # Track whether a match was found
+
         with bounding_boxes_lock:
             for (x1, y1, x2, y2, label) in bounding_boxes:
                 if x1 < x < x2 and y1 < y < y2:
+                    # Send the detection to the C# app via ZMQ
+                    message = f"{label},{x1},{y1},{x2},{y2}"
+                    socket.send_string(message)  # Send the message to C#
                     print(f"Hovering over: {label} at [{x1}, {y1}, {x2}, {y2}]")
+                    found_match = True  # A match was found, so we won't send "no detections"
+                    break  # No need to check other bounding boxes once a match is found
+
+        # If no match was found, send a "no detections" message
+        if not found_match:
+            socket.send_string("no detections")
 
         time.sleep(0.1)
 
-# Start the mouse polling thread
 mouse_polling_thread = threading.Thread(target=check_mouse_position)
 mouse_polling_thread.start()

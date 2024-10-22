@@ -7,6 +7,10 @@ using System.Windows.Automation;
 using System;
 using System.Collections.Generic;
 using System.Windows.Threading;
+using NetMQ;
+using NetMQ.Sockets;
+using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace ATEDNIULI
 {
@@ -26,6 +30,128 @@ namespace ATEDNIULI
 
         private const int LOGPIXELSX = 88;
 
+        private SubscriberSocket _subscriberSocket; // ZMQ Subscriber Socket
+
+        private void StartZMQListener()
+        {
+            // Set up a new thread to listen for ZMQ messages
+            Thread zmqThread = new Thread(new ThreadStart(ZMQListener));
+            zmqThread.IsBackground = true; // Ensure it doesn't block the application from closing
+            zmqThread.Start();
+        }
+
+        public void StartGridInference()
+        {
+            ProcessStartInfo start = new ProcessStartInfo
+            {
+                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe",
+                Arguments = "C:\\Users\\super.admin\\Desktop\\Capstone\\ATEDNIULI\\edn-app\\ATEDNIULI\\python\\grid_inference_optimized.py",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true, // Prevents the console window from appearing
+                EnvironmentVariables =
+                {
+                    { "PYTHONIOENCODING", "utf-8:replace" }
+                }
+            };
+
+            Process process = new Process
+            {
+                StartInfo = start
+            };
+
+            process.OutputDataReceived += (sender, args) =>
+            {
+                if (!string.IsNullOrEmpty(args.Data))
+                {
+                    Console.WriteLine(args.Data);
+                }
+            };
+
+            process.ErrorDataReceived += (sender, args) =>
+            {
+                if (!string.IsNullOrEmpty(args.Data))
+                {
+                    Console.WriteLine($"Error: {args.Data}");
+                }
+            };
+
+            process.Start();
+            process.BeginOutputReadLine(); // Start async read of output
+            process.BeginErrorReadLine(); // Start async read of error output
+        }
+
+
+        private void ZMQListener()
+        {
+            // Set up ZMQ Subscriber to listen to port 5555
+            using (_subscriberSocket = new SubscriberSocket())
+            {
+                _subscriberSocket.Connect("tcp://localhost:5555");
+                _subscriberSocket.Subscribe(""); // Subscribe to all messages
+
+                while (true)
+                {
+                    // Receive message from Python
+                    string message = _subscriberSocket.ReceiveFrameString();
+                    Dispatcher.Invoke(() => ProcessDetectionMessage(message)); // Process in UI thread
+                }
+            }
+        }
+
+        private void ProcessDetectionMessage(string message)
+        {
+            Console.WriteLine($"Received message: {message}");
+
+            // Check for "no detections" message first
+            if (message.Contains("no detections"))
+            {
+                Console.WriteLine("No detections found.");
+                DetectedItemLabel.Visibility = Visibility.Collapsed;
+                DetectedItemText.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            // Parse the received message (format: "label,x1,y1,x2,y2")
+            var parts = message.Split(',');
+            if (parts.Length == 5)
+            {
+                string label = parts[0];
+                int x1 = int.Parse(parts[1]);
+                int y1 = int.Parse(parts[2]);
+                int x2 = int.Parse(parts[3]);
+                int y2 = int.Parse(parts[4]);
+
+                // Update the UI with the new detection
+                DetectedItemLabel.Visibility = Visibility.Visible;
+                DetectedItemText.Text = label;
+                DetectedItemText.Visibility = Visibility.Visible;
+
+                // Create the tag label
+                Label tag = new Label
+                {
+                    Content = label,
+                    Background = Brushes.Transparent,
+                    Foreground = Brushes.Black,
+                    Padding = new Thickness(5),
+                    FontSize = 16,
+                    Opacity = 1.0
+                };
+
+                // Position the label above the bounding box
+                Canvas.SetLeft(tag, x1);
+                Canvas.SetTop(tag, y1 - 20);
+                OverlayCanvas.Children.Add(tag);
+            }
+            else
+            {
+                Console.WriteLine("Invalid detection message.");
+                DetectedItemLabel.Visibility = Visibility.Collapsed;
+                DetectedItemText.Visibility = Visibility.Collapsed;
+            }
+        }
+
         private double GetScalingFactor()
         {
             IntPtr hdc = GetDC(IntPtr.Zero); // Get the device context for the entire screen
@@ -39,6 +165,8 @@ namespace ATEDNIULI
             _tags = new List<Label>(); // Initialize the tag list
             ScalingFactor = GetScalingFactor();
             Show();
+            StartGridInference();
+            StartZMQListener();
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
