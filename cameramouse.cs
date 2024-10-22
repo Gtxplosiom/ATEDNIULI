@@ -70,7 +70,7 @@ namespace ATEDNIULI
         private int webcamHeight = 480;
         
         // precision mode stuff
-        private static int initialPrecisionRadius = 500; // Initial size of the precision area
+        private static int initialPrecisionRadius = 250; // Initial size of the precision area
         private static int reducedPrecisionRadius = 50; // Reduced size of the precision area
         private static DateTime precisionStartTime;
         private static DateTime reductionStartTime;
@@ -361,17 +361,31 @@ namespace ATEDNIULI
             double deltaY = targetY - startY;
 
             // Adjust movement range in precision mode
-            precisionFactor = precisionActivated ? 0.1 : 1.0; // Reduce target movement in precision mode
+            //precisionFactor = precisionActivated ? 0.1 : 1.0; // Reduce target movement in precision mode
 
             // Use a low-pass filter to smooth the movement
             double smoothingFactor = 0.5;
 
             for (int i = 0; i <= steps; i++)
             {
-                int newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-                int newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-                SetCursorPos(newX, newY);
-                Thread.Sleep(duration / steps); // Wait between steps
+                int newX = 0;
+                int newY = 0;
+
+                if (precisionActivated)
+                {
+                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * 0.05); // 5% of the movement
+                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * 0.05);
+                    SetCursorPos(newX, newY);
+                    Thread.Sleep(duration / steps); // Wait between steps
+                }
+                else // when not in precision mode
+                {
+                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * 0.5); // 50% of the movement
+                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * 0.5);
+                    SetCursorPos(newX, newY);
+                    Thread.Sleep(duration / steps); // Wait between steps
+                }
+                
             }
         }
 
