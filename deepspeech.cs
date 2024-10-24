@@ -195,6 +195,42 @@ class LiveTranscription
             }
         });
 
+        Task.Run(() =>
+        {
+            ProcessStartInfo start = new ProcessStartInfo
+            {
+                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe",
+                Arguments = "C:\\Users\\super.admin\\Desktop\\Capstone\\ATEDNIULI\\edn-app\\ATEDNIULI\\python\\grid_inference_optimized.py",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                //CreateNoWindow = true, // Prevents the console window from appearing
+                EnvironmentVariables =
+                {
+                    { "PYTHONIOENCODING", "utf-8:replace" }
+                }
+            };
+            using (Process process = Process.Start(start))
+            {
+                // Optionally read the output of the Python script
+                using (var reader = process.StandardOutput)
+                {
+                    string result = reader.ReadToEnd();
+                    Console.WriteLine(result);
+                }
+
+                // Optionally read the error output of the Python script
+                using (var errorReader = process.StandardError)
+                {
+                    string error = errorReader.ReadToEnd();
+                    if (!string.IsNullOrEmpty(error))
+                    {
+                        Console.WriteLine($"Error: {error}");
+                    }
+                }
+            }
+        });
+
         // pag communicate ha python code ha fld nga ma wait anay bago mag load an python bago mag continue ha rest of the program
         using (var notifySocketIR = new PullSocket("tcp://localhost:6970"))
         {

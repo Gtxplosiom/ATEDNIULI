@@ -40,49 +40,6 @@ namespace ATEDNIULI
             zmqThread.Start();
         }
 
-        public void StartGridInference()
-        {
-            ProcessStartInfo start = new ProcessStartInfo
-            {
-                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe",
-                Arguments = "C:\\Users\\super.admin\\Desktop\\Capstone\\ATEDNIULI\\edn-app\\ATEDNIULI\\python\\grid_inference_optimized.py",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true, // Prevents the console window from appearing
-                EnvironmentVariables =
-                {
-                    { "PYTHONIOENCODING", "utf-8:replace" }
-                }
-            };
-
-            Process process = new Process
-            {
-                StartInfo = start
-            };
-
-            process.OutputDataReceived += (sender, args) =>
-            {
-                if (!string.IsNullOrEmpty(args.Data))
-                {
-                    Console.WriteLine(args.Data);
-                }
-            };
-
-            process.ErrorDataReceived += (sender, args) =>
-            {
-                if (!string.IsNullOrEmpty(args.Data))
-                {
-                    Console.WriteLine($"Error: {args.Data}");
-                }
-            };
-
-            process.Start();
-            process.BeginOutputReadLine(); // Start async read of output
-            process.BeginErrorReadLine(); // Start async read of error output
-        }
-
-
         private void ZMQListener()
         {
             // Set up ZMQ Subscriber to listen to port 5555
@@ -165,7 +122,6 @@ namespace ATEDNIULI
             _tags = new List<Label>(); // Initialize the tag list
             ScalingFactor = GetScalingFactor();
             Show();
-            StartGridInference();
             StartZMQListener();
         }
 

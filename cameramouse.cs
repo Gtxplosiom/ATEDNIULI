@@ -70,13 +70,13 @@ namespace ATEDNIULI
         private int webcamHeight = 480;
         
         // precision mode stuff
-        private static int initialPrecisionRadius = 250; // Initial size of the precision area
+        private static int initialPrecisionRadius = 500; // Initial size of the precision area
         private static int reducedPrecisionRadius = 50; // Reduced size of the precision area
         private double precisionFactor = 1.0;
         private static DateTime precisionStartTime;
-        private static DateTime preparePrecisionTime;
+        private static DateTime transitionPrecision;
         private static DateTime reductionStartTime;
-        private static bool isInPrecisionMode = false;
+        private static bool newPrecisionArea = false;
         private static bool preparingPrecision = false;
         private static bool precisionActivated = false;
         private static bool isRadiusReduced = false; // To track if the radius has been reduced
@@ -87,18 +87,21 @@ namespace ATEDNIULI
             // Retrieve the window handle for the OpenCV window
             IntPtr hWnd = Cv2.GetWindowHandle(windowName);
 
-            // Define window size and position for the right side of the screen
-            int windowWidth = 640;  // Visually reduce width by 50%
-            int windowHeight = 480; // Visually reduce height by 50%
-            int posX = screenWidth - windowWidth; // X position for right alignment
-            int posY = (screenHeight - windowHeight) / 2; // Centered vertically
+            // Define window size
+            int windowWidth = 640;  // Adjusted window width
+            int windowHeight = 480; // Adjusted window height
 
-            // Resize the window (display size only, not affecting the resolution)
+            // Set the top-right corner position
+            int posX = screenWidth - windowWidth; // X position for right alignment
+            int posY = 0; // Y position for top alignment
+
+            // Resize the window
             Cv2.ResizeWindow(windowName, windowWidth, windowHeight);
 
-            // Set the window to always be on top and position it on the right side
+            // Set the window to always be on top and position it at top-right corner
             SetWindowPos(hWnd, HWND_TOPMOST, posX, posY, windowWidth, windowHeight, SWP_SHOWWINDOW);
         }
+
 
         public void StartCameraMouse()
         {
@@ -153,6 +156,7 @@ namespace ATEDNIULI
 
                 int screenWidth = GetSystemMetrics(0);
                 int screenHeight = GetSystemMetrics(1);
+
                 double roiPercentage = 0.05;
                 int roiWidth = (int)(webcamWidth * roiPercentage);
                 int roiHeight = (int)(webcamHeight * roiPercentage);
@@ -362,49 +366,46 @@ namespace ATEDNIULI
             double deltaX = targetX - startX;
             double deltaY = targetY - startY;
 
-            // Adjust movement range in precision mode
-            //precisionFactor = precisionActivated ? 0.1 : 1.0; // Reduce target movement in precision mode
-
-            // Use a low-pass filter to smooth the movement
-            double smoothingFactor = 0.6;
+            double smoothingFactor = 0.6; // Smoothing factor for low-pass filter
 
             for (int i = 0; i <= steps; i++)
             {
                 int newX = 0;
                 int newY = 0;
 
-                double elapsedTime = (DateTime.Now - precisionStartTime).TotalMilliseconds;
+                // Start transitioning to precision mode if necessary
+                if (preparingPrecision == true)
+                {
+                    // Only set transition time once when transitioning begins
+                    if (transitionPrecision == default)
+                    {
+                        transitionPrecision = DateTime.Now; // Set when transitioning begins
+                    }
 
-                if (elapsedTime <= 3000)
-                {
-                    precisionFactor = 1.0 - (0.95 * (elapsedTime / 3000.0)); // Linear transition
-                }
-                else
-                {
-                    precisionFactor = 0.075; // Cap at 0.05 after 3 seconds
+                    double elapsedTime = (DateTime.Now - transitionPrecision).TotalMilliseconds;
+
+                    if (elapsedTime <= 1500)
+                    {
+                        precisionFactor = 1.0 - (0.95 * (elapsedTime / 1500.0)); // Linear transition
+                    }
+                    else
+                    {
+                        precisionFactor = 0.1; // Cap at 10% after 2 seconds
+                    }
                 }
 
-                if (precisionActivated)
-                {
-                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor); // 10% of the movement
-                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-                    SetCursorPos(newX, newY);
-                    Thread.Sleep(duration / steps); // Wait between steps
-                }
-                else // when not in precision mode
-                {
-                    newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor); // 100% of the movement
-                    newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-                    SetCursorPos(newX, newY);
-                    Thread.Sleep(duration / steps); // Wait between steps
-                }
-                
+                // Calculate smoothed movement
+                newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
+                newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
+                SetCursorPos(newX, newY);
+
+                Thread.Sleep(duration / steps); // Wait between steps
             }
         }
 
+
         private void PrecisionMode()
         {
-            Console.WriteLine("Precision Mode Test. Press 'Ctrl+C' to exit.");
             int currentPrecisionRadius = 0;
             double distanceToTarget;
 
@@ -414,19 +415,10 @@ namespace ATEDNIULI
                 var currentMousePosition = GetMousePosition();
 
                 // Check if we are already in precision mode
-                if (isInPrecisionMode)
+                if (newPrecisionArea)
                 {
                     // Use the last known position as the target when in precision mode
                     distanceToTarget = CalculateDistance(currentMousePosition, lastMousePosition);
-
-                    if (!isRadiusReduced)
-                    {
-                        currentPrecisionRadius = initialPrecisionRadius;
-                    }
-                    else if (isRadiusReduced && currentPrecisionRadius == initialPrecisionRadius)
-                    {
-                        currentPrecisionRadius = reducedPrecisionRadius;
-                    }
                 }
                 else
                 {
@@ -439,50 +431,34 @@ namespace ATEDNIULI
                 // Check if the cursor is in the precision area
                 if (distanceToTarget < currentPrecisionRadius)
                 {
-                    if (!isInPrecisionMode)
+                    if (!newPrecisionArea)
                     {
                         precisionStartTime = DateTime.Now; // Start time for entering precision mode
-                        isInPrecisionMode = true;
-                        isRadiusReduced = false; // Reset the radius reduction flag
+                        newPrecisionArea = true;
                         Console.WriteLine("Updated Precision Area");
                     }
-
-                    // Check for the 2-second threshold to enter precision mode
-                    if ((DateTime.Now - precisionStartTime).TotalMilliseconds >= 2000)
+                    else
                     {
-                        Console.WriteLine("Mouse is now in Precision Mode");
-
-                        precisionActivated = true;
-
-                        // Start the reduction timer only after entering precision mode
-                        if (!isRadiusReduced)
+                        Console.WriteLine("Begining to stabilize");
+                        if ((DateTime.Now - precisionStartTime).TotalMilliseconds >= 1500)
                         {
-                            if (reductionStartTime == default) // Only set if it hasn't been set yet
-                            {
-                                //reductionStartTime = DateTime.Now; // Start timer for radius reduction
-                            }
+                            Console.WriteLine("Transitioning Precision Sensitivity");
 
-                            // Check if we need to reduce the radius
-                            if ((DateTime.Now - reductionStartTime).TotalMilliseconds >= 1000)
-                            {
-                                // Reduce the precision radius after 2 seconds
-                                Console.WriteLine("Reducing precision radius.");
-                                isRadiusReduced = true; // Mark that the radius has been reduced
-                                lastMousePosition = GetMousePosition();
-                            }
+                            preparingPrecision = true;
                         }
                     }
                 }
                 else
                 {
-                    if (isInPrecisionMode)
+                    if (newPrecisionArea)
                     {
-                        isInPrecisionMode = false; // Exit precision mode
+                        newPrecisionArea = false; // Exit precision mode
                         preparingPrecision = false;
                         precisionActivated = false;
                         precisionFactor = 1.0;
                         isRadiusReduced = false; // Reset the radius reduction flag
                         reductionStartTime = default; // Reset the reduction start time
+                        transitionPrecision = default;
                         lastMousePosition = (0, 0); // Optionally reset last mouse position
                         currentPrecisionRadius = initialPrecisionRadius; // Reset to initial radius
                         Console.WriteLine("Exited Precision Area.");
