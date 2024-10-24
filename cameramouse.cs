@@ -27,8 +27,6 @@ namespace ATEDNIULI
         static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
         private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-        private const uint SWP_NOSIZE = 0x0001;
-        private const uint SWP_NOMOVE = 0x0002;
         private const uint SWP_SHOWWINDOW = 0x0040;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -87,7 +85,13 @@ namespace ATEDNIULI
             // Retrieve the window handle for the OpenCV window
             IntPtr hWnd = Cv2.GetWindowHandle(windowName);
 
-            // Define window size
+            if (hWnd == IntPtr.Zero)
+            {
+                Console.WriteLine($"Error: Could not find window handle for {windowName}.");
+                return;
+            }
+
+            // Define window size (could be passed as parameters for dynamic resizing)
             int windowWidth = 640;  // Adjusted window width
             int windowHeight = 480; // Adjusted window height
 
@@ -95,13 +99,11 @@ namespace ATEDNIULI
             int posX = screenWidth - windowWidth; // X position for right alignment
             int posY = 0; // Y position for top alignment
 
-            // Resize the window
+            // Resize the window using OpenCV method
             Cv2.ResizeWindow(windowName, windowWidth, windowHeight);
-
-            // Set the window to always be on top and position it at top-right corner
-            SetWindowPos(hWnd, HWND_TOPMOST, posX, posY, windowWidth, windowHeight, SWP_SHOWWINDOW);
+            Cv2.MoveWindow(windowName, posX, posY);
+            Cv2.SetWindowProperty(windowName, WindowPropertyFlags.Topmost, 1.0);
         }
-
 
         public void StartCameraMouse()
         {
@@ -208,7 +210,10 @@ namespace ATEDNIULI
                                 ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
                             }
 
+                            Cv2.NamedWindow("Camera");
+                            Cv2.SetWindowProperty("Camera", WindowPropertyFlags.Fullscreen, 1);
                             Cv2.ImShow("Camera", frame);
+                            
                             SetWindowAlwaysOnTopAndPosition("Camera", screenWidth, screenHeight);
                         }
 
