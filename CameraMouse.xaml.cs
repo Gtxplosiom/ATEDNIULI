@@ -6,14 +6,21 @@ using OpenCvSharp;
 using DlibDotNet;
 using System.Windows.Forms;
 using System.Threading.Tasks;
+using System.Windows.Media.Imaging;
+using System.Windows.Media;
+using System.ComponentModel;
+using System.Windows;
 
 namespace ATEDNIULI
 {
-    public partial class CameraMouse : System.Windows.Window
+    public partial class CameraMouse : INotifyPropertyChanged
     {
         public CameraMouse()
         {
             InitializeComponent();
+            DataContext = this;
+
+            PositionWindow();
         }
 
         [DllImport("user32.dll")]
@@ -53,6 +60,28 @@ namespace ATEDNIULI
             }
         }
 
+        private BitmapSource _cameraImageSource;
+
+        public BitmapSource CameraImageSource
+        {
+            get => _cameraImageSource;
+            set
+            {
+                if (_cameraImageSource != value)
+                {
+                    _cameraImageSource = value;
+                    OnPropertyChanged(nameof(CameraImageSource));
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+
         private bool isRunning = false;
         private Thread cameraThread;
         private Thread mouseThread;
@@ -79,29 +108,17 @@ namespace ATEDNIULI
         private static bool isRadiusReduced = false; // To track if the radius has been reduced
         private static (int X, int Y) lastMousePosition;
 
-        private void SetWindowAlwaysOnTopAndPosition(string windowName, int screenWidth, int screenHeight)
+        private BitmapSource ConvertMat;
+
+        private void PositionWindow()
         {
-            // Retrieve the window handle for the OpenCV window
-            IntPtr hWnd = Cv2.GetWindowHandle(windowName);
+            // Get the dimensions of the primary screen
+            var screenWidth = SystemParameters.PrimaryScreenWidth;
+            var screenHeight = SystemParameters.PrimaryScreenHeight;
 
-            if (hWnd == IntPtr.Zero)
-            {
-                Console.WriteLine($"Error: Could not find window handle for {windowName}.");
-                return;
-            }
-
-            // Define window size (could be passed as parameters for dynamic resizing)
-            int windowWidth = 640;  // Adjusted window width
-            int windowHeight = 480; // Adjusted window height
-
-            // Set the top-right corner position
-            int posX = screenWidth - windowWidth; // X position for right alignment
-            int posY = 0; // Y position for top alignment
-
-            // Resize the window using OpenCV method
-            Cv2.ResizeWindow(windowName, windowWidth, windowHeight);
-            Cv2.MoveWindow(windowName, posX, posY);
-            Cv2.SetWindowProperty(windowName, WindowPropertyFlags.Topmost, 1.0);
+            // Set the window position to the top right corner
+            this.Left = screenWidth - this.Width; // Set Left position
+            this.Top = 0; // Set Top position
         }
 
         public void StartCameraMouse()
@@ -128,6 +145,8 @@ namespace ATEDNIULI
             Cv2.DestroyAllWindows();
             capture?.Release();
             capture = null;
+
+            ClosePreview();
         }
 
 
@@ -209,11 +228,14 @@ namespace ATEDNIULI
                                 ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
                             }
 
-                            Cv2.NamedWindow("Camera");
-                            Cv2.SetWindowProperty("Camera", WindowPropertyFlags.Fullscreen, 1);
-                            Cv2.ImShow("Camera", frame);
-
-                            SetWindowAlwaysOnTopAndPosition("Camera", screenWidth, screenHeight);
+                            Dispatcher.Invoke(() =>
+                            {
+                                if (this.Visibility == Visibility.Collapsed)
+                                {
+                                    this.Visibility = Visibility.Visible;
+                                }
+                                CameraImageSource = ConvertMatToBitmapSource(frame);
+                            });
                         }
 
                         if (Cv2.WaitKey(1) == 27) // Exit if 'ESC' is pressed
@@ -227,6 +249,29 @@ namespace ATEDNIULI
                     Console.WriteLine($"Error in CameraLoop: {ex.Message}");
                 }
             }
+        }
+
+        private BitmapSource ConvertMatToBitmapSource(Mat mat)
+        {
+            return BitmapSource.Create(
+                mat.Width,
+                mat.Height,
+                96,
+                96,
+                PixelFormats.Bgr24,
+                null,
+                (IntPtr)mat.Data,                // Cast mat.Data to IntPtr
+                (int)(mat.Step() * mat.Height),   // Explicitly cast long to int for buffer size
+                (int)mat.Step()                   // Explicitly cast long to int for stride
+            );
+        }
+
+        private void ClosePreview()
+        {
+            Dispatcher.Invoke(() =>
+            {
+                this.Visibility = Visibility.Collapsed;
+            });
         }
 
         private void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)

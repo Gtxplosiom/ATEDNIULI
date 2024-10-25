@@ -5,8 +5,17 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ATEDNIULI"
         mc:Ignorable="d"
-        Title="CameraMouse" Height="450" Width="800">
+        Title="CameraMouse"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="White"
+        Topmost="True"
+        SizeToContent="Manual"
+        ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        Width="320" Height="240"
+        Visibility="Collapsed">
     <Grid>
-        
+        <Image Source="{Binding CameraImageSource}" Width="320" Height="240"/>
     </Grid>
 </Window>

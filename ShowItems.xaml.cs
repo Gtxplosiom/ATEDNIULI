@@ -11,6 +11,7 @@ using NetMQ;
 using NetMQ.Sockets;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using System.Windows.Media.Imaging;
 
 namespace ATEDNIULI
 {
