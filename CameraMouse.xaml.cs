@@ -10,6 +10,8 @@ using System.Windows.Media.Imaging;
 using System.Windows.Media;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace ATEDNIULI
 {
@@ -19,6 +21,11 @@ namespace ATEDNIULI
         {
             InitializeComponent();
             DataContext = this;
+
+            // Initialize the timer
+            timer = new DispatcherTimer();
+            timer.Interval = TimeSpan.FromSeconds(3); // Set the duration (3 seconds)
+            timer.Tick += Timer_Tick;
 
             PositionWindow();
         }
@@ -108,6 +115,13 @@ namespace ATEDNIULI
         private static bool isRadiusReduced = false; // To track if the radius has been reduced
         private static (int X, int Y) lastMousePosition;
 
+        private System.Windows.Rect collapsedArea;
+        private System.Windows.Window invisibleWindow;
+
+        private DispatcherTimer timer;
+        private double originalLeft;
+        private double originalTop;
+
         private BitmapSource ConvertMat;
 
         private void PositionWindow()
@@ -119,6 +133,38 @@ namespace ATEDNIULI
             // Set the window position to the top right corner
             this.Left = screenWidth - this.Width; // Set Left position
             this.Top = 0; // Set Top position
+
+            originalLeft = this.Left;
+            originalTop = this.Top;
+        }
+
+        private void Timer_Tick(object sender, EventArgs e)
+        {
+            // Stop the timer
+            timer.Stop();
+
+            // Return the window to its original position
+            this.Left = originalLeft;
+            this.Top = originalTop;
+        }
+
+        public void Window_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+
+            // Get the dimensions of the primary screen
+            var screenWidth = SystemParameters.PrimaryScreenWidth;
+            var screenHeight = SystemParameters.PrimaryScreenHeight;
+
+            // Set the window position to the top right corner
+            this.Left = screenWidth; // Set Left position
+            this.Top = 0; // Set Top position
+
+            timer.Start();
+        }
+
+        private void Window_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+
         }
 
         public void StartCameraMouse()
@@ -148,7 +194,6 @@ namespace ATEDNIULI
 
             ClosePreview();
         }
-
 
         private bool IsCameraAvailable(int index)
         {
@@ -230,10 +275,11 @@ namespace ATEDNIULI
 
                             Dispatcher.Invoke(() =>
                             {
-                                if (this.Visibility == Visibility.Collapsed)
+                                if (this.Visibility == Visibility.Collapsed) // keep it here for some reason if the ui updates on anywhere else the using statement crashes
                                 {
                                     this.Visibility = Visibility.Visible;
                                 }
+
                                 CameraImageSource = ConvertMatToBitmapSource(frame);
                             });
                         }

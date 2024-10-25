@@ -8,13 +8,16 @@
         Title="CameraMouse"
         WindowStyle="None"
         AllowsTransparency="True"
-        Background="White"
+        Background="Transparent"
         Topmost="True"
         SizeToContent="Manual"
         ResizeMode="NoResize"
         WindowStartupLocation="Manual"
-        Width="320" Height="240"
-        Visibility="Collapsed">
+        Width="320"
+        Height="240"
+        Visibility="Collapsed"
+        MouseEnter="Window_MouseEnter"
+        MouseLeave="Window_MouseLeave">
     <Grid>
         <Image Source="{Binding CameraImageSource}" Width="320" Height="240"/>
     </Grid>
