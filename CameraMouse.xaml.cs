@@ -9,8 +9,13 @@ using System.Threading.Tasks;
 
 namespace ATEDNIULI
 {
-    internal class cameramouse
+    public partial class CameraMouse : System.Windows.Window
     {
+        public CameraMouse()
+        {
+            InitializeComponent();
+        }
+
         [DllImport("user32.dll")]
         static extern bool SetCursorPos(int x, int y);
 
@@ -22,12 +27,6 @@ namespace ATEDNIULI
         private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, int dwExtraInfo);
         private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
         private const uint MOUSEEVENTF_LEFTUP = 0x0004;
-
-        [DllImport("user32.dll")]
-        static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-
-        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-        private const uint SWP_SHOWWINDOW = 0x0040;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct Point
@@ -66,7 +65,7 @@ namespace ATEDNIULI
         // Declare webcamWidth and webcamHeight as class-level fields
         private int webcamWidth = 640;
         private int webcamHeight = 480;
-        
+
         // precision mode stuff
         private static int initialPrecisionRadius = 500; // Initial size of the precision area
         private static int reducedPrecisionRadius = 50; // Reduced size of the precision area
@@ -213,7 +212,7 @@ namespace ATEDNIULI
                             Cv2.NamedWindow("Camera");
                             Cv2.SetWindowProperty("Camera", WindowPropertyFlags.Fullscreen, 1);
                             Cv2.ImShow("Camera", frame);
-                            
+
                             SetWindowAlwaysOnTopAndPosition("Camera", screenWidth, screenHeight);
                         }
 
@@ -477,7 +476,7 @@ namespace ATEDNIULI
         private static (int X, int Y) GetMousePosition()
         {
             // Get the current mouse position using Cursor.Position
-            var mousePosition = Cursor.Position;
+            var mousePosition = System.Windows.Forms.Cursor.Position;
             return (mousePosition.X, mousePosition.Y);
         }
 

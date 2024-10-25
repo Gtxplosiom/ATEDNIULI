@@ -155,6 +155,9 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="CameraMouse.xaml.cs">
+      <DependentUpon>CameraMouse.xaml</DependentUpon>
+    </Compile>
     <Compile Include="ShowItems.xaml.cs">
       <DependentUpon>ShowItems.xaml</DependentUpon>
     </Compile>
@@ -162,6 +165,10 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Page>
+    <Page Include="CameraMouse.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="IntentWindow.xaml">
       <SubType>Designer</SubType>
@@ -178,9 +185,6 @@
     </Compile>
     <Compile Include="ASRWindow.xaml.cs">
       <DependentUpon>ASRWindow.xaml</DependentUpon>
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Compile>
-    <Compile Include="cameramouse.cs">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Compile>
     <Compile Include="deepspeech.cs">

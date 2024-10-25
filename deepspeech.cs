@@ -30,7 +30,7 @@ class LiveTranscription
     private readonly IntentWindow intent_window;
     private readonly MainWindow main_window;
     private readonly ShowItems show_items;
-    private readonly cameramouse camera_mouse;
+    private readonly CameraMouse camera_mouse;
     private WaveInEvent wave_in_event;
     private DeepSpeechStream deep_speech_stream;
     private DeepSpeech deep_speech_model;
@@ -143,7 +143,7 @@ class LiveTranscription
     // importante para diri mag error an memory corrupt ha deepspeech model
     private readonly object streamLock = new object();
 
-    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, cameramouse camera_mouse) // 
+    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, CameraMouse camera_mouse) // 
     {
         this.asr_window = asr_window ?? throw new ArgumentNullException(nameof(asr_window));
         this.intent_window = intent_window ?? throw new ArgumentNullException(nameof(intent_window));

@@ -14,13 +14,13 @@ namespace ATEDNIULI
         private MainWindow main_window;
         private IntentWindow intent_window;
         private ShowItems show_items;
-        private cameramouse camera_mouse;
+        private CameraMouse camera_mouse;
 
         public ASRWindow(MainWindow mainWindow)
         {
             InitializeComponent();
 
-            camera_mouse = new cameramouse();
+            camera_mouse = new CameraMouse();
 
             show_items = new ShowItems();
 
