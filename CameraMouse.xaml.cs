@@ -12,6 +12,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using System.Windows.Controls;
 
 namespace ATEDNIULI
 {
@@ -233,15 +234,16 @@ namespace ATEDNIULI
                 double scalingFactorX = screenWidth / (double)roiWidth;
                 double scalingFactorY = screenHeight / (double)roiHeight;
 
+                var frame = new Mat();
+                var gray = new Mat();
+
                 try
                 {
-                    var frame = new Mat();
-                    var gray = new Mat();
-
                     Task.Run(() => PrecisionMode());
 
                     while (isRunning)
                     {
+                        // Read the frame
                         capture.Read(frame);
 
                         if (frame.Empty())
@@ -250,41 +252,59 @@ namespace ATEDNIULI
                             break;
                         }
 
+                        // Resize and flip the frame
                         Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
                         Cv2.Flip(frame, frame, FlipMode.Y);
 
+                        // Convert to grayscale
                         Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
 
-                        // Load the image into Dlib
-                        using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
+                        try
                         {
-                            DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
-
-                            foreach (var face in faces)
+                            // Load the image into Dlib
+                            using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
                             {
-                                var landmarks = predictor.Detect(dlibImage, face);
-                                var landmarksList = new List<Point>();
-                                for (int i = 0; i < (int)landmarks.Parts; i++)
+                                DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
+
+                                foreach (var face in faces)
                                 {
-                                    landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
+                                    try
+                                    {
+                                        var landmarks = predictor.Detect(dlibImage, face);
+                                        var landmarksList = new List<Point>();
+                                        for (int i = 0; i < (int)landmarks.Parts; i++)
+                                        {
+                                            landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
+                                        }
+
+                                        // Draw landmarks and process the nose position
+                                        ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                                    }
+                                    catch (Exception landmarkEx)
+                                    {
+                                        Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
+                                    }
                                 }
 
-                                // Draw landmarks and process the nose position
-                                ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                                // Update UI on the main thread
+                                Dispatcher.Invoke(() =>
+                                {
+                                    if (this.Visibility == Visibility.Collapsed)
+                                    {
+                                        this.Visibility = Visibility.Visible;
+                                    }
+
+                                    CameraImageSource = ConvertMatToBitmapSource(frame);
+                                });
                             }
-
-                            Dispatcher.Invoke(() =>
-                            {
-                                if (this.Visibility == Visibility.Collapsed) // keep it here for some reason if the ui updates on anywhere else the using statement crashes
-                                {
-                                    this.Visibility = Visibility.Visible;
-                                }
-
-                                CameraImageSource = ConvertMatToBitmapSource(frame);
-                            });
+                        }
+                        catch (Exception dlibEx)
+                        {
+                            Console.WriteLine($"Error loading Dlib image: {dlibEx.Message}");
                         }
 
-                        if (Cv2.WaitKey(1) == 27) // Exit if 'ESC' is pressed
+                        // Exit if 'ESC' is pressed
+                        if (Cv2.WaitKey(1) == 27)
                         {
                             break;
                         }
@@ -293,6 +313,13 @@ namespace ATEDNIULI
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error in CameraLoop: {ex.Message}");
+                }
+                finally
+                {
+                    // Ensure the capture is released when done
+                    capture?.Release();
+                    frame?.Dispose();
+                    gray?.Dispose();
                 }
             }
         }

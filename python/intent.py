@@ -48,7 +48,7 @@ class IntentRecognition:
                 predicted_intent_label = self.intent_labels[predicted_intent_idx]
 
                 normalized_intent = self.normalize(predicted_intent_label)
-                return normalized_intent
+                return predicted_intent_label
             except Exception as e:
                 return "Error processing the input."
         else:

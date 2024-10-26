@@ -444,6 +444,69 @@ class LiveTranscription
                     string receivedMessage = socket.ReceiveFrameString();
                     received = receivedMessage;
 
+                    if (!commandExecuted)
+                    {
+                        // Check for specific commands
+                        if (received == "OpenChrome")
+                        {
+                            StartProcess("chrome");
+                        }
+                        else if (received == "OpenWord")
+                        {
+                            StartProcess("winword");
+                        }
+                        else if (received == "OpenExcel")
+                        {
+                            StartProcess("excel");
+                        }
+                        else if (received == "OpenPowerpoint")
+                        {
+                            StartProcess("powerpnt");
+                        }
+                        else if (received == "ScreenShot")
+                        {
+                            ScreenShot();
+                        }
+                        else if (received == "CloseApp")
+                        {
+                            CloseApp();
+                        }
+                        else if (received == "OpenExplorer")
+                        {
+                            StartProcess("explorer");
+                        }
+                        else if (received == "OpenSettings")
+                        {
+                            StartProcess("ms-settings:");
+                        }
+                        else if (received == "OpenNotepad")
+                        {
+                            StartProcess("notepad");
+                        }
+                        else if (received == "VolumeUp")
+                        {
+                            VolumeUp();
+                        }
+                        else if (received == "VolumeDown")
+                        {
+                            VolumeDown();
+                        }
+                        else if (received == "MouseControl")
+                        {
+                            OpenMouse();
+                        }
+                        else if (received == "MouseControlOff")
+                        {
+                            CloseMouse();
+                        }
+                        else if (received == "ShowItems")
+                        {
+                            DetectScreen();
+                        }
+                    }
+
+                    commandExecuted = false;
+
                     // Dispose and reset the stream
                     deep_speech_stream.Dispose();
                     deep_speech_stream = deep_speech_model.CreateStream();
@@ -737,12 +800,13 @@ class LiveTranscription
     }
 
     // TODO - himua an tanan na commands na gamiton an HandleCommand function
+    private bool commandExecuted = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
     {
-        // clicking commands
         if (string.IsNullOrEmpty(transcription)) return;
 
-        int new_click_count = transcription.Split(new[] { "click" }, StringSplitOptions.None).Length - 1; // enable clicks buffer like multiple clicks sunod sunod
+        // clicking commands
+        int new_click_count = transcription.Split(new[] { "click" }, StringSplitOptions.None).Length - 1; // enable clicks buffer
         if (new_click_count > click_command_count)
         {
             int clicks_to_perform = new_click_count - click_command_count;
@@ -754,29 +818,24 @@ class LiveTranscription
             click_command_count = new_click_count;
         }
 
-        // wip typing
-        if (transcription.IndexOf("start typing", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            typing_mode = true;
-            // wip
-        }
-
         // mouse control commands
         if (transcription.IndexOf("open mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             OpenMouse();
+            return; // Exit after processing this command
         }
 
-        // close mouse control
         if (transcription.IndexOf("close mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             CloseMouse();
+            return; // Exit after processing this command
         }
 
         // type something
         if (transcription.IndexOf("type", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             TypeText(transcription);
+            return; // Exit after processing this command
         }
 
         if (transcription.StartsWith("search", StringComparison.OrdinalIgnoreCase))
@@ -785,6 +844,7 @@ class LiveTranscription
             if (!string.IsNullOrEmpty(search_query))
             {
                 OpenBrowserWithSearch(search_query);
+                return; // Exit after processing this command
             }
         }
 
@@ -838,7 +898,6 @@ class LiveTranscription
             ProcessSpokenTag("10");
         });
 
-        // Handle other commands
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
         HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => CloseShowItemsWindow());
@@ -860,25 +919,21 @@ class LiveTranscription
         HandleCommand("scroll up", transcription, ref scroll_up_command_count, () => ScrollUp(200));
         HandleCommand("scroll down", transcription, ref scroll_down_command_count, () => ScrollDown(-200));
         HandleCommand("screenshot", transcription, ref screenshot_command_count, () => ScreenShot());
-        HandleCommand("open file manager", transcription, ref file_manager_command_count, () => StartProcess("explorer.exe"));
         HandleCommand("volume up", transcription, ref volume_up_command_count, () => VolumeUp());
         HandleCommand("volume down", transcription, ref volume_down_command_count, () => VolumeDown());
         HandleCommand("open settings", transcription, ref settings_command_count, () => StartProcess("ms-settings:"));
     }
 
-    private void HandleCommand(string commandText, string transcription, ref int commandCount, Action action) // ini an pan prevent hin pan execute command like opening hin utro utro
+    private bool HandleCommand(string commandPhrase, string transcription, ref int commandCount, Action action)
     {
-        int new_command_count = transcription.Split(new[] { commandText }, StringSplitOptions.None).Length - 1;
-        if (new_command_count > commandCount)
+        if (transcription.IndexOf(commandPhrase, StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            int commands_to_perform = new_command_count - commandCount;
-            UpdateUI(() => asr_window.AppendText($"Performing {commands_to_perform} {commandText} command(s)...", true));
-            for (int i = 0; i < commands_to_perform; i++)
-            {
-                action.Invoke();
-            }
-            commandCount = new_command_count;
+            commandCount++;
+            action();
+            commandExecuted = true;
+            return true; // Indicate that a command was executed
         }
+        return false;
     }
 
     private void ProcessSpokenTag(string spokenTag)
