@@ -85,22 +85,6 @@ namespace ATEDNIULI
                 DetectedItemLabel.Visibility = Visibility.Visible;
                 DetectedItemText.Text = label;
                 DetectedItemText.Visibility = Visibility.Visible;
-
-                // Create the tag label
-                Label tag = new Label
-                {
-                    Content = label,
-                    Background = Brushes.Transparent,
-                    Foreground = Brushes.Black,
-                    Padding = new Thickness(5),
-                    FontSize = 16,
-                    Opacity = 1.0
-                };
-
-                // Position the label above the bounding box
-                Canvas.SetLeft(tag, x1);
-                Canvas.SetTop(tag, y1 - 20);
-                OverlayCanvas.Children.Add(tag);
             }
             else
             {
@@ -147,6 +131,8 @@ namespace ATEDNIULI
             public Rect BoundingRectangle { get; set; } // This holds the coordinates
         }
 
+        private CancellationTokenSource _cancellationTokenSource;
+
         public void ListClickableItemsInCurrentWindow()
         {
             // Initialize the list of clickable items
@@ -158,78 +144,212 @@ namespace ATEDNIULI
                 return;
             }
 
+            // Cancel the previous task if it exists
+            _cancellationTokenSource?.Cancel();
+            _cancellationTokenSource = new CancellationTokenSource();
+
+            Task.Run(() => ProcessClickableItems(_cancellationTokenSource.Token));
+        }
+
+        private async Task ProcessClickableItems(CancellationToken token)
+        {
             try
             {
+                // Throttle the execution
+                await Task.Delay(200, token);
+
                 IntPtr windowHandle = GetForegroundWindow();
                 var currentWindow = AutomationElement.FromHandle(windowHandle);
 
                 if (currentWindow != null)
                 {
-                    var clickableCondition = new OrCondition(
-                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
-                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem)
-                    );
+                    string windowTitle = currentWindow.Current.Name;
+                    bool isBrowser = IsBrowserWindow(windowTitle);
 
-                    var clickableElements = currentWindow.FindAll(TreeScope.Subtree, clickableCondition);
-                    int counter = 1;
+                    // Define conditions for clickable control types
+                    OrCondition clickableCondition = isBrowser
+                        ? new OrCondition(
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit), // Added
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Custom)
+                        )
+                        : new OrCondition(
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem)
+                        );
 
-                    foreach (AutomationElement element in clickableElements)
+                    // If the window is a browser, find the main content
+                    AutomationElement mainContent = null;
+                    AutomationElementCollection webClickables = null;
+                    if (isBrowser)
                     {
-                        if (!element.Current.IsOffscreen)
+                        mainContent = currentWindow.FindFirst(TreeScope.Children, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document));
+                        if (mainContent != null)
                         {
-                            var boundingRect = element.Current.BoundingRectangle;
-
-                            if (!boundingRect.IsEmpty)
-                            {
-                                // Adjust the bounding rectangle coordinates for scaling
-                                Rect adjustedBoundingRect = new Rect(
-                                    boundingRect.Left / ScalingFactor,
-                                    boundingRect.Top / ScalingFactor,
-                                    boundingRect.Width / ScalingFactor,
-                                    boundingRect.Height / ScalingFactor
-                                );
-
-                                string controlName = element.Current.Name;
-                                Console.WriteLine($"Clickable Item {counter}: {controlName}");
-
-                                Label tag = new Label
-                                {
-                                    Content = counter,
-                                    Background = Brushes.Yellow,
-                                    Foreground = Brushes.Black,
-                                    Padding = new Thickness(5),
-                                    Opacity = 0.7
-                                };
-
-                                // Set the adjusted position based on the adjusted bounding rectangle
-                                Canvas.SetLeft(tag, adjustedBoundingRect.Left);
-                                Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
-                                OverlayCanvas.Children.Add(tag);
-
-                                // Add the tag to the list
-                                _tags.Add(tag);
-
-                                // Create and store the clickable item with the adjusted bounding rectangle
-                                _clickableItems.Add(new ClickableItem
-                                {
-                                    Name = controlName,
-                                    BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
-                                });
-
-                                counter++;
-                            }
+                            Console.WriteLine("Main content found in the browser.");
+                            // You can now perform further actions on the mainContent if needed
+                            webClickables = mainContent.FindAll(TreeScope.Descendants, clickableCondition);
+                        }
+                        else
+                        {
+                            Console.WriteLine("No main content found in the browser.");
                         }
                     }
 
+                    // Use TreeScope.Element for browsers to limit the search
+                    var clickableElements = currentWindow.FindAll(TreeScope.Descendants, clickableCondition);
+                    
+
+                    Console.WriteLine($"Total Elements Found: {clickableElements.Count}");
+
+                    foreach (AutomationElement element in clickableElements)
+                    {
+                        Console.WriteLine($"Element Name: {element.Current.Name}, Control Type: {element.Current.ControlType.ProgrammaticName}");
+                    }
+
+                    // Ensure UI updates are done on the UI thread
+                    Dispatcher.Invoke(() => ProcessClickableElements(clickableElements, webClickables, isBrowser));
+                }
+
+                // Ensure UI updates are done on the UI thread
+                Dispatcher.Invoke(() =>
+                {
                     StartTagRemovalTimer();
                     ListTaskbarItems();
-                }
+                });
+            }
+            catch (TaskCanceledException)
+            {
+                // Task was canceled
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error: {ex.Message}");
+                Dispatcher.Invoke(() => MessageBox.Show($"Error: {ex.Message}"));
             }
+        }
+
+
+        private void ProcessClickableElements(AutomationElementCollection clickableElements, AutomationElementCollection webClickables, bool isBrowser)
+        {
+
+            int counter = 1;
+            int browser_counter = 1;
+
+            foreach (AutomationElement element in clickableElements)
+            {
+                if (element == null || element.Current.IsOffscreen) continue;
+
+                var boundingRect = element.Current.BoundingRectangle;
+
+                if (!boundingRect.IsEmpty)
+                {
+                    // Adjust the bounding rectangle coordinates for scaling
+                    Rect adjustedBoundingRect = new Rect(
+                        boundingRect.Left / ScalingFactor,
+                        boundingRect.Top / ScalingFactor,
+                        boundingRect.Width / ScalingFactor,
+                        boundingRect.Height / ScalingFactor
+                    );
+
+                    string controlName = element.Current.Name;
+                    Console.WriteLine($"Clickable Item {counter}: {controlName}");
+
+                    // UI updates must be done on the UI thread
+                    Label tag = new Label
+                    {
+                        Content = counter,
+                        Background = Brushes.Yellow,
+                        Foreground = Brushes.Black,
+                        Padding = new Thickness(5),
+                        Opacity = 0.7
+                    };
+
+                    // Set the adjusted position based on the adjusted bounding rectangle
+                    Canvas.SetLeft(tag, adjustedBoundingRect.Left);
+                    Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
+                    OverlayCanvas.Children.Add(tag);
+
+                    // Add the tag to the list
+                    _tags.Add(tag);
+
+                    // Create and store the clickable item with the adjusted bounding rectangle
+                    _clickableItems.Add(new ClickableItem
+                    {
+                        Name = controlName,
+                        BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
+                    });
+
+                    counter++;
+                }
+            }
+
+            if (isBrowser)
+            {
+                
+                foreach (AutomationElement element in webClickables)
+                {
+                    if (element == null || element.Current.IsOffscreen) continue;
+
+                    var boundingRect = element.Current.BoundingRectangle;
+
+                    if (!boundingRect.IsEmpty)
+                    {
+                        // Adjust the bounding rectangle coordinates for scaling
+                        Rect adjustedBoundingRect = new Rect(
+                            boundingRect.Left / ScalingFactor,
+                            boundingRect.Top / ScalingFactor,
+                            boundingRect.Width / ScalingFactor,
+                            boundingRect.Height / ScalingFactor
+                        );
+
+                        string controlName = element.Current.Name;
+                        Console.WriteLine($"Clickable Item {browser_counter}: {controlName}");
+
+                        // UI updates must be done on the UI thread
+                        Label tag = new Label
+                        {
+                            Content = browser_counter,
+                            Background = Brushes.Yellow,
+                            Foreground = Brushes.Black,
+                            Padding = new Thickness(5),
+                            Opacity = 0.7
+                        };
+
+                        // Set the adjusted position based on the adjusted bounding rectangle
+                        Canvas.SetLeft(tag, adjustedBoundingRect.Left);
+                        Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
+                        OverlayCanvas.Children.Add(tag);
+
+                        // Add the tag to the list
+                        _tags.Add(tag);
+
+                        // Create and store the clickable item with the adjusted bounding rectangle
+                        _clickableItems.Add(new ClickableItem
+                        {
+                            Name = controlName,
+                            BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
+                        });
+
+                        browser_counter++;
+                    }
+                }
+            }
+        }
+
+        // Method to check if the current window is a browser
+        private bool IsBrowserWindow(string windowTitle)
+        {
+            bool isBrowser = windowTitle.Contains("Chrome") ||
+                             windowTitle.Contains("Firefox") ||
+                             windowTitle.Contains("Edge") ||
+                             windowTitle.Contains("Internet Explorer");
+
+            // Debug output to verify window title and browser detection
+            Console.WriteLine($"Window Title: {windowTitle}, Is Browser: {isBrowser}");
+            return isBrowser;
         }
 
         public void ListTaskbarItems()

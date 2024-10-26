@@ -15,16 +15,16 @@
         <!-- Example of a label for detected item -->
         <Label x:Name="DetectedItemLabel" 
                Content="Detected Item:" 
-               Foreground="Black" 
-               Background="Transparent"
+               Foreground="#031926"
+               Background="#f4e9cd"
                Padding="5"
                Opacity="1"
                FontSize="16" 
                Visibility="Collapsed"/>
         <!-- TextBlock for displaying the detected item -->
         <TextBlock x:Name="DetectedItemText" 
-                   Foreground="Black" 
-                   Background="Transparent"
+                   Foreground="#031926" 
+                   Background="#f4e9cd"
                    FontSize="16"
                    Canvas.Top="25"
                    Padding="5"
