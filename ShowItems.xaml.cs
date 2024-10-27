@@ -701,16 +701,19 @@ namespace ATEDNIULI
 
         public void RemoveTagsNoTimer()
         {
-            // Stop the timer
-            _tagRemovalTimer.Stop();
-
-            // Remove tags from the overlay canvas
-            foreach (var tag in _tags)
+            Dispatcher.Invoke(() =>
             {
-                OverlayCanvas.Children.Remove(tag);
-            }
+                // Stop the timer
+                _tagRemovalTimer.Stop();
 
-            _tags.Clear(); // Clear the list of tags
+                // Remove tags from the overlay canvas
+                foreach (var tag in _tags)
+                {
+                    OverlayCanvas.Children.Remove(tag);
+                }
+
+                _tags.Clear(); // Clear the list of tags
+            });
         }
 
         [DllImport("user32.dll")]
