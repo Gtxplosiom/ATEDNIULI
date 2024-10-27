@@ -137,7 +137,7 @@ class LiveTranscription
     // english
     string model_path = @"assets\models\delta15.pbmm";
     string scorer_path = @"assets\models\commands.scorer";
-    string ww_scorer_path = @"assets\models\wake_word.scorer";
+    string typing_scorer = @"assets\models\idrismunir.scorer";
 
     int deepspeech_confidence = -50;
 
@@ -329,11 +329,11 @@ class LiveTranscription
 
                 // Enable the new scorer
                 deep_speech_model.EnableExternalScorer(scorerPath);
-                UpdateUI(() => asr_window.AppendText($"Scorer switched to {scorerPath}"));
+                Console.WriteLine($"Switching scorer to: {scorerPath}");
             }
             catch (Exception ex)
             {
-                UpdateUI(() => asr_window.AppendText($"Error switching scorer: {ex.Message}"));
+                Console.WriteLine(ex.ToString());
             }
         }
     }
@@ -553,6 +553,13 @@ class LiveTranscription
                         }
                     }
 
+                    if (isTyping)
+                    {
+                        TypeText(final_result_from_stream);
+                        isTyping = false;
+                        SwitchScorer(scorer_path);
+                    }
+
                     commandExecuted = false;
 
                     // Dispose and reset the stream
@@ -638,7 +645,16 @@ class LiveTranscription
                 if (vad.HasSpeech(short_buffer))
                 {
                     is_stream_ready = false; // Block further feeds during processing
-                    ProcessSpeech(short_buffer);
+                    
+                    if (!isTyping)
+                    {
+                        ProcessSpeech(short_buffer);
+                    }
+                    else
+                    {
+                        ProcessTyping(short_buffer);
+                    }
+
                     is_stream_ready = true; // Ready for next audio feed
                 }
                 else
@@ -923,6 +939,7 @@ class LiveTranscription
 
     // TODO - himua an tanan na commands na gamiton an HandleCommand function
     private bool commandExecuted = false;
+    private bool isTyping = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
     {
         if (string.IsNullOrEmpty(transcription)) return;
@@ -945,8 +962,10 @@ class LiveTranscription
         // type something
         if (transcription.IndexOf("type", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            TypeText(transcription);
-            return; // Exit after processing this command
+            SwitchScorer(typing_scorer);
+            UpdateUI(() => FinalizeStream());
+            UpdateUI(() => asr_window.Show());
+            isTyping = true;
         }
 
         if (transcription.StartsWith("search", StringComparison.OrdinalIgnoreCase))
@@ -1059,34 +1078,64 @@ class LiveTranscription
         mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
     }
 
-    private void TypeText(string text) // pan type - wip
+    private void TypeText(string text)
     {
-        if (string.IsNullOrEmpty(text)) return;
+        Task.Run(() =>
+        {
+            if (string.IsNullOrEmpty(text)) return;
 
-        string processed_text = ProcessTextForTyping(text);
-        if (processed_text == lastTypedPhrase) return;
+            SendKeys.SendWait(text);
 
-        SendKeys.SendWait(processed_text);
-        lastTypedPhrase = processed_text;
-        return;
+            return;
+        });
     }
 
-    private string ProcessTextForTyping(string text) // tanggal an keyword na type, tapos ig output an tanan na words following han keyword
+    private void ProcessTyping(short[] short_buffer)
     {
-        const string keyword = "type";
-
-        int keywordIndex = text.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
-
-        if (keywordIndex >= 0)
+        // Lock only around the critical section to minimize delay
+        lock (streamLock)
         {
-            int startIndex = keywordIndex + keyword.Length;
+            try
+            {
+                // Feed audio to the model
+                deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
 
-            string result = text.Substring(startIndex).Trim();
+                // Get intermediate decoding with metadata (confidence values)
+                var metadata = deep_speech_model.IntermediateDecodeWithMetadata(deep_speech_stream, 1);
 
-            return result;
+                if (metadata == null || metadata.Transcripts.Length == 0) return;
+
+                var partial_result = metadata.Transcripts[0].Tokens.Select(t => t.Text).Aggregate((a, b) => a + b).Trim();
+                float confidence = (float)metadata.Transcripts[0].Confidence;
+
+                if (string.IsNullOrEmpty(partial_result)) return;
+
+                current_partial = partial_result;
+
+                if (confidence > deepspeech_confidence)
+                {
+                    // Proceed with transcription handling
+                    ShowTranscription($"typing: {partial_result}");
+                }
+                else
+                {
+                    // Handle low confidence case (e.g., log, retry, prompt user)
+                    Console.WriteLine("Low confidence in transcription. Please repeat.");
+                }
+
+                // Optionally log or display the confidence score
+                Console.WriteLine($"Confidence: {confidence}");
+            }
+            catch (AccessViolationException ex)
+            {
+                Console.WriteLine($"AccessViolationException: {ex.Message}");
+                deep_speech_model.FinishStream(deep_speech_stream);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"General Exception: {ex.Message}");
+            }
         }
-
-        return text;
     }
 
     private ShowItems showItemsWindow; // Field to hold the window reference
