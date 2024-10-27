@@ -12,6 +12,8 @@ using NetMQ.Sockets;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
 
 namespace ATEDNIULI
 {
@@ -32,6 +34,8 @@ namespace ATEDNIULI
         private const int LOGPIXELSX = 88;
 
         private SubscriberSocket _subscriberSocket; // ZMQ Subscriber Socket
+
+        private IWebDriver driver;
 
         private void StartZMQListener()
         {
@@ -58,6 +62,12 @@ namespace ATEDNIULI
             }
         }
 
+        // Define a delegate for the detection event
+        public delegate void ItemDetectedEventHandler(bool isDetected);
+
+        // Add an event using the delegate
+        public event ItemDetectedEventHandler ItemDetected;
+
         private void ProcessDetectionMessage(string message)
         {
             Console.WriteLine($"Received message: {message}");
@@ -68,10 +78,11 @@ namespace ATEDNIULI
                 Console.WriteLine("No detections found.");
                 DetectedItemLabel.Visibility = Visibility.Collapsed;
                 DetectedItemText.Visibility = Visibility.Collapsed;
+                ActionList.Visibility = Visibility.Collapsed;
+                ItemDetected?.Invoke(false);
                 return;
             }
 
-            // Parse the received message (format: "label,x1,y1,x2,y2")
             var parts = message.Split(',');
             if (parts.Length == 5)
             {
@@ -81,17 +92,139 @@ namespace ATEDNIULI
                 int x2 = int.Parse(parts[3]);
                 int y2 = int.Parse(parts[4]);
 
-                // Update the UI with the new detection
                 DetectedItemLabel.Visibility = Visibility.Visible;
                 DetectedItemText.Text = label;
                 DetectedItemText.Visibility = Visibility.Visible;
+
+                // Display numbered actions based on the detected label
+                var actions = GetActionsForLabel(label);
+                if (actions != null && actions.Length > 0)
+                {
+                    ActionList.ItemsSource = actions;
+                    ActionList.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    ActionList.Visibility = Visibility.Collapsed;
+                }
+
+                ItemDetected?.Invoke(true);
             }
             else
             {
                 Console.WriteLine("Invalid detection message.");
                 DetectedItemLabel.Visibility = Visibility.Collapsed;
                 DetectedItemText.Visibility = Visibility.Collapsed;
+                ActionList.Visibility = Visibility.Collapsed;
+
+                ItemDetected?.Invoke(false);
             }
+        }
+
+        // Returns a numbered list of actions based on the detected item label
+        private string[] GetActionsForLabel(string label)
+        {
+            switch (label.ToLower())
+            {
+                case "chrome":
+                    return new string[]
+                    {
+                "1. Open new tab",
+                "2. Open last visited website",
+                "3. Bookmark this page",
+                "4. Close tab",
+                "5. Open incognito window"
+                    };
+                case "folder":
+                    return new string[]
+                    {
+                "1. Open folder",
+                "2. Copy folder path",
+                "3. View properties",
+                "4. Share folder"
+                    };
+                case "youtube":
+                    return new string[]
+                    {
+                "1. Play/Pause video",
+                "2. Like video",
+                "3. Subscribe to channel",
+                "4. View comments",
+                "5. Share video link"
+                    };
+                default:
+                    return null; // No actions for unrecognized labels
+            }
+        }
+
+        private void ActionList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ActionList.SelectedItem != null)
+            {
+                // Parse the selected action number
+                int actionNumber = int.Parse(ActionList.SelectedItem.ToString().Split('.')[0]);
+                ExecuteAction(actionNumber);
+            }
+        }
+
+        // Map action numbers to action methods
+        public void ExecuteAction(int actionNumber)
+        {
+            switch (actionNumber)
+            {
+                case 1:
+                    OpenNewTab();
+                    break;
+                case 2:
+                    OpenLastVisitedWebsite();
+                    break;
+                case 3:
+                    BookmarkPage();
+                    break;
+                case 4:
+                    CloseTab();
+                    break;
+                case 5:
+                    OpenIncognitoWindow();
+                    break;
+                default:
+                    Console.WriteLine("Action not recognized.");
+                    break;
+            }
+        }
+
+        private void OpenNewTab()
+        {
+            driver = new ChromeDriver();
+            Console.WriteLine("Opening a new tab in Chrome...");
+            driver.Navigate().GoToUrl("chrome://newtab");
+        }
+
+        private void OpenLastVisitedWebsite()
+        {
+            Console.WriteLine("Opening the last visited website...");
+            driver.Navigate().Back(); // This simulates going back to the last page
+        }
+
+        private void BookmarkPage()
+        {
+            Console.WriteLine("Bookmarking the current page...");
+            // You can execute JavaScript to trigger the bookmark dialog in Chrome
+            ((IJavaScriptExecutor)driver).ExecuteScript("document.execCommand('AddBookmark');");
+        }
+
+        private void CloseTab()
+        {
+            Console.WriteLine("Closing the current tab...");
+            driver.Close(); // Closes the current tab
+        }
+
+        private void OpenIncognitoWindow()
+        {
+            Console.WriteLine("Opening an incognito window...");
+            var options = new ChromeOptions();
+            options.AddArgument("--incognito");
+            driver = new ChromeDriver(options); // Open a new incognito window
         }
 
         private double GetScalingFactor()
@@ -161,6 +294,35 @@ namespace ATEDNIULI
                 IntPtr windowHandle = GetForegroundWindow();
                 var currentWindow = AutomationElement.FromHandle(windowHandle);
 
+                // Get the desktop window
+                AutomationElement desktop = AutomationElement.RootElement.FindFirst(
+                    TreeScope.Children,
+                    new PropertyCondition(AutomationElement.ClassNameProperty, "Progman"));
+
+                AutomationElementCollection desktopIcons = null;
+                if (desktop != null)
+                {
+                    var iconCondition = new OrCondition(
+                                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem),
+                                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Image)
+                                        );
+
+                    desktopIcons = desktop.FindAll(TreeScope.Children, iconCondition);
+
+                    // List all icons found on the desktop
+                    Console.WriteLine("Desktop Icons:");
+                    foreach (AutomationElement icon in desktopIcons)
+                    {
+                        string iconName = icon.Current.Name;
+                        Console.WriteLine(iconName);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Desktop not found.");
+                }
+
                 if (currentWindow != null)
                 {
                     string windowTitle = currentWindow.Current.Name;
@@ -171,9 +333,7 @@ namespace ATEDNIULI
                         ? new OrCondition(
                             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
                             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit), // Added
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Custom)
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem)
                         )
                         : new OrCondition(
                             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
@@ -212,13 +372,19 @@ namespace ATEDNIULI
 
                     // Ensure UI updates are done on the UI thread
                     Dispatcher.Invoke(() => ProcessClickableElements(clickableElements, webClickables, isBrowser));
+                    // Ensure UI updates are done on the UI thread
+                    Dispatcher.Invoke(() => ProcessClickableElements(null, null, false, desktopIcons));
+                }
+                else
+                {
+                    
                 }
 
                 // Ensure UI updates are done on the UI thread
                 Dispatcher.Invoke(() =>
                 {
-                    StartTagRemovalTimer();
                     ListTaskbarItems();
+                    StartTagRemovalTimer();
                 });
             }
             catch (TaskCanceledException)
@@ -231,64 +397,68 @@ namespace ATEDNIULI
             }
         }
 
-
-        private void ProcessClickableElements(AutomationElementCollection clickableElements, AutomationElementCollection webClickables, bool isBrowser)
+        public bool detected = false;
+        private void ProcessClickableElements(AutomationElementCollection clickableElements = null, AutomationElementCollection webClickables = null, bool isBrowser = false, AutomationElementCollection desktopIcons = null)
         {
 
             int counter = 1;
             int browser_counter = 1;
+            int desktop_counter = 1;
 
-            foreach (AutomationElement element in clickableElements)
+            if (clickableElements != null)
             {
-                if (element == null || element.Current.IsOffscreen) continue;
-
-                var boundingRect = element.Current.BoundingRectangle;
-
-                if (!boundingRect.IsEmpty)
+                foreach (AutomationElement element in clickableElements)
                 {
-                    // Adjust the bounding rectangle coordinates for scaling
-                    Rect adjustedBoundingRect = new Rect(
-                        boundingRect.Left / ScalingFactor,
-                        boundingRect.Top / ScalingFactor,
-                        boundingRect.Width / ScalingFactor,
-                        boundingRect.Height / ScalingFactor
-                    );
+                    if (element == null || element.Current.IsOffscreen) continue;
 
-                    string controlName = element.Current.Name;
-                    Console.WriteLine($"Clickable Item {counter}: {controlName}");
+                    var boundingRect = element.Current.BoundingRectangle;
 
-                    // UI updates must be done on the UI thread
-                    Label tag = new Label
+                    if (!boundingRect.IsEmpty)
                     {
-                        Content = counter,
-                        Background = Brushes.Yellow,
-                        Foreground = Brushes.Black,
-                        Padding = new Thickness(5),
-                        Opacity = 0.7
-                    };
+                        // Adjust the bounding rectangle coordinates for scaling
+                        Rect adjustedBoundingRect = new Rect(
+                            boundingRect.Left / ScalingFactor,
+                            boundingRect.Top / ScalingFactor,
+                            boundingRect.Width / ScalingFactor,
+                            boundingRect.Height / ScalingFactor
+                        );
 
-                    // Set the adjusted position based on the adjusted bounding rectangle
-                    Canvas.SetLeft(tag, adjustedBoundingRect.Left);
-                    Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
-                    OverlayCanvas.Children.Add(tag);
+                        string controlName = element.Current.Name;
+                        Console.WriteLine($"Clickable Item {counter}: {controlName}");
 
-                    // Add the tag to the list
-                    _tags.Add(tag);
+                        // UI updates must be done on the UI thread
+                        Label tag = new Label
+                        {
+                            Content = counter,
+                            Background = Brushes.Yellow,
+                            Foreground = Brushes.Black,
+                            Padding = new Thickness(5),
+                            Opacity = 0.7
+                        };
 
-                    // Create and store the clickable item with the adjusted bounding rectangle
-                    _clickableItems.Add(new ClickableItem
-                    {
-                        Name = controlName,
-                        BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
-                    });
+                        // Set the adjusted position based on the adjusted bounding rectangle
+                        Canvas.SetLeft(tag, adjustedBoundingRect.Left);
+                        Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
+                        OverlayCanvas.Children.Add(tag);
 
-                    counter++;
+                        // Add the tag to the list
+                        _tags.Add(tag);
+
+                        // Create and store the clickable item with the adjusted bounding rectangle
+                        _clickableItems.Add(new ClickableItem
+                        {
+                            Name = controlName,
+                            BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
+                        });
+
+                        counter++;
+                    }
                 }
-            }
 
-            if (isBrowser)
+                detected = true;
+            } 
+            else if (isBrowser)
             {
-                
                 foreach (AutomationElement element in webClickables)
                 {
                     if (element == null || element.Current.IsOffscreen) continue;
@@ -336,6 +506,64 @@ namespace ATEDNIULI
                         browser_counter++;
                     }
                 }
+
+                detected = true;
+            }
+            else if (desktopIcons != null)
+            {
+                foreach (AutomationElement element in desktopIcons)
+                {
+                    if (element == null || element.Current.IsOffscreen) continue;
+
+                    var boundingRect = element.Current.BoundingRectangle;
+
+                    if (!boundingRect.IsEmpty)
+                    {
+                        // Adjust the bounding rectangle coordinates for scaling
+                        Rect adjustedBoundingRect = new Rect(
+                            boundingRect.Left / ScalingFactor,
+                            boundingRect.Top / ScalingFactor,
+                            boundingRect.Width / ScalingFactor,
+                            boundingRect.Height / ScalingFactor
+                        );
+
+                        string controlName = element.Current.Name;
+                        Console.WriteLine($"Clickable Item {desktop_counter}: {controlName}");
+
+                        // UI updates must be done on the UI thread
+                        Label tag = new Label
+                        {
+                            Content = desktop_counter,
+                            Background = Brushes.Yellow,
+                            Foreground = Brushes.Black,
+                            Padding = new Thickness(5),
+                            Opacity = 0.7
+                        };
+
+                        // Set the adjusted position based on the adjusted bounding rectangle
+                        Canvas.SetLeft(tag, adjustedBoundingRect.Left);
+                        Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
+                        OverlayCanvas.Children.Add(tag);
+
+                        // Add the tag to the list
+                        _tags.Add(tag);
+
+                        // Create and store the clickable item with the adjusted bounding rectangle
+                        _clickableItems.Add(new ClickableItem
+                        {
+                            Name = controlName,
+                            BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
+                        });
+
+                        desktop_counter++;
+                    }
+                }
+
+                detected = true;
+            }
+            else
+            {
+                Console.WriteLine("No icons detected");
             }
         }
 
@@ -433,10 +661,13 @@ namespace ATEDNIULI
             }
         }
 
-
         public List<ClickableItem> GetClickableItems()
         {
-            return _clickableItems;
+            if (_clickableItems != null)
+            {
+                return _clickableItems;
+            }
+            return null;
         }
 
         private void StartTagRemovalTimer()
@@ -446,7 +677,7 @@ namespace ATEDNIULI
             {
                 _tagRemovalTimer = new DispatcherTimer
                 {
-                    Interval = TimeSpan.FromSeconds(5) // Set timer for 10 seconds
+                    Interval = TimeSpan.FromSeconds(10) // Set timer for 10 seconds
                 };
                 _tagRemovalTimer.Tick += RemoveTags; // Attach the event handler
             }
@@ -455,6 +686,20 @@ namespace ATEDNIULI
         }
 
         private void RemoveTags(object sender, EventArgs e)
+        {
+            // Stop the timer
+            _tagRemovalTimer.Stop();
+
+            // Remove tags from the overlay canvas
+            foreach (var tag in _tags)
+            {
+                OverlayCanvas.Children.Remove(tag);
+            }
+
+            _tags.Clear(); // Clear the list of tags
+        }
+
+        public void RemoveTagsNoTimer()
         {
             // Stop the timer
             _tagRemovalTimer.Stop();

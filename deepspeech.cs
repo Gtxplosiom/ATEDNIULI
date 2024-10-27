@@ -62,6 +62,7 @@ class LiveTranscription
     private int volume_down_command_count = 0;
     private int search_command_count = 0;
     private int show_items_command_count = 0;
+    private int execute_number_command_count = 0;
 
     private int switch_command_count = 0;
     private int left_command_count = 0;
@@ -245,7 +246,7 @@ class LiveTranscription
         // timers
         InitializeTimer();
 
-        //DetectScreen(); ## for testing
+        show_items.ItemDetected += CheckDetected;
     }
 
     // zmq stuffs
@@ -259,6 +260,21 @@ class LiveTranscription
 
         // Create a new socket instance
         socket = new RequestSocket("tcp://localhost:6969");
+    }
+
+    private bool itemDetected = false;
+    private void CheckDetected(bool isDetected)
+    {
+        if (isDetected)
+        {
+            Console.WriteLine("An item has been detected.");
+            itemDetected = true;
+        }
+        else
+        {
+            Console.WriteLine("No item detected.");
+            itemDetected = false;
+        }
     }
 
     public class DetectionResult
@@ -275,10 +291,19 @@ class LiveTranscription
         public string ClassName { get; set; } // class name
     }
 
+    public bool showed_detected = false;
     public void DetectScreen()
     {
-        show_items.ListClickableItemsInCurrentWindow();
-        var clickable_items = show_items.GetClickableItems();
+        if (showed_detected == false)
+        {
+            show_items.ListClickableItemsInCurrentWindow();
+            var clickable_items = show_items.GetClickableItems();
+
+            if (clickable_items != null)
+            {
+                showed_detected = true;
+            }
+        }
     }
 
     public void load_model(string model_path, string scorer_path)
@@ -290,6 +315,29 @@ class LiveTranscription
         UpdateUI(() => asr_window.AppendText("Loading scorer..."));
         deep_speech_model.EnableExternalScorer(scorer_path);
     }
+
+    public void SwitchScorer(string scorerPath)
+    {
+        if (deep_speech_model == null) return;
+
+        lock (streamLock)
+        {
+            try
+            {
+                // Disable the current scorer if active
+                deep_speech_model.DisableExternalScorer();
+
+                // Enable the new scorer
+                deep_speech_model.EnableExternalScorer(scorerPath);
+                UpdateUI(() => asr_window.AppendText($"Scorer switched to {scorerPath}"));
+            }
+            catch (Exception ex)
+            {
+                UpdateUI(() => asr_window.AppendText($"Error switching scorer: {ex.Message}"));
+            }
+        }
+    }
+
 
     // Fields for stream rate limiting
     private DateTime last_stream_finalize_time = DateTime.MinValue;
@@ -662,11 +710,99 @@ class LiveTranscription
 
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        int new_click_count = CountClicks(partial_result);
-
+        // clicking commands
+        int new_click_count = partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1; // enable clicks buffer
         if (new_click_count > click_command_count)
         {
-            SimulateMouseClicks(new_click_count);
+            int clicks_to_perform = new_click_count - click_command_count;
+            UpdateUI(() => asr_window.AppendText($"Performing {clicks_to_perform} click(s)...", true));
+            for (int i = 0; i < clicks_to_perform; i++)
+            {
+                SimulateMouseClick();
+            }
+            click_command_count = new_click_count;
+        }
+
+        if (showed_detected && !itemDetected)
+        {
+            HandleCommand("one", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("1");
+            });
+
+            HandleCommand("two", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("2");
+            });
+
+            HandleCommand("three", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("3");
+            });
+
+            HandleCommand("four", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("4");
+            });
+
+            HandleCommand("five", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("5");
+            });
+
+            HandleCommand("six", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("6");
+            });
+
+            HandleCommand("seven", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("7");
+            });
+
+            HandleCommand("eight", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("8");
+            });
+
+            HandleCommand("nine", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("9");
+            });
+
+            HandleCommand("ten", partial_result, ref execute_number_command_count, () =>
+            {
+                ProcessSpokenTag("10");
+            });
+
+            showed_detected = false;
+        }
+        else if (itemDetected)
+        {
+            HandleCommand("one", partial_result, ref execute_number_command_count, () =>
+            {
+                show_items.ExecuteAction(1);
+            });
+
+            HandleCommand("two", partial_result, ref execute_number_command_count, () =>
+            {
+                show_items.ExecuteAction(2);
+            });
+
+            HandleCommand("three", partial_result, ref execute_number_command_count, () =>
+            {
+                show_items.ExecuteAction(3);
+            });
+
+            HandleCommand("four", partial_result, ref execute_number_command_count, () =>
+            {
+                show_items.ExecuteAction(4);
+            });
+
+            HandleCommand("five", partial_result, ref execute_number_command_count, () =>
+            {
+                show_items.ExecuteAction(5);
+            });
         }
 
         if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
@@ -683,20 +819,6 @@ class LiveTranscription
             ShowTranscription(partial_result);
             ProcessCommand(partial_result);
         }
-    }
-
-    private int CountClicks(string partial_result)
-    {
-        return partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1;
-    }
-
-    private void SimulateMouseClicks(int new_click_count)
-    {
-        for (int i = 0; i < new_click_count - click_command_count; i++)
-        {
-            SimulateMouseClick();
-        }
-        click_command_count = new_click_count;
     }
 
     private void ShowTranscription(string partial_result)
@@ -805,18 +927,7 @@ class LiveTranscription
     {
         if (string.IsNullOrEmpty(transcription)) return;
 
-        // clicking commands
-        int new_click_count = transcription.Split(new[] { "click" }, StringSplitOptions.None).Length - 1; // enable clicks buffer
-        if (new_click_count > click_command_count)
-        {
-            int clicks_to_perform = new_click_count - click_command_count;
-            UpdateUI(() => asr_window.AppendText($"Performing {clicks_to_perform} click(s)...", true));
-            for (int i = 0; i < clicks_to_perform; i++)
-            {
-                SimulateMouseClick();
-            }
-            click_command_count = new_click_count;
-        }
+        
 
         // mouse control commands
         if (transcription.IndexOf("open mouse", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -847,56 +958,6 @@ class LiveTranscription
                 return; // Exit after processing this command
             }
         }
-
-        HandleCommand("one", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("1");
-        });
-
-        HandleCommand("two", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("2");
-        });
-
-        HandleCommand("three", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("3");
-        });
-
-        HandleCommand("four", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("4");
-        });
-
-        HandleCommand("five", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("5");
-        });
-
-        HandleCommand("six", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("6");
-        });
-
-        HandleCommand("seven", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("7");
-        });
-
-        HandleCommand("eight", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("8");
-        });
-
-        HandleCommand("nine", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("9");
-        });
-
-        HandleCommand("ten", transcription, ref show_items_command_count, () =>
-        {
-            ProcessSpokenTag("10");
-        });
 
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
         HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
@@ -931,6 +992,9 @@ class LiveTranscription
             commandCount++;
             action();
             commandExecuted = true;
+
+            UpdateUI(() => FinalizeStream());
+
             return true; // Indicate that a command was executed
         }
         return false;
@@ -957,6 +1021,8 @@ class LiveTranscription
                 var convertedRect = ConvertToOpenCvRect(selectedItem.BoundingRectangle);
 
                 ClickItem(convertedRect); // Perform click on item
+
+                show_items.RemoveTagsNoTimer();
             }
             else
             {
@@ -1164,6 +1230,7 @@ class LiveTranscription
         volume_down_command_count = 0;
         search_command_count = 0;
         show_items_command_count = 0;
+        execute_number_command_count = 0;
 
         switch_command_count = 0;
         left_command_count = 0;

@@ -21,6 +21,7 @@
                Opacity="1"
                FontSize="16" 
                Visibility="Collapsed"/>
+
         <!-- TextBlock for displaying the detected item -->
         <TextBlock x:Name="DetectedItemText" 
                    Foreground="#031926" 
@@ -29,5 +30,15 @@
                    Canvas.Top="25"
                    Padding="5"
                    Visibility="Collapsed"/>
+
+        <!-- ListBox for displaying actions related to the detected item -->
+        <ListBox x:Name="ActionList" 
+                 Foreground="#031926" 
+                 Background="#f4e9cd"
+                 FontSize="14"
+                 Canvas.Top="55" 
+                 Width="200"
+                 Visibility="Collapsed"
+                 SelectionChanged="ActionList_SelectionChanged"/>
     </Canvas>
 </Window>

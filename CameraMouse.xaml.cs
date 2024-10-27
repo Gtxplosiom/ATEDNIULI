@@ -236,6 +236,7 @@ namespace ATEDNIULI
 
                 var frame = new Mat();
                 var gray = new Mat();
+                var landmarksList = new List<Point>();
 
                 try
                 {
@@ -261,7 +262,7 @@ namespace ATEDNIULI
 
                         try
                         {
-                            // Load the image into Dlib
+                            // Perform face detection on every frame
                             using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
                             {
                                 DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
@@ -271,7 +272,7 @@ namespace ATEDNIULI
                                     try
                                     {
                                         var landmarks = predictor.Detect(dlibImage, face);
-                                        var landmarksList = new List<Point>();
+                                        landmarksList.Clear();  // Clear previous landmarks to reuse list
                                         for (int i = 0; i < (int)landmarks.Parts; i++)
                                         {
                                             landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
@@ -285,18 +286,19 @@ namespace ATEDNIULI
                                         Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
                                     }
                                 }
-
-                                // Update UI on the main thread
-                                Dispatcher.Invoke(() =>
-                                {
-                                    if (this.Visibility == Visibility.Collapsed)
-                                    {
-                                        this.Visibility = Visibility.Visible;
-                                    }
-
-                                    CameraImageSource = ConvertMatToBitmapSource(frame);
-                                });
                             }
+
+                            // Update UI on the main thread without delay
+                            Dispatcher.BeginInvoke(new Action(() =>
+                            {
+                                if (this.Visibility == Visibility.Collapsed)
+                                {
+                                    this.Visibility = Visibility.Visible;
+                                }
+
+                                CameraImageSource = ConvertMatToBitmapSource(frame);
+                            }));
+
                         }
                         catch (Exception dlibEx)
                         {
@@ -524,7 +526,6 @@ namespace ATEDNIULI
                 Thread.Sleep(duration / steps); // Wait between steps
             }
         }
-
 
         private void PrecisionMode()
         {
