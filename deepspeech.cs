@@ -139,7 +139,7 @@ class LiveTranscription
     string scorer_path = @"assets\models\commands.scorer";
     string typing_scorer = @"assets\models\idrismunir.scorer";
 
-    int deepspeech_confidence = -50;
+    int deepspeech_confidence = -70;
 
     // importante para diri mag error an memory corrupt ha deepspeech model
     private readonly object streamLock = new object();
@@ -155,7 +155,7 @@ class LiveTranscription
         {
             SampleRate = WebRtcVadSharp.SampleRate.Is16kHz,
             FrameLength = WebRtcVadSharp.FrameLength.Is20ms,
-            OperatingMode = OperatingMode.VeryAggressive
+            OperatingMode = OperatingMode.Aggressive
         };
 
         // initialize python
@@ -164,8 +164,8 @@ class LiveTranscription
         {
             ProcessStartInfo start = new ProcessStartInfo
             {
-                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe",
-                Arguments = "C:\\Users\\super.admin\\Desktop\\Capstone\\ATEDNIULI\\edn-app\\ATEDNIULI\\python\\intent.py",
+                FileName = @"C:\Users\Pijo\AppData\Local\Programs\Python\Python312\python.exe",
+                Arguments = "C:\\Users\\Pijo\\Desktop\\Release\\python\\intent.py",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -200,8 +200,8 @@ class LiveTranscription
         {
             ProcessStartInfo start = new ProcessStartInfo
             {
-                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe",
-                Arguments = "C:\\Users\\super.admin\\Desktop\\Capstone\\ATEDNIULI\\edn-app\\ATEDNIULI\\python\\grid_inference_optimized.py",
+                FileName = @"C:\Users\Pijo\AppData\Local\Programs\Python\Python312\python.exe",
+                Arguments = "C:\\Users\\Pijo\\Desktop\\Release\\python\\grid_inference_optimized.py",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -314,6 +314,8 @@ class LiveTranscription
 
         UpdateUI(() => asr_window.AppendText("Loading scorer..."));
         deep_speech_model.EnableExternalScorer(scorer_path);
+
+        deep_speech_model.AddHotWord("thermal", 5);
     }
 
     public void SwitchScorer(string scorerPath)
@@ -492,73 +494,73 @@ class LiveTranscription
                     string receivedMessage = socket.ReceiveFrameString();
                     received = receivedMessage;
 
-                    if (!commandExecuted)
-                    {
-                        // Check for specific commands
-                        if (received == "OpenChrome")
-                        {
-                            StartProcess("chrome");
-                        }
-                        else if (received == "OpenWord")
-                        {
-                            StartProcess("winword");
-                        }
-                        else if (received == "OpenExcel")
-                        {
-                            StartProcess("excel");
-                        }
-                        else if (received == "OpenPowerpoint")
-                        {
-                            StartProcess("powerpnt");
-                        }
-                        else if (received == "ScreenShot")
-                        {
-                            ScreenShot();
-                        }
-                        else if (received == "CloseApp")
-                        {
-                            CloseApp();
-                        }
-                        else if (received == "OpenExplorer")
-                        {
-                            StartProcess("explorer");
-                        }
-                        else if (received == "OpenSettings")
-                        {
-                            StartProcess("ms-settings:");
-                        }
-                        else if (received == "OpenNotepad")
-                        {
-                            StartProcess("notepad");
-                        }
-                        else if (received == "VolumeUp")
-                        {
-                            VolumeUp();
-                        }
-                        else if (received == "VolumeDown")
-                        {
-                            VolumeDown();
-                        }
-                        else if (received == "MouseControl")
-                        {
-                            OpenMouse();
-                        }
-                        else if (received == "MouseControlOff")
-                        {
-                            CloseMouse();
-                        }
-                        else if (received == "ShowItems")
-                        {
-                            DetectScreen();
-                        }
-                    }
+                    //if (!commandExecuted)
+                    //{
+                    //    // Check for specific commands
+                    //    if (received == "OpenChrome")
+                    //    {
+                    //        StartProcess("chrome");
+                    //    }
+                    //    else if (received == "OpenWord")
+                    //    {
+                    //        StartProcess("winword");
+                    //    }
+                    //    else if (received == "OpenExcel")
+                    //    {
+                    //        StartProcess("excel");
+                    //    }
+                    //    else if (received == "OpenPowerpoint")
+                    //    {
+                    //        StartProcess("powerpnt");
+                    //    }
+                    //    else if (received == "ScreenShot")
+                    //    {
+                    //        ScreenShot();
+                    //    }
+                    //    else if (received == "CloseApp")
+                    //    {
+                    //        CloseApp();
+                    //    }
+                    //    else if (received == "OpenExplorer")
+                    //    {
+                    //        StartProcess("explorer");
+                    //    }
+                    //    else if (received == "OpenSettings")
+                    //    {
+                    //        StartProcess("ms-settings:");
+                    //    }
+                    //    else if (received == "OpenNotepad")
+                    //    {
+                    //        StartProcess("notepad");
+                    //    }
+                    //    else if (received == "VolumeUp")
+                    //    {
+                    //        VolumeUp();
+                    //    }
+                    //    else if (received == "VolumeDown")
+                    //    {
+                    //        VolumeDown();
+                    //    }
+                    //    else if (received == "MouseControl")
+                    //    {
+                    //        OpenMouse();
+                    //    }
+                    //    else if (received == "MouseControlOff")
+                    //    {
+                    //        CloseMouse();
+                    //    }
+                    //    else if (received == "ShowItems")
+                    //    {
+                    //        DetectScreen();
+                    //    }
+                    //}
 
-                    if (isTyping)
-                    {
-                        TypeText(final_result_from_stream);
-                        isTyping = false;
-                        SwitchScorer(scorer_path);
-                    }
+                    //if (isTyping)
+                    //{
+                    //    TypeText(final_result_from_stream);
+                    //    isTyping = false;
+                    //    SwitchScorer(scorer_path);
+                    //}
 
                     commandExecuted = false;
 
@@ -645,15 +647,17 @@ class LiveTranscription
                 if (vad.HasSpeech(short_buffer))
                 {
                     is_stream_ready = false; // Block further feeds during processing
-                    
-                    if (!isTyping)
-                    {
-                        ProcessSpeech(short_buffer);
-                    }
-                    else
-                    {
-                        ProcessTyping(short_buffer);
-                    }
+
+                    ProcessSpeech(short_buffer);
+
+                    //if (!isTyping)
+                    //{
+                    //    ProcessSpeech(short_buffer);
+                    //}
+                    //else
+                    //{
+                    //    //ProcessTyping(short_buffer);
+                    //}
 
                     is_stream_ready = true; // Ready for next audio feed
                 }
@@ -723,9 +727,9 @@ class LiveTranscription
         }
     }
 
-
     private void HandleWakeWord(string partial_result, double confidence)
     {
+        Console.WriteLine(confidence);
         // clicking commands
         int new_click_count = partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1; // enable clicks buffer
         if (new_click_count > click_command_count)
@@ -858,7 +862,7 @@ class LiveTranscription
                 Console.WriteLine(ex);
                 return;
             }
-        }); 
+        });
     }
 
     private void HandleNoSpeechDetected()
@@ -939,22 +943,24 @@ class LiveTranscription
 
     // TODO - himua an tanan na commands na gamiton an HandleCommand function
     private bool commandExecuted = false;
-    private bool isTyping = false;
+    //private bool isTyping = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
     {
         if (string.IsNullOrEmpty(transcription)) return;
 
-        
+
 
         // mouse control commands
         if (transcription.IndexOf("open mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
+            UpdateUI(() => show_items.NotificationLabel.Content = "Enabling mouse control...");
             OpenMouse();
             return; // Exit after processing this command
         }
 
         if (transcription.IndexOf("close mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
+            UpdateUI(() => show_items.NotificationLabel.Content = "Disabling mouse control...");
             CloseMouse();
             return; // Exit after processing this command
         }
@@ -965,7 +971,7 @@ class LiveTranscription
             SwitchScorer(typing_scorer);
             UpdateUI(() => FinalizeStream());
             UpdateUI(() => asr_window.Show());
-            isTyping = true;
+            //isTyping = true;
         }
 
         if (transcription.StartsWith("search", StringComparison.OrdinalIgnoreCase))
@@ -978,8 +984,8 @@ class LiveTranscription
             }
         }
 
-        HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
-        HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
+        HandleCommand("open calculator", transcription, ref calculator_command_count, () => { StartProcess("calc"); UpdateUI(() => show_items.NotificationLabel.Content = "Opening calculator..."); });
+        HandleCommand("show items", transcription, ref show_items_command_count, () => {DetectScreen(); UpdateUI(() => show_items.NotificationLabel.Content = "Showing items..."); });
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => CloseShowItemsWindow());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(Keys.ControlKey)); // Customize as needed

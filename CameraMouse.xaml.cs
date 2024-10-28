@@ -236,7 +236,6 @@ namespace ATEDNIULI
 
                 var frame = new Mat();
                 var gray = new Mat();
-                var landmarksList = new List<Point>();
 
                 try
                 {
@@ -262,7 +261,7 @@ namespace ATEDNIULI
 
                         try
                         {
-                            // Perform face detection on every frame
+                            // Load the image into Dlib
                             using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
                             {
                                 DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
@@ -272,7 +271,7 @@ namespace ATEDNIULI
                                     try
                                     {
                                         var landmarks = predictor.Detect(dlibImage, face);
-                                        landmarksList.Clear();  // Clear previous landmarks to reuse list
+                                        var landmarksList = new List<Point>();
                                         for (int i = 0; i < (int)landmarks.Parts; i++)
                                         {
                                             landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
@@ -286,19 +285,18 @@ namespace ATEDNIULI
                                         Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
                                     }
                                 }
-                            }
 
-                            // Update UI on the main thread without delay
-                            Dispatcher.BeginInvoke(new Action(() =>
-                            {
-                                if (this.Visibility == Visibility.Collapsed)
+                                // Update UI on the main thread
+                                Dispatcher.Invoke(() =>
                                 {
-                                    this.Visibility = Visibility.Visible;
-                                }
+                                    if (this.Visibility == Visibility.Collapsed)
+                                    {
+                                        this.Visibility = Visibility.Visible;
+                                    }
 
-                                CameraImageSource = ConvertMatToBitmapSource(frame);
-                            }));
-
+                                    CameraImageSource = ConvertMatToBitmapSource(frame);
+                                });
+                            }
                         }
                         catch (Exception dlibEx)
                         {
@@ -419,11 +417,11 @@ namespace ATEDNIULI
 
             if (isLeftBrowRaised || isRightBrowRaised)
             {
-                //mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
             }
             else
             {
-                //mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
             }
         }
 

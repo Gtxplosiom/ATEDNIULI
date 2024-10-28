@@ -384,7 +384,7 @@ namespace ATEDNIULI
                 Dispatcher.Invoke(() =>
                 {
                     ListTaskbarItems();
-                    StartTagRemovalTimer();
+                    //StartTagRemovalTimer();
                 });
             }
             catch (TaskCanceledException)

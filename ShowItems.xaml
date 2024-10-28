@@ -13,6 +13,15 @@
     <Canvas x:Name="OverlayCanvas"
             Background="Transparent">
         <!-- Example of a label for detected item -->
+        <Label x:Name="NotificationLabel" 
+               Content="" 
+               Foreground="#f4e9cd"
+               Background="#031926"
+               Opacity="1"
+               Height="30"
+               Width="200"
+               FontSize="16" 
+               Visibility="Visible"/>
         <Label x:Name="DetectedItemLabel" 
                Content="Detected Item:" 
                Foreground="#031926"
@@ -21,7 +30,6 @@
                Opacity="1"
                FontSize="16" 
                Visibility="Collapsed"/>
-
         <!-- TextBlock for displaying the detected item -->
         <TextBlock x:Name="DetectedItemText" 
                    Foreground="#031926" 
@@ -30,7 +38,6 @@
                    Canvas.Top="25"
                    Padding="5"
                    Visibility="Collapsed"/>
-
         <!-- ListBox for displaying actions related to the detected item -->
         <ListBox x:Name="ActionList" 
                  Foreground="#031926" 
