@@ -314,8 +314,6 @@ class LiveTranscription
 
         UpdateUI(() => asr_window.AppendText("Loading scorer..."));
         deep_speech_model.EnableExternalScorer(scorer_path);
-
-        deep_speech_model.AddHotWord("thermal", 5);
     }
 
     public void SwitchScorer(string scorerPath)
@@ -985,7 +983,20 @@ class LiveTranscription
         }
 
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => { StartProcess("calc"); UpdateUI(() => show_items.NotificationLabel.Content = "Opening calculator..."); });
-        HandleCommand("show items", transcription, ref show_items_command_count, () => {DetectScreen(); UpdateUI(() => show_items.NotificationLabel.Content = "Showing items..."); });
+        HandleCommand("show items", transcription, ref show_items_command_count, () =>
+        {
+            try
+            {
+                DetectScreen();
+                UpdateUI(() => show_items.NotificationLabel.Content = "Showing items...");
+            }
+            catch (Exception ex)
+            {
+                // Log or handle errors, possibly with a fallback message or action.
+                Console.WriteLine($"Error during 'show items' command: {ex.Message}");
+            }
+        });
+
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => CloseShowItemsWindow());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(Keys.ControlKey)); // Customize as needed

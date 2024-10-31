@@ -7,7 +7,7 @@ import time
 from ultralytics import YOLO
 
 # Load the YOLO model
-model = YOLO(r'C:\Users\super.admin\Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\assets\models\official-train-1-best-640.pt')
+model = YOLO(r'C:\Users\Pijo\Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\assets\models\official-train-1-best-640.pt')
 
 # Set up ZMQ for sending detections to C#
 context = zmq.Context()
