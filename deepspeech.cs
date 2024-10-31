@@ -467,6 +467,7 @@ class LiveTranscription
 
     private string received = "";
 
+    private string send_to_intent = "";
     // Forcefully end the stream
     private void FinalizeStream()
     {
@@ -487,13 +488,16 @@ class LiveTranscription
                 {
                     string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
 
+                    send_to_intent = RemoveWakeWord(final_result_from_stream, wake_word);
+
                     // Perform socket operations in a background thread
-                    socket.SendFrame(final_result_from_stream);
+                    socket.SendFrame(send_to_intent);
                     string receivedMessage = socket.ReceiveFrameString();
                     received = receivedMessage;
 
                     if (wake_word_detected && !commandExecuted)
                     {
+                        UpdateUI(() => show_items.NotificationLabel.Content = $"Executing: {received}");
                         // Check for specific commands
                         if (received == "OpenChrome")
                         {
@@ -724,7 +728,7 @@ class LiveTranscription
             click_command_count = new_click_count;
         }
 
-        if (showed_detected && !itemDetected)
+        if (showed_detected && !itemDetected && confidence> deepspeech_confidence)
         {
             HandleCommand("one", partial_result, ref execute_number_command_count, () =>
             {
@@ -941,23 +945,25 @@ class LiveTranscription
         // mouse control commands
         if (transcription.IndexOf("open mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
+            UpdateUI(() => show_items.NotificationLabel.Content = "Opening Mouse");
             OpenMouse();
             return; // Exit after processing this command
         }
 
         if (transcription.IndexOf("close mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
+            UpdateUI(() => show_items.NotificationLabel.Content = "Closing Mouse");
             CloseMouse();
             return; // Exit after processing this command
         }
 
         // type something
-        if (transcription.IndexOf("type", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            SwitchScorer(typing_scorer);
-            UpdateUI(() => FinalizeStream());
-            UpdateUI(() => asr_window.Show());
-        }
+        //if (transcription.IndexOf("type", StringComparison.OrdinalIgnoreCase) >= 0)
+        //{
+        //    SwitchScorer(typing_scorer);
+        //    UpdateUI(() => FinalizeStream());
+        //    UpdateUI(() => asr_window.Show());
+        //}
 
         if (transcription.StartsWith("search", StringComparison.OrdinalIgnoreCase))
         {
@@ -1005,6 +1011,7 @@ class LiveTranscription
             action();
             commandExecuted = true;
 
+            UpdateUI(() => show_items.NotificationLabel.Content = $"Executed: {commandPhrase}");
             UpdateUI(() => FinalizeStream());
 
             return true; // Indicate that a command was executed
@@ -1032,6 +1039,7 @@ class LiveTranscription
                 // Convert System.Windows.Rect to OpenCvSharp.Rect
                 var convertedRect = ConvertToOpenCvRect(selectedItem.BoundingRectangle);
 
+                UpdateUI(() => show_items.NotificationLabel.Content = $"Clicking {tagNumber}");
                 ClickItem(convertedRect); // Perform click on item
 
                 show_items.RemoveTagsNoTimer();

@@ -203,20 +203,41 @@ namespace ATEDNIULI
         private void OpenLastVisitedWebsite()
         {
             Console.WriteLine("Opening the last visited website...");
-            driver.Navigate().Back(); // This simulates going back to the last page
+            if (driver == null)
+            {
+                Console.WriteLine("No chrome window yet");
+            }
+            else
+            {
+                driver.Navigate().Back(); // This simulates going back to the last page
+            }
         }
-
+            
         private void BookmarkPage()
         {
-            Console.WriteLine("Bookmarking the current page...");
-            // You can execute JavaScript to trigger the bookmark dialog in Chrome
-            ((IJavaScriptExecutor)driver).ExecuteScript("document.execCommand('AddBookmark');");
+            if (driver == null)
+            {
+                Console.WriteLine("No chrome window yet");
+            }
+            else
+            {
+                Console.WriteLine("Bookmarking the current page...");
+                // You can execute JavaScript to trigger the bookmark dialog in Chrome
+                ((IJavaScriptExecutor)driver).ExecuteScript("document.execCommand('AddBookmark');");
+            }
         }
 
         private void CloseTab()
         {
-            Console.WriteLine("Closing the current tab...");
-            driver.Close(); // Closes the current tab
+            if (driver == null)
+            {
+                Console.WriteLine("No chrome window yet");
+            }
+            else
+            {
+                Console.WriteLine("Closing the current tab...");
+                driver.Close(); // Closes the current tab
+            }
         }
 
         private void OpenIncognitoWindow()
