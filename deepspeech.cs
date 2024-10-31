@@ -89,7 +89,9 @@ class LiveTranscription
     private System.Timers.Timer intent_window_timer;
     private System.Timers.Timer input_timer;
     private System.Timers.Timer wake_word_timer;
-
+    private System.Timers.Timer debounce_timer;
+    
+    private const int debounce_timeout = 1000; // Delay in milliseconds
     private const int input_timeout = 7000;
     private const int wake_word_timeout = 7000; // 10 seconds timeout for no wake word detection
 
@@ -338,7 +340,6 @@ class LiveTranscription
         }
     }
 
-
     // Fields for stream rate limiting
     private DateTime last_stream_finalize_time = DateTime.MinValue;
     private const int stream_finalize_cooldown = 5000; // 5 seconds cooldown between finalizations
@@ -353,7 +354,7 @@ class LiveTranscription
             wave_in_event = new WaveInEvent
             {
                 WaveFormat = new WaveFormat(16000, 1),
-                BufferMilliseconds = 400 // no this doesnt affect my problem
+                BufferMilliseconds = 500 // no this doesnt affect my problem
             };
 
             deep_speech_stream = deep_speech_model.CreateStream();
@@ -409,7 +410,15 @@ class LiveTranscription
         wake_word_timer.Elapsed += OnWakeWordTimeout;
         wake_word_timer.AutoReset = false; // Timer will only trigger once
 
+        debounce_timer = new System.Timers.Timer(debounce_timeout);
+        debounce_timer.Elapsed += (sender, e) =>
+        {
+            isDebounceElapsed = true; // Set the flag when the timer elapses
+            debounce_timer.Stop(); // Stop the timer
+        };
+        debounce_timer.AutoReset = false; // Ensure the timer only runs once
     }
+    private bool isDebounceElapsed = false;
 
     // timer stuff kun mag timeout
     private void OnInactivityTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
@@ -469,6 +478,18 @@ class LiveTranscription
 
     private string send_to_intent = "";
     // Forcefully end the stream
+    List<string> numberStrings = new List<string>
+        {
+            "one", "two", "three", "four ", "five", "six ", "seven ", "eight ", "nine ", "ten",
+            "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+            "eighteen", "nineteen", "twenty", "twenty one", "twenty two", "twenty three",
+            "twenty four", "twenty five", "twenty six", "twenty seven", "twenty eight",
+            "twenty nine", "thirty", "thirty one", "thirty two", "thirty three",
+            "thirty four", "thirty five", "thirty six", "thirty seven", "thirty eight",
+            "thirty nine", "forty", "forty one", "forty two", "forty three",
+            "forty four", "forty five", "forty six", "forty seven", "forty eight",
+            "forty nine", "fifty"
+        };
     private void FinalizeStream()
     {
         try
@@ -554,6 +575,23 @@ class LiveTranscription
                         else if (received == "ShowItems")
                         {
                             DetectScreen();
+                        }
+                    }
+                    else if (!wake_word_detected && !commandExecuted)
+                    {
+                        if (showed_detected && !itemDetected)
+                        {
+                            // Iterate through the predefined number strings
+                            for (int number_index = 0; number_index < numberStrings.Count; number_index++)
+                            {
+                                string number = numberStrings[number_index]; // Get the current number as a string
+
+                                // Here we handle the command for each number string
+                                HandleCommand(number, final_result_from_stream, ref execute_number_command_count, () =>
+                                {
+                                    ProcessSpokenTag($"{number_index + 1}"); // Use number_index + 1 if you want to represent 1-based index
+                                });
+                            }
                         }
                     }
 
@@ -654,7 +692,6 @@ class LiveTranscription
         });
     }
 
-
     private void ProcessSpeech(short[] short_buffer)
     {
         // Lock only around the critical section to minimize delay
@@ -712,113 +749,34 @@ class LiveTranscription
         }
     }
 
-
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        // clicking commands
-        int new_click_count = partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1; // enable clicks buffer
-        if (new_click_count > click_command_count)
+        if (itemDetected && confidence > deepspeech_confidence)
         {
-            int clicks_to_perform = new_click_count - click_command_count;
-            UpdateUI(() => asr_window.AppendText($"Performing {clicks_to_perform} click(s)...", true));
-            for (int i = 0; i < clicks_to_perform; i++)
+            for (int number_index = 0; number_index < numberStrings.Count; number_index++)
             {
-                SimulateMouseClick();
+                string number = numberStrings[number_index]; // Get the current number as a string
+
+                // Here we handle the command for each number string
+                HandleCommand(number, partial_result, ref execute_number_command_count, () =>
+                {
+                    show_items.ExecuteAction(number_index + 1); // Use number_index + 1 if you want to represent 1-based index
+                });
             }
-            click_command_count = new_click_count;
         }
 
-        if (showed_detected && !itemDetected && confidence> deepspeech_confidence)
-        {
-            HandleCommand("one", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("1");
-            });
-
-            HandleCommand("two", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("2");
-            });
-
-            HandleCommand("three", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("3");
-            });
-
-            HandleCommand("four", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("4");
-            });
-
-            HandleCommand("five", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("5");
-            });
-
-            HandleCommand("six", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("6");
-            });
-
-            HandleCommand("seven", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("7");
-            });
-
-            HandleCommand("eight", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("8");
-            });
-
-            HandleCommand("nine", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("9");
-            });
-
-            HandleCommand("ten", partial_result, ref execute_number_command_count, () =>
-            {
-                ProcessSpokenTag("10");
-            });
-        }
-        else if (itemDetected)
-        {
-            HandleCommand("one", partial_result, ref execute_number_command_count, () =>
-            {
-                show_items.ExecuteAction(1);
-            });
-
-            HandleCommand("two", partial_result, ref execute_number_command_count, () =>
-            {
-                show_items.ExecuteAction(2);
-            });
-
-            HandleCommand("three", partial_result, ref execute_number_command_count, () =>
-            {
-                show_items.ExecuteAction(3);
-            });
-
-            HandleCommand("four", partial_result, ref execute_number_command_count, () =>
-            {
-                show_items.ExecuteAction(4);
-            });
-
-            HandleCommand("five", partial_result, ref execute_number_command_count, () =>
-            {
-                show_items.ExecuteAction(5);
-            });
-        }
         if (partial_result.Contains(wake_word))
         {
             if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
             {
+                wake_word_detected = true;
+
                 if (wake_word_timer.Enabled)
                 {
                     wake_word_timer.Close();
                 }
-
-                wake_word_detected = true;
+                
                 partial_result = RemoveWakeWord(partial_result, wake_word);
-                click_command_count = 0;
 
                 ShowTranscription(partial_result);
                 ProcessCommand(partial_result);
@@ -947,14 +905,16 @@ class LiveTranscription
         {
             UpdateUI(() => show_items.NotificationLabel.Content = "Opening Mouse");
             OpenMouse();
-            return; // Exit after processing this command
+            commandExecuted = true;
+            UpdateUI(() => FinalizeStream());
         }
 
         if (transcription.IndexOf("close mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             UpdateUI(() => show_items.NotificationLabel.Content = "Closing Mouse");
             CloseMouse();
-            return; // Exit after processing this command
+            commandExecuted = true;
+            UpdateUI(() => FinalizeStream());
         }
 
         // type something
@@ -1181,21 +1141,6 @@ class LiveTranscription
             SendMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
         }
         UpdateUI(() => asr_window.AppendText("Closing current window...", true));
-    }
-
-    private void CloseApplication(string processName) // pag close hin app - wip
-    {
-        try
-        {
-            foreach (var process in Process.GetProcessesByName(processName))
-            {
-                process.Kill();
-            }
-        }
-        catch (Exception ex)
-        {
-            UpdateUI(() => asr_window.AppendText($"Error closing process {processName}: {ex.Message}"));
-        }
     }
 
     private void ResetCommandCounts() // pan reset hin mga command count, kailangan command count for now kay para diri na execute an mga commands pa utro utro kay an partial transcription

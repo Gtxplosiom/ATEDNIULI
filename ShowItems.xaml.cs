@@ -363,10 +363,13 @@ namespace ATEDNIULI
                     bool isBrowser = IsBrowserWindow(windowTitle);
 
                     var clickableCondition = new OrCondition(
-                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
-                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem)
-                    );
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TreeItem),  // Include TreeItem for sidebar elements
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Pane),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem)// Include Pane for potential container elements
+                );
 
                     var clickableElements = currentWindow.FindAll(TreeScope.Descendants, clickableCondition);
 
@@ -375,7 +378,7 @@ namespace ATEDNIULI
 
                 // Ensure ListTaskbarItems runs on the UI thread
                 Dispatcher.Invoke(ListTaskbarItems);
-                Dispatcher.Invoke(StartTagRemovalTimer);
+                //Dispatcher.Invoke(StartTagRemovalTimer);
             }
             catch (TaskCanceledException)
             {
@@ -700,9 +703,6 @@ namespace ATEDNIULI
         {
             Dispatcher.Invoke(() =>
             {
-                // Stop the timer
-                _tagRemovalTimer.Stop();
-
                 // Remove tags from the overlay canvas
                 foreach (var tag in _tags)
                 {
