@@ -196,6 +196,13 @@ namespace ATEDNIULI
             ClosePreview();
         }
 
+        private void Window_Activated(object sender, EventArgs e)
+        {
+            // Immediately deactivate the window to prevent it from getting focus
+            this.Hide();
+            this.Show();
+        }
+
         private bool IsCameraAvailable(int index)
         {
             using (var testCapture = new VideoCapture(index))

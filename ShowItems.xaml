@@ -9,7 +9,9 @@
         SizeToContent="Manual"
         ResizeMode="NoResize"
         WindowStartupLocation="Manual"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        ShowInTaskbar="False"
+        Activated="Window_Activated">
     <Canvas x:Name="OverlayCanvas"
             Background="Transparent">
         <!-- Example of a label for detected item -->

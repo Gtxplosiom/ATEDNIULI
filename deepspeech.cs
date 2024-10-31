@@ -155,7 +155,7 @@ class LiveTranscription
         {
             SampleRate = WebRtcVadSharp.SampleRate.Is16kHz,
             FrameLength = WebRtcVadSharp.FrameLength.Is20ms,
-            OperatingMode = OperatingMode.VeryAggressive
+            OperatingMode = OperatingMode.Aggressive
         };
 
         // initialize python
@@ -492,7 +492,7 @@ class LiveTranscription
                     string receivedMessage = socket.ReceiveFrameString();
                     received = receivedMessage;
 
-                    if (!commandExecuted)
+                    if (wake_word_detected && !commandExecuted)
                     {
                         // Check for specific commands
                         if (received == "OpenChrome")
@@ -553,14 +553,9 @@ class LiveTranscription
                         }
                     }
 
-                    if (isTyping)
-                    {
-                        TypeText(final_result_from_stream);
-                        isTyping = false;
-                        SwitchScorer(scorer_path);
-                    }
-
                     commandExecuted = false;
+                    wake_word_detected = false;
+                    ResetCommandCounts();
 
                     // Dispose and reset the stream
                     deep_speech_stream.Dispose();
@@ -587,9 +582,6 @@ class LiveTranscription
                             intent_window_timer.Start();
                             main_window.SetListeningIcon(false);
                             asr_window.Hide();
-
-                            wake_word_detected = false;
-                            ResetCommandCounts();
 
                             Console.WriteLine("Stream finalized successfully.");
                         }
@@ -646,14 +638,7 @@ class LiveTranscription
                 {
                     is_stream_ready = false; // Block further feeds during processing
                     
-                    if (!isTyping)
-                    {
-                        ProcessSpeech(short_buffer);
-                    }
-                    else
-                    {
-                        ProcessTyping(short_buffer);
-                    }
+                    ProcessSpeech(short_buffer);
 
                     is_stream_ready = true; // Ready for next audio feed
                 }
@@ -699,7 +684,7 @@ class LiveTranscription
                     {
                         // Proceed with transcription handling
                         ShowTranscription(partial_result);
-                        ProcessCommand(partial_result);
+                        //ProcessCommand(partial_result);
                     }
                     else
                     {
@@ -790,8 +775,6 @@ class LiveTranscription
             {
                 ProcessSpokenTag("10");
             });
-
-            showed_detected = false;
         }
         else if (itemDetected)
         {
@@ -820,20 +803,22 @@ class LiveTranscription
                 show_items.ExecuteAction(5);
             });
         }
-
-        if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
+        if (partial_result.Contains(wake_word))
         {
-            if (wake_word_timer.Enabled)
+            if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                wake_word_timer.Close();
+                if (wake_word_timer.Enabled)
+                {
+                    wake_word_timer.Close();
+                }
+
+                wake_word_detected = true;
+                partial_result = RemoveWakeWord(partial_result, wake_word);
+                click_command_count = 0;
+
+                ShowTranscription(partial_result);
+                ProcessCommand(partial_result);
             }
-
-            wake_word_detected = true;
-            partial_result = RemoveWakeWord(partial_result, wake_word);
-            click_command_count = 0;
-
-            ShowTranscription(partial_result);
-            ProcessCommand(partial_result);
         }
     }
 
@@ -927,24 +912,31 @@ class LiveTranscription
         device.AudioEndpointVolume.MasterVolumeLevelScalar = newVolume;
     }
 
-    private string RemoveWakeWord(string transcription, string wake_word) // pan remove hin wake word ha partial para diri ma output
+    private string RemoveWakeWord(string transcription, string wake_word)
     {
+        // Find the index of the wake word
         int index = transcription.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase);
+
+        // If the wake word is found, remove everything up to and including the wake word
         if (index >= 0)
         {
-            return transcription.Remove(index, wake_word.Length).Trim();
+            // Calculate the starting index of the text after the wake word
+            int startAfterWakeWord = index + wake_word.Length;
+
+            // Return the remaining text after the wake word, trimmed of any leading/trailing whitespace
+            return transcription.Substring(startAfterWakeWord).Trim();
         }
+
+        // If the wake word is not found, return the original transcription
         return transcription;
     }
 
+
     // TODO - himua an tanan na commands na gamiton an HandleCommand function
     private bool commandExecuted = false;
-    private bool isTyping = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
     {
         if (string.IsNullOrEmpty(transcription)) return;
-
-        
 
         // mouse control commands
         if (transcription.IndexOf("open mouse", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -965,7 +957,6 @@ class LiveTranscription
             SwitchScorer(typing_scorer);
             UpdateUI(() => FinalizeStream());
             UpdateUI(() => asr_window.Show());
-            isTyping = true;
         }
 
         if (transcription.StartsWith("search", StringComparison.OrdinalIgnoreCase))
@@ -990,10 +981,12 @@ class LiveTranscription
         HandleCommand("open powerpoint", transcription, ref powerpoint_command_count, () => StartProcess("powerpnt"));
         HandleCommand("open file manager", transcription, ref file_manager_command_count, () => StartProcess("explorer"));
         HandleCommand("switch", transcription, ref switch_command_count, () => SimulateKeyPress(Keys.Tab));
-        HandleCommand("left", transcription, ref left_command_count, () => SimulateKeyPress(Keys.Left));
-        HandleCommand("right", transcription, ref right_command_count, () => SimulateKeyPress(Keys.Right));
-        HandleCommand("up", transcription, ref up_command_count, () => SimulateKeyPress(Keys.Up));
-        HandleCommand("down", transcription, ref down_command_count, () => SimulateKeyPress(Keys.Down));
+
+        //HandleCommand("left", transcription, ref left_command_count, () => SimulateKeyPress(Keys.Left));
+        //HandleCommand("right", transcription, ref right_command_count, () => SimulateKeyPress(Keys.Right));
+        //HandleCommand("up", transcription, ref up_command_count, () => SimulateKeyPress(Keys.Up));
+        //HandleCommand("down", transcription, ref down_command_count, () => SimulateKeyPress(Keys.Down));
+
         HandleCommand("enter", transcription, ref enter_command_count, () => SimulateKeyPress(Keys.Enter));
         HandleCommand("close application", transcription, ref close_calculator_command_count, () => CloseApp());
         HandleCommand("scroll up", transcription, ref scroll_up_command_count, () => ScrollUp(200));
@@ -1042,6 +1035,7 @@ class LiveTranscription
                 ClickItem(convertedRect); // Perform click on item
 
                 show_items.RemoveTagsNoTimer();
+                showed_detected = false;
             }
             else
             {
@@ -1076,66 +1070,6 @@ class LiveTranscription
         System.Windows.Forms.Cursor.Position = new System.Drawing.Point((int)x, (int)y);
         mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
         mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-    }
-
-    private void TypeText(string text)
-    {
-        Task.Run(() =>
-        {
-            if (string.IsNullOrEmpty(text)) return;
-
-            SendKeys.SendWait(text);
-
-            return;
-        });
-    }
-
-    private void ProcessTyping(short[] short_buffer)
-    {
-        // Lock only around the critical section to minimize delay
-        lock (streamLock)
-        {
-            try
-            {
-                // Feed audio to the model
-                deep_speech_model.FeedAudioContent(deep_speech_stream, short_buffer, (uint)short_buffer.Length);
-
-                // Get intermediate decoding with metadata (confidence values)
-                var metadata = deep_speech_model.IntermediateDecodeWithMetadata(deep_speech_stream, 1);
-
-                if (metadata == null || metadata.Transcripts.Length == 0) return;
-
-                var partial_result = metadata.Transcripts[0].Tokens.Select(t => t.Text).Aggregate((a, b) => a + b).Trim();
-                float confidence = (float)metadata.Transcripts[0].Confidence;
-
-                if (string.IsNullOrEmpty(partial_result)) return;
-
-                current_partial = partial_result;
-
-                if (confidence > deepspeech_confidence)
-                {
-                    // Proceed with transcription handling
-                    ShowTranscription($"typing: {partial_result}");
-                }
-                else
-                {
-                    // Handle low confidence case (e.g., log, retry, prompt user)
-                    Console.WriteLine("Low confidence in transcription. Please repeat.");
-                }
-
-                // Optionally log or display the confidence score
-                Console.WriteLine($"Confidence: {confidence}");
-            }
-            catch (AccessViolationException ex)
-            {
-                Console.WriteLine($"AccessViolationException: {ex.Message}");
-                deep_speech_model.FinishStream(deep_speech_stream);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"General Exception: {ex.Message}");
-            }
-        }
     }
 
     private ShowItems showItemsWindow; // Field to hold the window reference

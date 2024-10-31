@@ -6,10 +6,12 @@
         xmlns:local="clr-namespace:ATEDNIULI"
         mc:Ignorable="d"
         Title="IntentWindow"
-            Height="93" Width="269"
-    WindowStyle="None"
-    AllowsTransparency="True"
-    Background="Transparent">
+        Height="93" Width="269"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Activated="Window_Activated">
     <Border Background="#F4E9CD"
     CornerRadius="20"
     BorderBrush="Black"

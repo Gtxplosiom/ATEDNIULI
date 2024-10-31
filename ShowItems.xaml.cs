@@ -256,6 +256,9 @@ namespace ATEDNIULI
 
             OverlayCanvas.Width = this.Width;
             OverlayCanvas.Height = this.Height;
+
+            // To prevent the window from being focusable
+            this.IsHitTestVisible = false;
         }
 
         public class ClickableItem
@@ -268,59 +271,69 @@ namespace ATEDNIULI
 
         public void ListClickableItemsInCurrentWindow()
         {
-            // Initialize the list of clickable items
+            // Reset clickable items and tags
             _clickableItems = new List<ClickableItem>();
+            foreach (var tag in _tags)
+            {
+                OverlayCanvas.Children.Remove(tag);
+            }
+            _tags.Clear();
+            detected = false;
 
+            // Ensure the method runs on the UI thread
             if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
             {
                 Dispatcher.Invoke(() => ListClickableItemsInCurrentWindow());
                 return;
             }
 
-            // Cancel the previous task if it exists
+            // Dispose of the previous token source to avoid memory leaks
             _cancellationTokenSource?.Cancel();
+            _cancellationTokenSource?.Dispose();
             _cancellationTokenSource = new CancellationTokenSource();
 
+            // Start processing clickable items with a new token
             Task.Run(() => ProcessClickableItems(_cancellationTokenSource.Token));
         }
 
         private async Task ProcessClickableItems(CancellationToken token)
         {
+            AutomationElement currentWindow = null;
             try
             {
-                // Throttle the execution
+                // Throttle the execution to prevent overlap
                 await Task.Delay(200, token);
 
-                IntPtr windowHandle = GetForegroundWindow();
-                var currentWindow = AutomationElement.FromHandle(windowHandle);
+                if (token.IsCancellationRequested)
+                    return; // Early exit if the token was canceled
 
-                // Get the desktop window
+                IntPtr windowHandle = GetForegroundWindow();
+                if (windowHandle == IntPtr.Zero)
+                {
+                    Console.WriteLine("Currently not focused in a window, processing desktop and taskbar items.");
+                    // Skip current window scanning and continue with the rest
+                }
+                else
+                {
+                    currentWindow = AutomationElement.FromHandle(windowHandle);
+                }
+
+                // Proceed to get desktop window and its elements as before
                 AutomationElement desktop = AutomationElement.RootElement.FindFirst(
                     TreeScope.Children,
                     new PropertyCondition(AutomationElement.ClassNameProperty, "Progman"));
 
-                AutomationElementCollection desktopIcons = null;
                 if (desktop != null)
                 {
                     var iconCondition = new OrCondition(
-                                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem),
-                                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Image)
-                                        );
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Image)
+                    );
 
-                    desktopIcons = desktop.FindAll(TreeScope.Children, iconCondition);
+                    var desktopIcons = desktop.FindAll(TreeScope.Children, iconCondition);
 
-                    // List all icons found on the desktop
-                    Console.WriteLine("Desktop Icons:");
-                    foreach (AutomationElement icon in desktopIcons)
-                    {
-                        string iconName = icon.Current.Name;
-                        Console.WriteLine(iconName);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("Desktop not found.");
+                    Dispatcher.Invoke(() => ProcessClickableElements(null, null, false, desktopIcons));
                 }
 
                 if (currentWindow != null)
@@ -328,68 +341,24 @@ namespace ATEDNIULI
                     string windowTitle = currentWindow.Current.Name;
                     bool isBrowser = IsBrowserWindow(windowTitle);
 
-                    // Define conditions for clickable control types
-                    OrCondition clickableCondition = isBrowser
-                        ? new OrCondition(
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem)
-                        )
-                        : new OrCondition(
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem)
-                        );
+                    var clickableCondition = new OrCondition(
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem)
+                    );
 
-                    // If the window is a browser, find the main content
-                    AutomationElement mainContent = null;
-                    AutomationElementCollection webClickables = null;
-                    if (isBrowser)
-                    {
-                        mainContent = currentWindow.FindFirst(TreeScope.Children, new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document));
-                        if (mainContent != null)
-                        {
-                            Console.WriteLine("Main content found in the browser.");
-                            // You can now perform further actions on the mainContent if needed
-                            webClickables = mainContent.FindAll(TreeScope.Descendants, clickableCondition);
-                        }
-                        else
-                        {
-                            Console.WriteLine("No main content found in the browser.");
-                        }
-                    }
-
-                    // Use TreeScope.Element for browsers to limit the search
                     var clickableElements = currentWindow.FindAll(TreeScope.Descendants, clickableCondition);
-                    
 
-                    Console.WriteLine($"Total Elements Found: {clickableElements.Count}");
-
-                    foreach (AutomationElement element in clickableElements)
-                    {
-                        Console.WriteLine($"Element Name: {element.Current.Name}, Control Type: {element.Current.ControlType.ProgrammaticName}");
-                    }
-
-                    // Ensure UI updates are done on the UI thread
-                    Dispatcher.Invoke(() => ProcessClickableElements(clickableElements, webClickables, isBrowser));
-                    // Ensure UI updates are done on the UI thread
-                    Dispatcher.Invoke(() => ProcessClickableElements(null, null, false, desktopIcons));
-                }
-                else
-                {
-                    
+                    Dispatcher.Invoke(() => ProcessClickableElements(clickableElements, null, isBrowser));
                 }
 
-                // Ensure UI updates are done on the UI thread
-                Dispatcher.Invoke(() =>
-                {
-                    ListTaskbarItems();
-                    StartTagRemovalTimer();
-                });
+                // Ensure ListTaskbarItems runs on the UI thread
+                Dispatcher.Invoke(ListTaskbarItems);
+                Dispatcher.Invoke(StartTagRemovalTimer);
             }
             catch (TaskCanceledException)
             {
-                // Task was canceled
+                Console.WriteLine("Process was canceled.");
             }
             catch (Exception ex)
             {
@@ -659,6 +628,13 @@ namespace ATEDNIULI
             {
                 MessageBox.Show($"Error listing taskbar items: {ex.Message}");
             }
+        }
+
+        private void Window_Activated(object sender, EventArgs e)
+        {
+            // Immediately deactivate the window to prevent it from getting focus
+            this.Hide();
+            this.Show();
         }
 
         public List<ClickableItem> GetClickableItems()

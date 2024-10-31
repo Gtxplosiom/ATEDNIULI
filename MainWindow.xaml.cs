@@ -31,6 +31,13 @@ namespace ATEDNIULI
             };
         }
 
+        private void Window_Activated(object sender, EventArgs e)
+        {
+            // Immediately deactivate the window to prevent it from getting focus
+            this.Hide();
+            this.Show();
+        }
+
         public void SetListeningIcon(bool isActive)
         {
             string iconPath = isActive ? "/assets/icons/listening.png" : "/assets/icons/listening-disabled.png";
