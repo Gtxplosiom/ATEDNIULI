@@ -296,6 +296,9 @@
     <None Include="assets\models\shape_predictor_68_face_landmarks.dat">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="assets\models\sherwoodschool_plus_commands.scorer">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="assets\models\wake_word.scorer">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

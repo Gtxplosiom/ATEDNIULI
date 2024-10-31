@@ -93,7 +93,7 @@ class LiveTranscription
     
     private const int debounce_timeout = 1000; // Delay in milliseconds
     private const int input_timeout = 7000;
-    private const int wake_word_timeout = 7000; // 10 seconds timeout for no wake word detection
+    private const int wake_word_timeout = 5000; // 10 seconds timeout for no wake word detection
 
     // pag store han current result and previous
     private string previous_partial = string.Empty;
@@ -138,8 +138,8 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta15.pbmm";
-    string scorer_path = @"assets\models\commands.scorer";
-    string typing_scorer = @"assets\models\idrismunir.scorer";
+    string commands_scorer = @"assets\models\commands.scorer";
+    string typing_scorer = @"assets\models\sherwoodschool_plus_commands.scorer";
 
     int deepspeech_confidence = -50;
 
@@ -349,7 +349,7 @@ class LiveTranscription
     {
         try
         {
-            load_model(model_path, scorer_path);
+            load_model(model_path, commands_scorer);
 
             wave_in_event = new WaveInEvent
             {
