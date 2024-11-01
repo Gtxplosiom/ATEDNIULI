@@ -39,32 +39,17 @@ namespace ATEDNIULI
             this.Show();
         }
 
-        public void SetListeningIcon(bool isActive)
-        {
-            // Update the icon source based on the active state
-            string iconPath = isActive ? "/assets/icons/listening.png" : "/assets/icons/listening-disabled.png";
-            var icon = new BitmapImage(new Uri(iconPath, UriKind.Relative));
-            listening_icon.Source = icon;
-        }
-
         public void UpdateListeningIcon(bool isActive)
         {
-            // Update the icon based on the active state
-            SetListeningIcon(isActive);
-
-            // Animate based on the active state
-            if (isActive)
-            {
-                AnimateListeningIcon(-10); // Move left
-            }
-            else
-            {
-                AnimateListeningIcon(0); // Move back to original position
-            }
+            // Start the animation and update the icon simultaneously
+            AnimateListeningIcon(isActive ? -20 : 0, isActive);
         }
 
-        private void AnimateListeningIcon(double targetX)
+        private void AnimateListeningIcon(double targetX, bool isActive)
         {
+            // Update the icon source based on the active state
+            SetListeningIcon(isActive);
+
             // Ensure the RenderTransform is initialized with a new TranslateTransform
             TranslateTransform transform;
 
@@ -76,7 +61,7 @@ namespace ATEDNIULI
             else
             {
                 transform = new TranslateTransform(); // Create a new transform
-                listening_icon.RenderTransform = transform; // Assign to the icon
+                listening_icon.RenderTransform = transform; // Assign the TranslateTransform to the icon
             }
 
             // Create the storyboard for the animation
@@ -100,6 +85,44 @@ namespace ATEDNIULI
 
             // Start the animation
             storyboard.Begin();
+        }
+
+        public void SetListeningIcon(bool isActive)
+        {
+            // Determine the icon path based on the active state
+            string iconPath = isActive ? "/assets/icons/listening.png" : "/assets/icons/listening-disabled.png";
+
+            // Preload the BitmapImage
+            var icon = new BitmapImage(new Uri(iconPath, UriKind.Relative));
+
+            // Create an animation for the opacity transition to fade out
+            DoubleAnimation fadeOutAnimation = new DoubleAnimation
+            {
+                From = 1, // Start fully visible
+                To = 0, // Fade out
+                Duration = TimeSpan.FromMilliseconds(75)
+            };
+
+            // Attach the Completed event handler
+            fadeOutAnimation.Completed += (s, e) =>
+            {
+                // Set the new icon source after fading out
+                listening_icon.Source = icon;
+
+                // Create a fade-in animation
+                DoubleAnimation fadeInAnimation = new DoubleAnimation
+                {
+                    From = 0, // Start fully transparent
+                    To = 1, // Fade in
+                    Duration = TimeSpan.FromMilliseconds(75)
+                };
+
+                // Start the fade-in animation
+                listening_icon.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
+            };
+
+            // Apply the fade-out animation to the icon
+            listening_icon.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
         }
 
         private void ExecuteOpenApplication(object sender, ExecutedRoutedEventArgs e) //method for opening applications

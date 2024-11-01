@@ -786,8 +786,6 @@ class LiveTranscription
 
     private void ShowTranscription(string partial_result)
     {
-        UpdateUI(() => intent_window.Show());
-
         UpdateUI(() => main_window.UpdateListeningIcon(true));
 
         UpdateUI(() =>
@@ -805,7 +803,9 @@ class LiveTranscription
                 Console.WriteLine(ex);
                 return;
             }
-        }); 
+        });
+
+        UpdateUI(() => intent_window.Show());
     }
 
     private void HandleNoSpeechDetected()

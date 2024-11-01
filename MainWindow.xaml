@@ -59,10 +59,13 @@
         <Border Name="object_detection_border"  Margin="0,0,0,67">
             <Image Name="object_detection_icon" Source="/assets/icons/object-detection-disabled.png" Width="35" VerticalAlignment="Bottom"/>
         </Border>
-        <Border Name="listening_border"  Margin="0,0,0,15">
+        <Border Name="listening_border" Margin="0,0,0,15">
             <Image Name="listening_icon" Source="/assets/icons/listening-disabled.png" Width="35" VerticalAlignment="Bottom">
                 <Image.RenderTransform>
-                    <TranslateTransform x:Name="listeningIconTransform" />
+                    <TransformGroup>
+                        <ScaleTransform x:Name="listeningIconScale" ScaleX="1" ScaleY="1"/>
+                        <TranslateTransform x:Name="listeningIconTransform"/>
+                    </TransformGroup>
                 </Image.RenderTransform>
             </Image>
         </Border>

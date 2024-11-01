@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace ATEDNIULI
 {
@@ -41,6 +43,8 @@ namespace ATEDNIULI
         // Fade in the window
         public void ShowWithFadeIn()
         {
+            allowTextUpdates = false;
+
             this.Opacity = 0; // Start fully transparent
             this.Show();
 
@@ -48,41 +52,59 @@ namespace ATEDNIULI
             {
                 From = 0,
                 To = 1,
-                Duration = new Duration(TimeSpan.FromMilliseconds(100)), // Adjust duration as needed
+                Duration = new Duration(TimeSpan.FromMilliseconds(150)), // Increase duration
                 FillBehavior = FillBehavior.HoldEnd
             };
 
             fadeInAnimation.Completed += (s, e) =>
             {
+                StartBeatingAnimation();
                 allowTextUpdates = true;
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeInAnimation);
         }
 
-        // Fade out the window
         public void HideWithFadeOut()
         {
             var fadeOutAnimation = new DoubleAnimation
             {
                 From = 1,
                 To = 0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(100)), // Adjust duration as needed
+                Duration = new Duration(TimeSpan.FromMilliseconds(200)), // Increase duration
                 FillBehavior = FillBehavior.HoldEnd
             };
 
             fadeOutAnimation.Completed += (s, e) =>
             {
                 this.Hide(); // Hide the window after fade-out
+                StopBeatingAnimation();
                 allowTextUpdates = false;
+                OutputTextBox.Text = "";
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeOutAnimation);
         }
 
-        public void UpdateListeningIcon(bool isActive)
+        private void StartBeatingAnimation()
         {
-            main_window.SetListeningIcon(isActive);
+            var scaleUpAnimation = new DoubleAnimation
+            {
+                From = 1.0,
+                To = 1.1, // Scale to 120%
+                Duration = TimeSpan.FromMilliseconds(300), // Duration of the scale up
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever // Repeat forever
+            };
+
+            ListeningImage.RenderTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleUpAnimation);
+            ListeningImage.RenderTransform.BeginAnimation(ScaleTransform.ScaleYProperty, scaleUpAnimation);
+        }
+
+        private void StopBeatingAnimation()
+        {
+            ListeningImage.RenderTransform.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            ListeningImage.RenderTransform.BeginAnimation(ScaleTransform.ScaleYProperty, null);
         }
 
         private void ASRWindow_Loaded(object sender, RoutedEventArgs e)
@@ -146,20 +168,17 @@ namespace ATEDNIULI
             }
             else
             {
-                Dispatcher.Invoke(() =>
+                if (is_partial)
                 {
-                    if (is_partial)
-                    {
-                        // Clear previous partial transcription
-                        OutputTextBox.Text = text;
-                    }
-                    else
-                    {
-                        // Append final transcription
-                        OutputTextBox.AppendText(text + "\n");
-                    }
-                    OutputTextBox.ScrollToEnd();
-                });
+                    // Clear previous partial transcription
+                    OutputTextBox.Text = text;
+                }
+                else
+                {
+                    // Append final transcription
+                    OutputTextBox.AppendText(text + "\n");
+                }
+                OutputTextBox.ScrollToEnd();
             }
         }
 

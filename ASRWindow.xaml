@@ -47,7 +47,7 @@
             </Grid>
         </Border>
 
-        <!-- Ellipse extension to the right -->
+        <!-- Border extension to the right -->
         <Border Background="#F4E9CD"
                 CornerRadius="0,30,30,0"
                 BorderBrush="Black"
@@ -56,6 +56,25 @@
                 Grid.Column="1"
                 Margin="-20, 33, 0, 0">
             <!-- Negative margin to overlap -->
+            <Grid>
+                <!-- Center the image within the circular frame -->
+                <Border Width="60" Height="60" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Border.Effect>
+                        <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="2" Opacity="0.5"/>
+                    </Border.Effect>
+                    <Ellipse Width="55" Height="45" Fill="#77ACA2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <Image x:Name="ListeningImage" 
+                       Source="/assets/icons/listening.png" 
+                       Width="35" Height="35" 
+                       HorizontalAlignment="Center" VerticalAlignment="Center" 
+                       ClipToBounds="True" Stretch="UniformToFill">
+                    <Image.RenderTransform>
+                        <ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1"/>
+                    </Image.RenderTransform>
+                </Image>
+            </Grid>
+
         </Border>
     </Grid>
 </Window>
