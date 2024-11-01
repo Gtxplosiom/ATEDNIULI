@@ -47,23 +47,24 @@
         </Style>
     </Window.Resources>
     <Grid>
-        <Button Name="settings_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,10,0,0" Visibility="Collapsed">
+        <Button Name="settings_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,10,0,0">
             <Image Name="settings_icon" Source="/assets/icons/settings.png" Width="35"/>
         </Button>
-        <Button Name="help_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,55,0,0" Visibility="Collapsed">
+        <Button Name="help_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,55,0,0">
             <Image Name="help_icon" Source="/assets/icons/help.png" Width="35"/>
         </Button>
-        <Button Name="toggle_button" Height="18" Width="50" BorderThickness="0" Background="#77ACA2" Click="toggle_button_Click" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,131">
-            <Image Name="expand_icon" Source="/assets/icons/expand.png" Width="50" HorizontalAlignment="Center" Stretch="Fill"/>
-        </Button>
-        <Border Name="camera_mouse_border"  Margin="0,0,0,95">
+        <Border Name="camera_mouse_border"  Margin="0,0,0,110">
             <Image Name="camera_mouse_icon" Source="/assets/icons/camera-mouse-preview.png" Width="35" VerticalAlignment="Bottom"/>
         </Border>
-        <Border Name="object_detection_border"  Margin="0,0,0,55">
+        <Border Name="object_detection_border"  Margin="0,0,0,67">
             <Image Name="object_detection_icon" Source="/assets/icons/object-detection-disabled.png" Width="35" VerticalAlignment="Bottom"/>
         </Border>
-        <Border Name="listening_border"  Margin="0,0,0,8">
-            <Image Name="listening_icon" Source="/assets/icons/listening-disabled.png" Width="35" VerticalAlignment="Bottom"/>
+        <Border Name="listening_border"  Margin="0,0,0,15">
+            <Image Name="listening_icon" Source="/assets/icons/listening-disabled.png" Width="35" VerticalAlignment="Bottom">
+                <Image.RenderTransform>
+                    <TranslateTransform x:Name="listeningIconTransform" />
+                </Image.RenderTransform>
+            </Image>
         </Border>
     </Grid>
 </Window>

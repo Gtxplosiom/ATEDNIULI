@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows;
-using System.Windows.Media.Imaging;
+using System.Windows.Media.Animation;
 
 namespace ATEDNIULI
 {
@@ -19,36 +19,66 @@ namespace ATEDNIULI
         public ASRWindow(MainWindow mainWindow)
         {
             InitializeComponent();
-
             camera_mouse = new CameraMouse();
-
             show_items = new ShowItems();
-
-            // Initialize IntentWindow
             intent_window = new IntentWindow(mainWindow);
-
             live_transcription = new LiveTranscription(this, intent_window, mainWindow, show_items, camera_mouse);
-
-            // Initialize BackgroundWorker
             background_worker = new BackgroundWorker();
             background_worker.DoWork += BackgroundWorker_DoWork;
             background_worker.RunWorkerCompleted += BackgroundWorker_RunWorkerCompleted;
             background_worker.WorkerSupportsCancellation = true;
-
-            // Start the BackgroundWorker when the window is loaded
             Loaded += ASRWindow_Loaded;
             Topmost = true;
-
-            // Store the reference to the MainWindow
             main_window = mainWindow;
 
             Dispatcher.UnhandledException += (sender, e) =>
             {
                 Console.WriteLine("Dispatcher unhandled exception: " + e.Exception);
-                // Log the exception or take other actions
             };
         }
 
+        private bool allowTextUpdates = false;
+        // Fade in the window
+        public void ShowWithFadeIn()
+        {
+            this.Opacity = 0; // Start fully transparent
+            this.Show();
+
+            var fadeInAnimation = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = new Duration(TimeSpan.FromMilliseconds(100)), // Adjust duration as needed
+                FillBehavior = FillBehavior.HoldEnd
+            };
+
+            fadeInAnimation.Completed += (s, e) =>
+            {
+                allowTextUpdates = true;
+            };
+
+            this.BeginAnimation(Window.OpacityProperty, fadeInAnimation);
+        }
+
+        // Fade out the window
+        public void HideWithFadeOut()
+        {
+            var fadeOutAnimation = new DoubleAnimation
+            {
+                From = 1,
+                To = 0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(100)), // Adjust duration as needed
+                FillBehavior = FillBehavior.HoldEnd
+            };
+
+            fadeOutAnimation.Completed += (s, e) =>
+            {
+                this.Hide(); // Hide the window after fade-out
+                allowTextUpdates = false;
+            };
+
+            this.BeginAnimation(Window.OpacityProperty, fadeOutAnimation);
+        }
 
         public void UpdateListeningIcon(bool isActive)
         {
@@ -59,12 +89,9 @@ namespace ATEDNIULI
         {
             if (main_window != null)
             {
-                // Ensure the dimensions are correct when setting the position
                 double main_window_bottom_left_x = main_window.Left;
                 double main_window_bottom_y = main_window.Top + main_window.Height;
-
-                // Position the ASRWindow
-                Left = main_window_bottom_left_x - Width;
+                Left = (main_window_bottom_left_x - Width) + 35;
                 Top = main_window_bottom_y - Height;
             }
 
@@ -75,14 +102,10 @@ namespace ATEDNIULI
         {
             try
             {
-                // Start transcription in the background
                 live_transcription.StartTranscription();
-
-                // Check for cancellation
                 while (!background_worker.CancellationPending)
                 {
-                    // Let the transcription continue
-                    System.Threading.Thread.Sleep(100); // Reduce CPU usage
+                    System.Threading.Thread.Sleep(100);
                 }
             }
             catch (Exception ex)
@@ -90,20 +113,13 @@ namespace ATEDNIULI
                 Dispatcher.Invoke(() => AppendText($"Error in background worker: {ex.Message}"));
                 e.Cancel = true;
             }
-            finally
-            {
-                if (background_worker.CancellationPending)
-                {
-                    // live_transcription.StopTranscription();
-                }
-            }
         }
 
         private void Window_Activated(object sender, EventArgs e)
         {
             // Immediately deactivate the window to prevent it from getting focus
-            this.Hide();
-            this.Show();
+            HideWithFadeOut();
+            ShowWithFadeIn();
         }
 
         private void BackgroundWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
@@ -124,25 +140,31 @@ namespace ATEDNIULI
 
         public void AppendText(string text, bool is_partial = false)
         {
-            Dispatcher.Invoke(() =>
+            if (!allowTextUpdates)
             {
-                if (is_partial)
+                return; // Prevent text updates if animations are in progress
+            }
+            else
+            {
+                Dispatcher.Invoke(() =>
                 {
-                    // Clear previous partial transcription
-                    OutputTextBox.Text = text;
-                }
-                else
-                {
-                    // Append final transcription
-                    OutputTextBox.AppendText(text + "\n");
-                }
-                OutputTextBox.ScrollToEnd();
-            });
+                    if (is_partial)
+                    {
+                        // Clear previous partial transcription
+                        OutputTextBox.Text = text;
+                    }
+                    else
+                    {
+                        // Append final transcription
+                        OutputTextBox.AppendText(text + "\n");
+                    }
+                    OutputTextBox.ScrollToEnd();
+                });
+            }
         }
 
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
-            // Request cancellation of the background worker
             if (background_worker.IsBusy)
             {
                 background_worker.CancelAsync();

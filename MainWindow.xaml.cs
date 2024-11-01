@@ -5,6 +5,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using ATEDNIULI;
 
@@ -40,6 +41,7 @@ namespace ATEDNIULI
 
         public void SetListeningIcon(bool isActive)
         {
+            // Update the icon source based on the active state
             string iconPath = isActive ? "/assets/icons/listening.png" : "/assets/icons/listening-disabled.png";
             var icon = new BitmapImage(new Uri(iconPath, UriKind.Relative));
             listening_icon.Source = icon;
@@ -47,7 +49,57 @@ namespace ATEDNIULI
 
         public void UpdateListeningIcon(bool isActive)
         {
+            // Update the icon based on the active state
             SetListeningIcon(isActive);
+
+            // Animate based on the active state
+            if (isActive)
+            {
+                AnimateListeningIcon(-10); // Move left
+            }
+            else
+            {
+                AnimateListeningIcon(0); // Move back to original position
+            }
+        }
+
+        private void AnimateListeningIcon(double targetX)
+        {
+            // Ensure the RenderTransform is initialized with a new TranslateTransform
+            TranslateTransform transform;
+
+            // Check if RenderTransform is a TranslateTransform
+            if (listening_icon.RenderTransform is TranslateTransform existingTransform)
+            {
+                transform = existingTransform; // Use existing transform
+            }
+            else
+            {
+                transform = new TranslateTransform(); // Create a new transform
+                listening_icon.RenderTransform = transform; // Assign to the icon
+            }
+
+            // Create the storyboard for the animation
+            var storyboard = new Storyboard();
+
+            // Create the animation to move to targetX
+            var moveAnimation = new DoubleAnimation
+            {
+                From = transform.X, // Use the current X value
+                To = targetX, // Move to the target X position
+                Duration = TimeSpan.FromMilliseconds(150) // Duration of the animation
+            };
+
+            // Set the target of the animation
+            Storyboard.SetTarget(moveAnimation, listening_icon); // Target the UI element
+                                                                 // Correct property path for the TranslateTransform X property
+            Storyboard.SetTargetProperty(moveAnimation, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
+
+            // Add the animation to the storyboard
+            storyboard.Children.Add(moveAnimation);
+
+            // Start the animation
+            storyboard.Begin();
         }
 
         private void ExecuteOpenApplication(object sender, ExecutedRoutedEventArgs e) //method for opening applications
@@ -86,29 +138,12 @@ namespace ATEDNIULI
             }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
-        private void toggle_button_Click(object sender, RoutedEventArgs e)
-        {
-            settings_button.Visibility = settings_button.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-            help_button.Visibility = help_button.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-            AdjustWindowHeight();
-        }
-
         public void AdjustWindowHeight()
         {
             double desiredHeight = settings_button.Visibility == Visibility.Visible ? 250 : 150;
             Height = desiredHeight;
 
             Top = (screenHeight - Height) - 48;
-        }
-
-        private void CommandHandler(string text)
-        {
-            if (text == "adjust")
-            {
-                settings_button.Visibility = settings_button.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-                help_button.Visibility = help_button.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-                AdjustWindowHeight();
-            }
         }
 
         private void OpenWindows()

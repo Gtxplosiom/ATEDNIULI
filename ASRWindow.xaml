@@ -6,38 +6,56 @@
         xmlns:local="clr-namespace:ATEDNIULI"
         mc:Ignorable="d"
         Title="ASRWindow"
-        Height="93" Width="269"
+        Height="93" Width="300"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
         ShowInTaskbar="False"
         Activated="Window_Activated">
-    <Border Background="#F4E9CD"
-        CornerRadius="20"
-        BorderBrush="Black"
-        BorderThickness="1"
-        Padding="10">
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="243*"/>
-                <ColumnDefinition Width="4*"/>
-            </Grid.ColumnDefinitions>
-            <TextBox x:Name="OutputTextBox"
-                 IsReadOnly="True"
-                 TextWrapping="Wrap"
-                 AcceptsReturn="True"
-                 VerticalScrollBarVisibility="Auto"
-                 HorizontalScrollBarVisibility="Auto"
-                 Background="#F4E9CD"
-                 Foreground="#031926"
-                 Grid.ColumnSpan="2"/>
 
-            <Button x:Name="StopButton"
-                Content="Stop"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Top"
-                Margin="76,404,0,0"
-                Click="StopButton_Click" Width="96"/>
-        </Grid>
-    </Border>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="5*"/>
+            <!-- First Border occupies 5 parts -->
+            <ColumnDefinition Width="1*"/>
+            <!-- Second Border occupies 1 part -->
+        </Grid.ColumnDefinitions>
+
+        <!-- Cloud shape with a Border -->
+        <Border Background="#F4E9CD"
+                CornerRadius="30,30,0,30"
+                BorderBrush="Black"
+                BorderThickness="0"
+                Padding="10"
+                Grid.Column="0">
+            <Grid>
+                <TextBox x:Name="OutputTextBox"
+                         IsReadOnly="True"
+                         TextWrapping="Wrap"
+                         AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         Background="#F4E9CD"
+                         Foreground="#031926"
+                         BorderThickness="0"/>
+                <Button x:Name="StopButton"
+                        Content="Stop"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Margin="76,404,0,0"
+                        Click="StopButton_Click" Width="96"/>
+            </Grid>
+        </Border>
+
+        <!-- Ellipse extension to the right -->
+        <Border Background="#F4E9CD"
+                CornerRadius="0,30,30,0"
+                BorderBrush="Black"
+                BorderThickness="0"
+                Height="60"
+                Grid.Column="1"
+                Margin="-20, 33, 0, 0">
+            <!-- Negative margin to overlap -->
+        </Border>
+    </Grid>
 </Window>

@@ -368,7 +368,7 @@ class LiveTranscription
 
             UpdateUI(() =>
             {
-                asr_window.Hide();
+                asr_window.HideWithFadeOut();
             });
         }
         catch (Exception ex)
@@ -622,8 +622,8 @@ class LiveTranscription
                         {
                             intent_window.AppendText($"Intent: {received}");
                             intent_window_timer.Start();
-                            main_window.SetListeningIcon(false);
-                            asr_window.Hide();
+                            main_window.UpdateListeningIcon(false);
+                            asr_window.HideWithFadeOut();
 
                             Console.WriteLine("Stream finalized successfully.");
                         }
@@ -788,7 +788,7 @@ class LiveTranscription
     {
         UpdateUI(() => intent_window.Show());
 
-        UpdateUI(() => main_window.SetListeningIcon(true));
+        UpdateUI(() => main_window.UpdateListeningIcon(true));
 
         UpdateUI(() =>
         {
@@ -796,7 +796,7 @@ class LiveTranscription
             {
                 if (!asr_window.IsVisible)
                 {
-                    asr_window.Show();
+                    asr_window.ShowWithFadeIn();
                 }
                 asr_window.AppendText($"You said: {partial_result}", true);
             }
@@ -1194,7 +1194,7 @@ class LiveTranscription
                 asr_window.AppendText("Final Transcription: " + final_result);
                 if (asr_window.IsVisible)
                 {
-                    asr_window.Hide();
+                    asr_window.HideWithFadeOut();
                 }
             });
         }
