@@ -341,6 +341,12 @@
     <Resource Include="assets\classes.txt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Resource>
+    <Resource Include="assets\icons\typing-disabled.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Resource>
+    <Resource Include="assets\icons\typing.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Resource>
     <Content Include="assets\models\please_work\pleasework.py" />
     <Content Include="python\grid_inference_optimized.py">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

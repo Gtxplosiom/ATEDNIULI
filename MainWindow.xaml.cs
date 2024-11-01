@@ -39,6 +39,14 @@ namespace ATEDNIULI
             this.Show();
         }
 
+        public void HighlightOD(bool showed_detected)
+        {
+            // Convert the color strings to Brush using SolidColorBrush
+            OD_ellipse.Fill = showed_detected
+                ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F4E9CD"))
+                : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#77ACA2"));
+        }
+
         public void UpdateListeningIcon(bool isActive)
         {
             // Start the animation and update the icon simultaneously
@@ -146,7 +154,7 @@ namespace ATEDNIULI
         {
             WindowStartupLocation = WindowStartupLocation.Manual;
             Left = SystemParameters.PrimaryScreenWidth - ActualWidth;
-            double desiredHeight = settings_button.Visibility == Visibility.Visible ? 250 : 150;
+            double desiredHeight = settings_button.Visibility == Visibility.Visible ? 300 : 150;
             Height = desiredHeight;
             Top = (screenHeight - Height) - 48;
         }
@@ -163,7 +171,7 @@ namespace ATEDNIULI
 
         public void AdjustWindowHeight()
         {
-            double desiredHeight = settings_button.Visibility == Visibility.Visible ? 250 : 150;
+            double desiredHeight = settings_button.Visibility == Visibility.Visible ? 300 : 150;
             Height = desiredHeight;
 
             Top = (screenHeight - Height) - 48;

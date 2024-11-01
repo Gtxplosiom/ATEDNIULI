@@ -304,6 +304,7 @@ class LiveTranscription
             if (clickable_items != null)
             {
                 showed_detected = true;
+                UpdateUI(() => main_window.HighlightOD(showed_detected));
             }
         }
     }
@@ -454,7 +455,7 @@ class LiveTranscription
 
     private void OnIntentTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
-        UpdateUI(() => intent_window.Hide());
+        //UpdateUI(() => intent_window.Hide());
     }
 
     private void OnInputTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
@@ -805,7 +806,7 @@ class LiveTranscription
             }
         });
 
-        UpdateUI(() => intent_window.Show());
+        //UpdateUI(() => intent_window.Show());
     }
 
     private void HandleNoSpeechDetected()
@@ -1004,6 +1005,7 @@ class LiveTranscription
 
                 show_items.RemoveTagsNoTimer();
                 showed_detected = false;
+                UpdateUI(() => main_window.HighlightOD(showed_detected));
             }
             else
             {
