@@ -63,10 +63,14 @@ namespace ATEDNIULI
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeInAnimation);
+
+            AnimateWindowGrowth(300);
         }
 
         public void HideWithFadeOut()
         {
+            AnimateWindowShrink(0);
+
             var fadeOutAnimation = new DoubleAnimation
             {
                 From = 1,
@@ -84,6 +88,62 @@ namespace ATEDNIULI
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeOutAnimation);
+        }
+
+        public void AnimateWindowGrowth(double targetWidth)
+        {
+            // Calculate the target left position to keep the right edge in place
+            double targetLeft = Left - (targetWidth - Width) + 27;
+
+            // Animate the Width
+            var widthAnimation = new DoubleAnimation
+            {
+                From = Width,
+                To = targetWidth,
+                Duration = TimeSpan.FromMilliseconds(150),
+                FillBehavior = FillBehavior.HoldEnd
+            };
+
+            // Animate the Left position to move the window leftward as it grows
+            var leftAnimation = new DoubleAnimation
+            {
+                From = Left,
+                To = targetLeft,
+                Duration = TimeSpan.FromMilliseconds(150),
+                FillBehavior = FillBehavior.HoldEnd
+            };
+
+            // Begin both animations
+            BeginAnimation(WidthProperty, widthAnimation);
+            BeginAnimation(LeftProperty, leftAnimation);
+        }
+
+        public void AnimateWindowShrink(double targetWidth)
+        {
+            // Calculate the target left position to keep the right edge in place
+            double targetLeft = Left + (Width - targetWidth) - 27;
+
+            // Animate the Width
+            var widthAnimation = new DoubleAnimation
+            {
+                From = Width,
+                To = targetWidth,
+                Duration = TimeSpan.FromMilliseconds(150),
+                FillBehavior = FillBehavior.HoldEnd
+            };
+
+            // Animate the Left position to move the window rightward as it shrinks
+            var leftAnimation = new DoubleAnimation
+            {
+                From = Left,
+                To = targetLeft,
+                Duration = TimeSpan.FromMilliseconds(150),
+                FillBehavior = FillBehavior.HoldEnd
+            };
+
+            // Begin both animations
+            BeginAnimation(WidthProperty, widthAnimation);
+            BeginAnimation(LeftProperty, leftAnimation);
         }
 
         private void StartBeatingAnimation()

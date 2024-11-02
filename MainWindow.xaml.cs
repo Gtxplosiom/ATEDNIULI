@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using ATEDNIULI;
+using static LiveTranscription;
 
 namespace ATEDNIULI
 {
@@ -39,12 +40,9 @@ namespace ATEDNIULI
             this.Show();
         }
 
-        public void HighlightOD(bool showed_detected)
+        public void HighlightODIcon(bool showed_detected)
         {
-            // Convert the color strings to Brush using SolidColorBrush
-            OD_ellipse.Fill = showed_detected
-                ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F4E9CD"))
-                : new SolidColorBrush((Color)ColorConverter.ConvertFromString("#77ACA2"));
+            AnimateODIcon(showed_detected ? -20 : 0, showed_detected);
         }
 
         public void UpdateListeningIcon(bool isActive)
@@ -95,6 +93,48 @@ namespace ATEDNIULI
             storyboard.Begin();
         }
 
+        private void AnimateODIcon(double targetX, bool isActive)
+        {
+            // Update the icon source based on the active state
+            SetODIcon(isActive);
+
+            // Ensure the RenderTransform is initialized with a new TranslateTransform
+            TranslateTransform transform;
+
+            // Check if RenderTransform is a TranslateTransform
+            if (object_detection_icon.RenderTransform is TranslateTransform existingTransform)
+            {
+                transform = existingTransform; // Use existing transform
+            }
+            else
+            {
+                transform = new TranslateTransform(); // Create a new transform
+                object_detection_icon.RenderTransform = transform; // Assign the TranslateTransform to the icon
+            }
+
+            // Create the storyboard for the animation
+            var storyboard = new Storyboard();
+
+            // Create the animation to move to targetX
+            var moveAnimation = new DoubleAnimation
+            {
+                From = transform.X, // Use the current X value
+                To = targetX, // Move to the target X position
+                Duration = TimeSpan.FromMilliseconds(150) // Duration of the animation
+            };
+
+            // Set the target of the animation
+            Storyboard.SetTarget(moveAnimation, object_detection_icon); // Target the UI element
+                                                                 // Correct property path for the TranslateTransform X property
+            Storyboard.SetTargetProperty(moveAnimation, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
+
+            // Add the animation to the storyboard
+            storyboard.Children.Add(moveAnimation);
+
+            // Start the animation
+            storyboard.Begin();
+        }
+
         public void SetListeningIcon(bool isActive)
         {
             // Determine the icon path based on the active state
@@ -131,6 +171,44 @@ namespace ATEDNIULI
 
             // Apply the fade-out animation to the icon
             listening_icon.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
+        }
+
+        public void SetODIcon(bool isActive)
+        {
+            // Determine the icon path based on the active state
+            string iconPath = isActive ? "/assets/icons/object-detection.png" : "/assets/icons/object-detection-disabled.png";
+
+            // Preload the BitmapImage
+            var icon = new BitmapImage(new Uri(iconPath, UriKind.Relative));
+
+            // Create an animation for the opacity transition to fade out
+            DoubleAnimation fadeOutAnimation = new DoubleAnimation
+            {
+                From = 1, // Start fully visible
+                To = 0, // Fade out
+                Duration = TimeSpan.FromMilliseconds(75)
+            };
+
+            // Attach the Completed event handler
+            fadeOutAnimation.Completed += (s, e) =>
+            {
+                // Set the new icon source after fading out
+                object_detection_icon.Source = icon;
+
+                // Create a fade-in animation
+                DoubleAnimation fadeInAnimation = new DoubleAnimation
+                {
+                    From = 0, // Start fully transparent
+                    To = 1, // Fade in
+                    Duration = TimeSpan.FromMilliseconds(75)
+                };
+
+                // Start the fade-in animation
+                object_detection_icon.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
+            };
+
+            // Apply the fade-out animation to the icon
+            object_detection_icon.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
         }
 
         private void ExecuteOpenApplication(object sender, ExecutedRoutedEventArgs e) //method for opening applications

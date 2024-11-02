@@ -157,7 +157,7 @@ class LiveTranscription
         {
             SampleRate = WebRtcVadSharp.SampleRate.Is16kHz,
             FrameLength = WebRtcVadSharp.FrameLength.Is20ms,
-            OperatingMode = OperatingMode.Aggressive
+            OperatingMode = OperatingMode.HighQuality
         };
 
         // initialize python
@@ -304,7 +304,7 @@ class LiveTranscription
             if (clickable_items != null)
             {
                 showed_detected = true;
-                UpdateUI(() => main_window.HighlightOD(showed_detected));
+                UpdateUI(() => main_window.HighlightODIcon(showed_detected));
             }
         }
     }
@@ -1005,7 +1005,7 @@ class LiveTranscription
 
                 show_items.RemoveTagsNoTimer();
                 showed_detected = false;
-                UpdateUI(() => main_window.HighlightOD(showed_detected));
+                UpdateUI(() => main_window.HighlightODIcon(showed_detected));
             }
             else
             {

@@ -46,56 +46,63 @@
             </Setter>
         </Style>
     </Window.Resources>
-    <Grid>
-        <Button Name="settings_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,10,0,0">
-            <Image Name="settings_icon" Source="/assets/icons/settings.png" Width="35"/>
-        </Button>
-        <Button Name="help_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,55,0,0">
-            <Image Name="help_icon" Source="/assets/icons/help.png" Width="35"/>
-        </Button>
-        <Border Name="typing_mode_border"  Margin="0,0,0,67">
-            <Border.Effect>
-                <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="3" Opacity="0.5"/>
-            </Border.Effect>
-            <Image Name="typing_icon" Source="/assets/icons/typing-disabled.png" Width="35" VerticalAlignment="Bottom">
-                <Image.RenderTransform>
-                    <ScaleTransform x:Name="TypingScale" ScaleX="1" ScaleY="1"/>
-                </Image.RenderTransform>
-            </Image>
-        </Border>
-        <Ellipse Name="camera_mouse_ellipse" Width="50" Height="40" Margin="0,0,0,55" Fill="#77ACA2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        <Border Name="camera_mouse_border"  Margin="0,0,0,160">
-            <Border.Effect>
-                <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="3" Opacity="0.5"/>
-            </Border.Effect>
-            <Image Name="camera_mouse_icon" Source="/assets/icons/camera-mouse-preview.png" Width="35" VerticalAlignment="Bottom">
-                <Image.RenderTransform>
-                    <ScaleTransform x:Name="CameraScale" ScaleX="1" ScaleY="1"/>
-                </Image.RenderTransform>
-            </Image>
-        </Border>
-        <Ellipse Name="OD_ellipse" Width="50" Height="40" Margin="0,0,0,-27" Fill="#77ACA2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        <Border Name="object_detection_border"  Margin="0,0,0,120">
-            <Border.Effect>
-                <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="3" Opacity="0.8"/>
-            </Border.Effect>
-            <Image Name="object_detection_icon" Source="/assets/icons/object-detection-disabled.png" Width="35" VerticalAlignment="Bottom">
-                <Image.RenderTransform>
-                    <ScaleTransform x:Name="ODScale" ScaleX="1" ScaleY="1"/>
-                </Image.RenderTransform>
-            </Image>
-        </Border>
-        <Border Name="listening_border" Margin="0,0,0,15">
-            <Border.Effect>
-                <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="3" Opacity="0.5"/>
-            </Border.Effect>
-            <Image Name="listening_icon" Source="/assets/icons/listening-disabled.png" Width="35" VerticalAlignment="Bottom">
-                <Image.RenderTransform>
-                    <TransformGroup>
-                        <TranslateTransform x:Name="listeningIconTransform"/>
-                    </TransformGroup>
-                </Image.RenderTransform>
-            </Image>
-        </Border>
-    </Grid>
+    <Border CornerRadius="0" Background="#77ACA2">
+        <!-- Set the desired background color -->
+        <Grid>
+            <Button Name="settings_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,10,0,0">
+                <Image Name="settings_icon" Source="/assets/icons/settings.png" Width="35"/>
+            </Button>
+            <Button Name="help_button" Height="40" Width="40" BorderThickness="0" Background="#77ACA2" Style="{StaticResource RoundedButtonStyle}" VerticalAlignment="Top" Margin="0,55,0,0">
+                <Image Name="help_icon" Source="/assets/icons/help.png" Width="35"/>
+            </Button>
+            <Border Name="typing_mode_border" Margin="0,0,0,67">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="3" Opacity="0.5"/>
+                </Border.Effect>
+                <Image Name="typing_icon" Source="/assets/icons/typing-disabled.png" Width="35" VerticalAlignment="Bottom">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <TranslateTransform x:Name="TypingIconTransform"/>
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+            </Border>
+            <Border Name="camera_mouse_border" Margin="0,0,0,160">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="3" Opacity="0.5"/>
+                </Border.Effect>
+                <Image Name="camera_mouse_icon" Source="/assets/icons/camera-mouse-preview.png" Width="35" VerticalAlignment="Bottom">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <TranslateTransform x:Name="CMIconTransform"/>
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+            </Border>
+            <Border Name="object_detection_border" Margin="0,0,0,120">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="3" Opacity="0.8"/>
+                </Border.Effect>
+                <Image Name="object_detection_icon" Source="/assets/icons/object-detection-disabled.png" Width="35" VerticalAlignment="Bottom">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <TranslateTransform x:Name="ODIconTransform"/>
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+            </Border>
+            <Border Name="listening_border" Margin="0,0,0,15">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="3" ShadowDepth="3" Opacity="0.5"/>
+                </Border.Effect>
+                <Image Name="listening_icon" Source="/assets/icons/listening-disabled.png" Width="35" VerticalAlignment="Bottom">
+                    <Image.RenderTransform>
+                        <TransformGroup>
+                            <TranslateTransform x:Name="listeningIconTransform"/>
+                        </TransformGroup>
+                    </Image.RenderTransform>
+                </Image>
+            </Border>
+        </Grid>
+    </Border>
 </Window>
