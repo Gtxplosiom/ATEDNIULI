@@ -14,6 +14,11 @@
         Activated="Window_Activated">
 
     <Grid>
+        <Grid.Effect>
+            <!-- Apply a shadow effect to the whole ASR window -->
+            <DropShadowEffect Color="Black" BlurRadius="15" ShadowDepth="5" Opacity="0.4"/>
+        </Grid.Effect>
+        
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="5*"/>
             <!-- First Border occupies 5 parts -->

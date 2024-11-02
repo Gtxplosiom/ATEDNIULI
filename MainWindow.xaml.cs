@@ -3,10 +3,13 @@ using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
 using ATEDNIULI;
 using static LiveTranscription;
 
@@ -15,6 +18,8 @@ namespace ATEDNIULI
     public partial class MainWindow : Window
     {
         double screenHeight = SystemParameters.PrimaryScreenHeight;
+
+        private Window ODoverlay; //design a simple ODoverlay
 
         public MainWindow()
         {
@@ -31,6 +36,150 @@ namespace ATEDNIULI
                 Console.WriteLine("Dispatcher unhandled exception: " + e.Exception);
                 // Log the exception or take other actions
             };
+
+            ODWindow();
+        }
+
+        public void ShowWithFadeIn(Window window)
+        {
+            window.Opacity = 0; // Start fully transparent
+            window.Show();
+
+            var fadeInAnimation = new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                Duration = new Duration(TimeSpan.FromMilliseconds(300)), // Increase duration
+                FillBehavior = FillBehavior.HoldEnd
+            };
+
+            fadeInAnimation.Completed += (s, e) =>
+            {
+                //
+            };
+
+            window.BeginAnimation(Window.OpacityProperty, fadeInAnimation);
+        }
+
+        public void HideWithFadeOut(Window window)
+        {
+            var fadeOutAnimation = new DoubleAnimation
+            {
+                From = 1,
+                To = 0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(300)), // Increase duration
+                FillBehavior = FillBehavior.HoldEnd
+            };
+
+            fadeOutAnimation.Completed += (s, e) =>
+            {
+                window.Hide(); // Hide the window after fade-out
+            };
+
+            window.BeginAnimation(Window.OpacityProperty, fadeOutAnimation);
+        }
+
+        private void ODWindow()
+        {
+            // Initialize the overlay window
+            ODoverlay = new Window
+            {
+                Title = "Object Detection Overlay",  // Title of the overlay
+                Width = 100,                  // Adjust width for a compact overlay
+                Height = 100,                 // Adjust height for a compact overlay
+                Background = Brushes.Transparent,
+                WindowStyle = WindowStyle.None, // No window chrome
+                AllowsTransparency = true, // Allow transparency
+                ShowInTaskbar = false,     // Do not show in taskbar
+                Topmost = true,            // Stay on top of other windows
+                Visibility = Visibility.Hidden // Start hidden
+            };
+
+            // Create the layout similar to the Xamarin design
+            var mainGrid = new Grid();
+
+            var border = new Border
+            {
+                Background = (SolidColorBrush)new BrushConverter().ConvertFrom("#F4E9CD"),
+                CornerRadius = new CornerRadius(30, 30, 30, 30),
+                BorderBrush = Brushes.Black,
+                BorderThickness = new Thickness(0),
+                Width = 70,
+                Height = 55,
+            };
+
+            // Create the inner Grid for the image
+            var innerGrid = new Grid();
+
+            var imageBorder = new Border
+            {
+                Width = 55,
+                Height = 55,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    BlurRadius = 3,
+                    ShadowDepth = 2,
+                    Opacity = 0.5
+                }
+            };
+
+            var ellipse = new Ellipse
+            {
+                Width = 55,
+                Height = 45,
+                Fill = (SolidColorBrush)new BrushConverter().ConvertFrom("#77ACA2"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Create the Listening Image
+            var listeningImage = new Image
+            {
+                Source = new BitmapImage(new Uri("pack://application:,,,/assets/icons/object-detection.png")),
+                Width = 35,
+                Height = 35,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                ClipToBounds = true,
+                Stretch = Stretch.UniformToFill
+            };
+
+            // Add elements to the inner Grid
+            imageBorder.Child = ellipse;
+            innerGrid.Children.Add(imageBorder);
+            innerGrid.Children.Add(listeningImage);
+
+            // Add inner grid to the border
+            border.Child = innerGrid;
+
+            // Add border to the main grid
+            mainGrid.Children.Add(border);
+
+            // Set the main grid as the content of the overlay window
+            ODoverlay.Content = mainGrid;
+
+            // Optional: Event handler for closing the overlay (e.g., click)
+            ODoverlay.MouseDown += (s, e) =>
+            {
+                if (e.ChangedButton == MouseButton.Left)
+                    ODoverlay.Hide(); // Hide the overlay on click
+            };
+        }
+
+        // Call this method to show the overlay
+        private void ShowODOverlay()
+        {
+            //ODoverlay.Show(); // Show the overlay
+            ShowWithFadeIn(ODoverlay);
+        }
+
+        // Call this method to hide the overlay
+        public void HideODOverlay()
+        {
+            HideWithFadeOut(ODoverlay);
         }
 
         private void Window_Activated(object sender, EventArgs e)
@@ -97,6 +246,8 @@ namespace ATEDNIULI
         {
             // Update the icon source based on the active state
             SetODIcon(isActive);
+
+            ShowODOverlay();
 
             // Ensure the RenderTransform is initialized with a new TranslateTransform
             TranslateTransform transform;
@@ -270,6 +421,9 @@ namespace ATEDNIULI
                 asrWindow.Left = mainWindowBottomLeftX - asrWindow.Width;
                 asrWindow.Top = mainWindowBottomLeftY - asrWindow.Height;
 
+                ODoverlay.Left = (mainWindowBottomLeftX - ODoverlay.Width) + 45;
+                ODoverlay.Top = (mainWindowBottomLeftY - ODoverlay.Height) - 85;
+
                 double mainWindowTopLeftX = Left;
                 double mainWindowTopY = Top;
 
@@ -280,5 +434,6 @@ namespace ATEDNIULI
 
             }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
+
     }
 }

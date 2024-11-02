@@ -31,6 +31,7 @@ class LiveTranscription
     private readonly MainWindow main_window;
     private readonly ShowItems show_items;
     private readonly CameraMouse camera_mouse;
+
     private WaveInEvent wave_in_event;
     private DeepSpeechStream deep_speech_stream;
     private DeepSpeech deep_speech_model;
@@ -153,6 +154,7 @@ class LiveTranscription
         this.main_window = main_window ?? throw new ArgumentNullException(nameof(main_window));
         this.show_items = show_items ?? throw new ArgumentNullException(nameof(show_items));
         this.camera_mouse = camera_mouse ?? throw new ArgumentNullException(nameof(camera_mouse));
+
         vad = new WebRtcVad
         {
             SampleRate = WebRtcVadSharp.SampleRate.Is16kHz,
@@ -1005,6 +1007,7 @@ class LiveTranscription
 
                 show_items.RemoveTagsNoTimer();
                 showed_detected = false;
+                UpdateUI(() => main_window.HideODOverlay());
                 UpdateUI(() => main_window.HighlightODIcon(showed_detected));
             }
             else

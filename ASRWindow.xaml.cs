@@ -21,9 +21,11 @@ namespace ATEDNIULI
         public ASRWindow(MainWindow mainWindow)
         {
             InitializeComponent();
+
             camera_mouse = new CameraMouse();
             show_items = new ShowItems();
             intent_window = new IntentWindow(mainWindow);
+
             live_transcription = new LiveTranscription(this, intent_window, mainWindow, show_items, camera_mouse);
             background_worker = new BackgroundWorker();
             background_worker.DoWork += BackgroundWorker_DoWork;
