@@ -43,11 +43,19 @@ namespace ATEDNIULI
 
         private bool allowTextUpdates = false;
         // Fade in the window
-        public void ShowWithFadeIn()
+        public void ShowWithFadeIn(bool isTyping)
         {
             allowTextUpdates = false;
 
+            if (isTyping)
+            {
+                this.Height = 100;
+            }
+
             this.Opacity = 0; // Start fully transparent
+
+            AdjustWindow();
+
             this.Show();
 
             var fadeInAnimation = new DoubleAnimation
@@ -182,6 +190,14 @@ namespace ATEDNIULI
             background_worker.RunWorkerAsync();
         }
 
+        private void AdjustWindow()
+        {
+            double main_window_bottom_left_x = main_window.Left;
+            double main_window_bottom_y = main_window.Top + main_window.Height;
+            Left = (main_window_bottom_left_x - Width) + 35;
+            Top = main_window_bottom_y - Height;
+        }
+
         private void BackgroundWorker_DoWork(object sender, DoWorkEventArgs e)
         {
             try
@@ -203,7 +219,7 @@ namespace ATEDNIULI
         {
             // Immediately deactivate the window to prevent it from getting focus
             HideWithFadeOut();
-            ShowWithFadeIn();
+            ShowWithFadeIn(false);
         }
 
         private void BackgroundWorker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)

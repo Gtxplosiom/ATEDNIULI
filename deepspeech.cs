@@ -23,6 +23,7 @@ using System.Threading;
 using OpenCvSharp;
 using static ATEDNIULI.ShowItems;
 using System.Linq;
+using OpenQA.Selenium.BiDi.Modules.Network;
 
 class LiveTranscription
 {
@@ -91,10 +92,12 @@ class LiveTranscription
     private System.Timers.Timer input_timer;
     private System.Timers.Timer wake_word_timer;
     private System.Timers.Timer debounce_timer;
+    private System.Timers.Timer typing_appear_timer;
     
     private const int debounce_timeout = 1000; // Delay in milliseconds
     private const int input_timeout = 7000;
     private const int wake_word_timeout = 5000; // 10 seconds timeout for no wake word detection
+    private const int typing_appear = 2000;
 
     // pag store han current result and previous
     private string previous_partial = string.Empty;
@@ -420,6 +423,10 @@ class LiveTranscription
             debounce_timer.Stop(); // Stop the timer
         };
         debounce_timer.AutoReset = false; // Ensure the timer only runs once
+
+        typing_appear_timer = new System.Timers.Timer(typing_appear);
+        typing_appear_timer.Elapsed += TypingMode;
+        typing_appear_timer.AutoReset = false; // Timer will only trigger once
     }
     private bool isDebounceElapsed = false;
 
@@ -512,96 +519,99 @@ class LiveTranscription
                 {
                     string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
 
-                    send_to_intent = RemoveWakeWord(final_result_from_stream, wake_word);
-
-                    // Perform socket operations in a background thread
-                    socket.SendFrame(send_to_intent);
-                    string receivedMessage = socket.ReceiveFrameString();
-                    received = receivedMessage;
-
-                    if (wake_word_detected && !commandExecuted)
+                    if (!typing_mode)
                     {
-                        UpdateUI(() => show_items.NotificationLabel.Content = $"Executing: {received}");
-                        // Check for specific commands
-                        if (received == "OpenChrome")
+                        send_to_intent = RemoveWakeWord(final_result_from_stream, wake_word);
+
+                        // Perform socket operations in a background thread
+                        socket.SendFrame(send_to_intent);
+                        string receivedMessage = socket.ReceiveFrameString();
+                        received = receivedMessage;
+
+                        if (wake_word_detected && !commandExecuted)
                         {
-                            StartProcess("chrome");
-                        }
-                        else if (received == "OpenWord")
-                        {
-                            StartProcess("winword");
-                        }
-                        else if (received == "OpenExcel")
-                        {
-                            StartProcess("excel");
-                        }
-                        else if (received == "OpenPowerpoint")
-                        {
-                            StartProcess("powerpnt");
-                        }
-                        else if (received == "ScreenShot")
-                        {
-                            ScreenShot();
-                        }
-                        else if (received == "CloseApp")
-                        {
-                            CloseApp();
-                        }
-                        else if (received == "OpenExplorer")
-                        {
-                            StartProcess("explorer");
-                        }
-                        else if (received == "OpenSettings")
-                        {
-                            StartProcess("ms-settings:");
-                        }
-                        else if (received == "OpenNotepad")
-                        {
-                            StartProcess("notepad");
-                        }
-                        else if (received == "VolumeUp")
-                        {
-                            VolumeUp();
-                        }
-                        else if (received == "VolumeDown")
-                        {
-                            VolumeDown();
-                        }
-                        else if (received == "MouseControl")
-                        {
-                            OpenMouse();
-                        }
-                        else if (received == "MouseControlOff")
-                        {
-                            CloseMouse();
-                        }
-                        else if (received == "ShowItems")
-                        {
-                            DetectScreen();
-                        }
-                    }
-                    else if (!wake_word_detected && !commandExecuted)
-                    {
-                        if (showed_detected && !itemDetected)
-                        {
-                            // Iterate through the predefined number strings
-                            for (int number_index = 0; number_index < numberStrings.Count; number_index++)
+                            UpdateUI(() => show_items.NotificationLabel.Content = $"Executing: {received}");
+                            // Check for specific commands
+                            if (received == "OpenChrome")
                             {
-                                string number = numberStrings[number_index]; // Get the current number as a string
-
-                                // Here we handle the command for each number string
-                                HandleCommand(number, final_result_from_stream, ref execute_number_command_count, () =>
-                                {
-                                    ProcessSpokenTag($"{number_index + 1}"); // Use number_index + 1 if you want to represent 1-based index
-                                });
+                                StartProcess("chrome");
+                            }
+                            else if (received == "OpenWord")
+                            {
+                                StartProcess("winword");
+                            }
+                            else if (received == "OpenExcel")
+                            {
+                                StartProcess("excel");
+                            }
+                            else if (received == "OpenPowerpoint")
+                            {
+                                StartProcess("powerpnt");
+                            }
+                            else if (received == "ScreenShot")
+                            {
+                                ScreenShot();
+                            }
+                            else if (received == "CloseApp")
+                            {
+                                CloseApp();
+                            }
+                            else if (received == "OpenExplorer")
+                            {
+                                StartProcess("explorer");
+                            }
+                            else if (received == "OpenSettings")
+                            {
+                                StartProcess("ms-settings:");
+                            }
+                            else if (received == "OpenNotepad")
+                            {
+                                StartProcess("notepad");
+                            }
+                            else if (received == "VolumeUp")
+                            {
+                                VolumeUp();
+                            }
+                            else if (received == "VolumeDown")
+                            {
+                                VolumeDown();
+                            }
+                            else if (received == "MouseControl")
+                            {
+                                OpenMouse();
+                            }
+                            else if (received == "MouseControlOff")
+                            {
+                                CloseMouse();
+                            }
+                            else if (received == "ShowItems")
+                            {
+                                DetectScreen();
                             }
                         }
+                        else if (!wake_word_detected && !commandExecuted)
+                        {
+                            if (showed_detected && !itemDetected)
+                            {
+                                // Iterate through the predefined number strings
+                                for (int number_index = 0; number_index < numberStrings.Count; number_index++)
+                                {
+                                    string number = numberStrings[number_index]; // Get the current number as a string
+
+                                    // Here we handle the command for each number string
+                                    HandleCommand(number, final_result_from_stream, ref execute_number_command_count, () =>
+                                    {
+                                        ProcessSpokenTag($"{number_index + 1}"); // Use number_index + 1 if you want to represent 1-based index
+                                    });
+                                }
+                            }
+                        }
+
+                        commandExecuted = false;
+                        wake_word_detected = false;
+                        ResetCommandCounts();
                     }
-
-                    commandExecuted = false;
-                    wake_word_detected = false;
-                    ResetCommandCounts();
-
+                    
                     // Dispose and reset the stream
                     deep_speech_stream.Dispose();
                     deep_speech_stream = deep_speech_model.CreateStream();
@@ -619,7 +629,7 @@ class LiveTranscription
                 // Update the UI on the UI thread
                 UpdateUI(() =>
                 {
-                    if (asr_window.IsVisible)
+                    if (asr_window.IsVisible && !typing_mode)
                     {
                         try
                         {
@@ -635,6 +645,8 @@ class LiveTranscription
                             Console.WriteLine($"Error updating UI: {ex.Message}");
                         }
                     }
+
+                    Console.WriteLine("Stream finalized successfully.");
                 });
             }, TaskScheduler.FromCurrentSynchronizationContext()); // Ensure the continuation runs on the UI thread context
         }
@@ -785,29 +797,79 @@ class LiveTranscription
                 ProcessCommand(partial_result);
             }
         }
+        else if (typing_mode)
+        {
+            HandleTyping(partial_result);
+        }
     }
+
+    private int lastTypedWordIndex = -1;
+    private string current_word;
+
+    private void HandleTyping(string partial_result)
+    {
+        // Split partial_result into words by spaces, removing any empty entries
+        string[] words = partial_result.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+        // Check if there are new words beyond the last typed word
+        if (words.Length > lastTypedWordIndex + 1)
+        {
+            // Get the next word to type
+            string nextWord = words[lastTypedWordIndex + 1];
+
+            // Type and display the next word if it's different from the current word
+            if (nextWord != current_word)
+            {
+                ShowTranscription(nextWord);
+                TypeText(nextWord);
+
+                // Update the current word to the newly typed word
+                current_word = nextWord;
+            }
+
+            // Update the last typed word index
+            lastTypedWordIndex++;
+        }
+    }
+
+    private void TypeText(string text)
+    {
+        foreach (char c in text)
+        {
+            // Send the character and wait briefly to avoid buffering issues
+            SendKeys.SendWait(c.ToString());
+            Thread.Sleep(50); // Adjust delay as needed (e.g., 50 milliseconds)
+        }
+    }
+
 
     private void ShowTranscription(string partial_result)
     {
-        UpdateUI(() => main_window.UpdateListeningIcon(true));
-
-        UpdateUI(() =>
+        if (!typing_mode)
         {
-            try
-            {
-                if (!asr_window.IsVisible)
-                {
-                    asr_window.ShowWithFadeIn();
-                }
-                asr_window.AppendText($"You said: {partial_result}", true);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-                return;
-            }
-        });
+            UpdateUI(() => main_window.UpdateListeningIcon(true));
 
+            UpdateUI(() =>
+            {
+                try
+                {
+                    if (!asr_window.IsVisible)
+                    {
+                        asr_window.ShowWithFadeIn(false);
+                    }
+                    asr_window.AppendText($"You said: {partial_result}", true);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                    return;
+                }
+            });
+        }
+        else
+        {
+            UpdateUI(() => asr_window.AppendText($"Typing: {partial_result}", true));
+        }
         //UpdateUI(() => intent_window.Show());
     }
 
@@ -920,6 +982,16 @@ class LiveTranscription
             UpdateUI(() => FinalizeStream());
         }
 
+        if (transcription.IndexOf("type", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            if (!typing_mode)
+            {
+                UpdateUI(() => FinalizeStream());
+                typing_appear_timer.Start();
+                commandExecuted = true;
+            }  
+        }
+
         // type something
         //if (transcription.IndexOf("type", StringComparison.OrdinalIgnoreCase) >= 0)
         //{
@@ -982,6 +1054,20 @@ class LiveTranscription
         return false;
     }
 
+    private void TypingMode(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        typing_mode = true;
+        if (typing_mode)
+        {
+            input_timer.Stop();
+            wake_word_timer.Stop();
+            intent_window_timer.Stop();
+
+            UpdateUI(() => asr_window.ShowWithFadeIn(true));
+            UpdateUI(() => show_items.NotificationLabel.Content = "Now Typing...");
+        }
+    }
+
     private void ProcessSpokenTag(string spokenTag)
     {
         var clickableItems = show_items.GetClickableItems();
@@ -1007,7 +1093,6 @@ class LiveTranscription
 
                 show_items.RemoveTagsNoTimer();
                 showed_detected = false;
-                UpdateUI(() => main_window.HideODOverlay());
                 UpdateUI(() => main_window.HighlightODIcon(showed_detected));
             }
             else

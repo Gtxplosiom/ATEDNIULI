@@ -173,7 +173,10 @@ namespace ATEDNIULI
         private void ShowODOverlay()
         {
             //ODoverlay.Show(); // Show the overlay
-            ShowWithFadeIn(ODoverlay);
+            if (ODoverlay != null)
+            {
+                ShowWithFadeIn(ODoverlay);
+            }
         }
 
         // Call this method to hide the overlay
@@ -192,6 +195,15 @@ namespace ATEDNIULI
         public void HighlightODIcon(bool showed_detected)
         {
             AnimateODIcon(showed_detected ? -20 : 0, showed_detected);
+
+            if (showed_detected)
+            {
+                ShowODOverlay();
+            }
+            else
+            {
+                HideODOverlay();
+            }
         }
 
         public void UpdateListeningIcon(bool isActive)
@@ -246,8 +258,6 @@ namespace ATEDNIULI
         {
             // Update the icon source based on the active state
             SetODIcon(isActive);
-
-            ShowODOverlay();
 
             // Ensure the RenderTransform is initialized with a new TranslateTransform
             TranslateTransform transform;
