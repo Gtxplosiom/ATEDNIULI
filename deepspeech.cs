@@ -93,11 +93,13 @@ class LiveTranscription
     private System.Timers.Timer wake_word_timer;
     private System.Timers.Timer debounce_timer;
     private System.Timers.Timer typing_appear_timer;
+    private System.Timers.Timer reset_typing_stream_timer;
     
     private const int debounce_timeout = 1000; // Delay in milliseconds
     private const int input_timeout = 7000;
     private const int wake_word_timeout = 5000; // 10 seconds timeout for no wake word detection
     private const int typing_appear = 2000;
+    private const int reset_typing_timeout = 7000;
 
     // pag store han current result and previous
     private string previous_partial = string.Empty;
@@ -427,6 +429,10 @@ class LiveTranscription
         typing_appear_timer = new System.Timers.Timer(typing_appear);
         typing_appear_timer.Elapsed += TypingMode;
         typing_appear_timer.AutoReset = false; // Timer will only trigger once
+
+        reset_typing_stream_timer = new System.Timers.Timer(typing_appear);
+        reset_typing_stream_timer.Elapsed += OnResetTypingTimerElapsed;
+        reset_typing_stream_timer.AutoReset = false; // Timer will only trigger once
     }
     private bool isDebounceElapsed = false;
 
@@ -481,6 +487,20 @@ class LiveTranscription
         catch (Exception ex)
         {
             Console.WriteLine($"Error in Input Timer: {ex.Message}");
+        }
+    }
+
+    private void OnResetTypingTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        lock (streamLock)
+        {
+            if (deep_speech_stream != null)
+            {
+                deep_speech_stream.Dispose();
+            }
+            deep_speech_stream = deep_speech_model.CreateStream();
+            Console.WriteLine("Stream reset successfully.");
+            is_stream_ready = true;
         }
     }
 
@@ -666,11 +686,18 @@ class LiveTranscription
 
         // timers start everytime audio is detedted
 
-        StartInactivityTimer();
+        if (!typing_mode)
+        {
+            StartInactivityTimer();
 
-        StartWakeWordTimer();
+            StartWakeWordTimer();
 
-        StartInputTimer();
+            StartInputTimer();
+        }
+        else
+        {
+            StartResetTypingTimer();
+        }
 
         // Offload audio processing to avoid blocking the main thread
         Task.Run(() =>
@@ -736,20 +763,7 @@ class LiveTranscription
                 }
                 else
                 {
-                    if (confidence > deepspeech_confidence)
-                    {
-                        // Proceed with transcription handling
-                        ShowTranscription(partial_result);
-                        //ProcessCommand(partial_result);
-                    }
-                    else
-                    {
-                        // Handle low confidence case (e.g., log, retry, prompt user)
-                        Console.WriteLine("Low confidence in transcription. Please repeat.");
-                    }
-
-                    // Optionally log or display the confidence score
-                    Console.WriteLine($"Confidence: {confidence}");
+                    ShowTranscription(partial_result);
                 }
             }
             catch (AccessViolationException ex)
@@ -766,38 +780,41 @@ class LiveTranscription
 
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        if (itemDetected && confidence > deepspeech_confidence)
+        if (!typing_mode)
         {
-            for (int number_index = 0; number_index < numberStrings.Count; number_index++)
+            if (itemDetected && confidence > deepspeech_confidence)
             {
-                string number = numberStrings[number_index]; // Get the current number as a string
-
-                // Here we handle the command for each number string
-                HandleCommand(number, partial_result, ref execute_number_command_count, () =>
+                for (int number_index = 0; number_index < numberStrings.Count; number_index++)
                 {
-                    show_items.ExecuteAction(number_index + 1); // Use number_index + 1 if you want to represent 1-based index
-                });
-            }
-        }
+                    string number = numberStrings[number_index]; // Get the current number as a string
 
-        if (partial_result.Contains(wake_word))
-        {
-            if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                wake_word_detected = true;
-
-                if (wake_word_timer.Enabled)
-                {
-                    wake_word_timer.Close();
+                    // Here we handle the command for each number string
+                    HandleCommand(number, partial_result, ref execute_number_command_count, () =>
+                    {
+                        show_items.ExecuteAction(number_index + 1); // Use number_index + 1 if you want to represent 1-based index
+                    });
                 }
-                
-                partial_result = RemoveWakeWord(partial_result, wake_word);
+            }
 
-                ShowTranscription(partial_result);
-                ProcessCommand(partial_result);
+            if (partial_result.Contains(wake_word))
+            {
+                if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    wake_word_detected = true;
+
+                    if (wake_word_timer.Enabled)
+                    {
+                        wake_word_timer.Close();
+                    }
+
+                    partial_result = RemoveWakeWord(partial_result, wake_word);
+
+                    ShowTranscription(partial_result);
+                    ProcessCommand(partial_result);
+                }
             }
         }
-        else if (typing_mode)
+        else
         {
             HandleTyping(partial_result);
         }
@@ -808,32 +825,21 @@ class LiveTranscription
 
     private void HandleTyping(string partial_result)
     {
-        // Split partial_result into words by spaces, removing any empty entries
-        string[] words = partial_result.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        // Split the result into words, taking only the last word
+        string lastWord = partial_result.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
 
-        // Check if there are new words beyond the last typed word
-        if (words.Length > lastTypedWordIndex + 1)
+        // Type and display the word if it’s new
+        if (lastWord != current_word)
         {
-            // Get the next word to type
-            string nextWord = words[lastTypedWordIndex + 1];
-
-            // Type and display the next word if it's different from the current word
-            if (nextWord != current_word)
-            {
-                ShowTranscription(nextWord);
-                TypeText(nextWord);
-
-                // Update the current word to the newly typed word
-                current_word = nextWord;
-            }
-
-            // Update the last typed word index
-            lastTypedWordIndex++;
+            ShowTranscription(lastWord);
+            TypeText(lastWord);
+            current_word = lastWord;
         }
     }
 
     private void TypeText(string text)
     {
+        //UpdateUI(() => asr_window.AppendText($"Typing: {text}", true));
         foreach (char c in text)
         {
             // Send the character and wait briefly to avoid buffering issues
@@ -912,6 +918,16 @@ class LiveTranscription
             input_timer.Stop(); // Stop the timer first
             input_timer.Start(); // Restart the timer
             Console.WriteLine("started the input timer");
+        }
+    }
+
+    private void StartResetTypingTimer()
+    {
+        if (!reset_typing_stream_timer.Enabled)
+        {
+            reset_typing_stream_timer.Stop(); // Stop the timer first
+            reset_typing_stream_timer.Start(); // Restart the timer
+            Console.WriteLine("started the reset typing stream timer");
         }
     }
 
@@ -1059,6 +1075,7 @@ class LiveTranscription
     private void TypingMode(object sender, System.Timers.ElapsedEventArgs e)
     {
         typing_mode = true;
+
         if (typing_mode)
         {
             input_timer.Stop();
