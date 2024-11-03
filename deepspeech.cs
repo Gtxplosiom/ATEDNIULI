@@ -633,8 +633,8 @@ class LiveTranscription
                     {
                         try
                         {
-                            intent_window.AppendText($"Intent: {received}");
-                            intent_window_timer.Start();
+                            //intent_window.AppendText($"Intent: {received}");
+                            //intent_window_timer.Start();
                             main_window.UpdateListeningIcon(false);
                             asr_window.HideWithFadeOut();
 
@@ -840,6 +840,7 @@ class LiveTranscription
             SendKeys.SendWait(c.ToString());
             Thread.Sleep(50); // Adjust delay as needed (e.g., 50 milliseconds)
         }
+        SendKeys.SendWait(" ");
     }
 
 
@@ -986,6 +987,7 @@ class LiveTranscription
         {
             if (!typing_mode)
             {
+                SwitchScorer(typing_scorer);
                 UpdateUI(() => FinalizeStream());
                 typing_appear_timer.Start();
                 commandExecuted = true;

@@ -1,11 +1,11 @@
 ﻿using ATEDNIULI;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace ATEDNIULI
 {
@@ -42,6 +42,7 @@ namespace ATEDNIULI
         }
 
         private bool allowTextUpdates = false;
+
         // Fade in the window
         public void ShowWithFadeIn(bool isTyping)
         {
@@ -50,11 +51,15 @@ namespace ATEDNIULI
             if (isTyping)
             {
                 this.Height = 100;
+                // Optionally adjust Top if Height changes
+                SetInitialPosition();
+            }
+            else
+            {
+                SetInitialPosition();
             }
 
-            this.Opacity = 0; // Start fully transparent
-
-            AdjustWindow();
+            this.Opacity = 0; // Start fully transparent  
 
             this.Show();
 
@@ -62,7 +67,7 @@ namespace ATEDNIULI
             {
                 From = 0,
                 To = 1,
-                Duration = new Duration(TimeSpan.FromMilliseconds(150)), // Increase duration
+                Duration = new Duration(TimeSpan.FromMilliseconds(150)), // Increased duration for smoother fade
                 FillBehavior = FillBehavior.HoldEnd
             };
 
@@ -79,13 +84,18 @@ namespace ATEDNIULI
 
         public void HideWithFadeOut()
         {
+            // Stop any ongoing animations to prevent conflicts
+            BeginAnimation(WidthProperty, null);
+            BeginAnimation(LeftProperty, null);
+            BeginAnimation(Window.OpacityProperty, null);
+
             AnimateWindowShrink(0);
 
             var fadeOutAnimation = new DoubleAnimation
             {
                 From = 1,
                 To = 0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(200)), // Increase duration
+                Duration = new Duration(TimeSpan.FromMilliseconds(200)), // Increased duration for smoother fade
                 FillBehavior = FillBehavior.HoldEnd
             };
 
@@ -95,6 +105,9 @@ namespace ATEDNIULI
                 StopBeatingAnimation();
                 allowTextUpdates = false;
                 OutputTextBox.Text = "";
+
+                // Optionally reset Width to initial value if necessary
+                // this.Width = initialWidth; // Define initialWidth as a class member
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeOutAnimation);
@@ -102,8 +115,14 @@ namespace ATEDNIULI
 
         public void AnimateWindowGrowth(double targetWidth)
         {
-            // Calculate the target left position to keep the right edge in place
-            double targetLeft = Left - (targetWidth - Width) + 27;
+            if (main_window == null) return;
+
+            double main_window_right_x = main_window.Left + main_window.Width;
+            double targetLeft = Math.Round(main_window_right_x - targetWidth - 25); // Ensure consistent offset
+
+            // Stop any ongoing animations to prevent overlap
+            BeginAnimation(WidthProperty, null);
+            BeginAnimation(LeftProperty, null);
 
             // Animate the Width
             var widthAnimation = new DoubleAnimation
@@ -114,7 +133,7 @@ namespace ATEDNIULI
                 FillBehavior = FillBehavior.HoldEnd
             };
 
-            // Animate the Left position to move the window leftward as it grows
+            // Animate the Left position
             var leftAnimation = new DoubleAnimation
             {
                 From = Left,
@@ -130,8 +149,14 @@ namespace ATEDNIULI
 
         public void AnimateWindowShrink(double targetWidth)
         {
-            // Calculate the target left position to keep the right edge in place
-            double targetLeft = Left + (Width - targetWidth) - 27;
+            if (main_window == null) return;
+
+            double main_window_right_x = main_window.Left + main_window.Width;
+            double targetLeft = Math.Round(main_window_right_x - targetWidth - 25); // Ensure consistent offset
+
+            // Stop any ongoing animations to prevent overlap
+            BeginAnimation(WidthProperty, null);
+            BeginAnimation(LeftProperty, null);
 
             // Animate the Width
             var widthAnimation = new DoubleAnimation
@@ -142,7 +167,7 @@ namespace ATEDNIULI
                 FillBehavior = FillBehavior.HoldEnd
             };
 
-            // Animate the Left position to move the window rightward as it shrinks
+            // Animate the Left position
             var leftAnimation = new DoubleAnimation
             {
                 From = Left,
@@ -161,7 +186,7 @@ namespace ATEDNIULI
             var scaleUpAnimation = new DoubleAnimation
             {
                 From = 1.0,
-                To = 1.1, // Scale to 120%
+                To = 1.1, // Scale to 110%
                 Duration = TimeSpan.FromMilliseconds(300), // Duration of the scale up
                 AutoReverse = true,
                 RepeatBehavior = RepeatBehavior.Forever // Repeat forever
@@ -179,23 +204,29 @@ namespace ATEDNIULI
 
         private void ASRWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            if (main_window != null)
-            {
-                double main_window_bottom_left_x = main_window.Left;
-                double main_window_bottom_y = main_window.Top + main_window.Height;
-                Left = (main_window_bottom_left_x - Width) + 35;
-                Top = main_window_bottom_y - Height;
-            }
-
+            SetInitialPosition(); // Set initial position only here
             background_worker.RunWorkerAsync();
         }
 
+        private void SetInitialPosition()
+        {
+            if (main_window != null)
+            {
+                double main_window_right_x = main_window.Left + main_window.Width;
+                double main_window_bottom_y = main_window.Top + main_window.Height;
+                Left = Math.Round(main_window_right_x - Width - 25); // Adjust 35 as needed
+                Top = Math.Round(main_window_bottom_y - Height);
+            }
+        }
+
+        // Optionally, separate AdjustWindow to only adjust Top if necessary
         private void AdjustWindow()
         {
-            double main_window_bottom_left_x = main_window.Left;
-            double main_window_bottom_y = main_window.Top + main_window.Height;
-            Left = (main_window_bottom_left_x - Width) + 35;
-            Top = main_window_bottom_y - Height;
+            if (main_window != null)
+            {
+                double main_window_bottom_y = main_window.Top + main_window.Height;
+                Top = Math.Round(main_window_bottom_y - Height);
+            }
         }
 
         private void BackgroundWorker_DoWork(object sender, DoWorkEventArgs e)
