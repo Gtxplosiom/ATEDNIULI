@@ -146,14 +146,58 @@ class LiveTranscription
     //string scorer_path = @"assets\models\waray_dnc.scorer";
 
     // english
-    string model_path = @"assets\models\delta15.pbmm";
+    string model_path = @"assets\models\delta12.pbmm";
     string commands_scorer = @"assets\models\commands.scorer";
-    string typing_scorer = @"assets\models\sherwoodschool_plus_commands.scorer";
+    string typing_scorer = @"assets\models\ef-en-3002.scorer";
 
     int deepspeech_confidence = -50;
 
     // importante para diri mag error an memory corrupt ha deepspeech model
     private readonly object streamLock = new object();
+
+    private string GetPythonExecutablePath()
+    {
+        // Get the user's home directory
+        string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        // Construct the Python executable path
+        string python12Path = Path.Combine(userHome, @"AppData\Local\Programs\Python\Python312\python.exe");
+
+        // Check if the Python executable exists
+        if (File.Exists(python12Path))
+        {
+            return python12Path;
+        }
+        else
+        {
+            Console.WriteLine("Python is not installed at the expected path.");
+            return null;
+        }
+    }
+
+    private string GetPythonScriptPath(string scriptName)
+    {
+        // Get the user's home directory
+        string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        // Get the current directory
+        string currentDirectory = Environment.CurrentDirectory;
+
+        // Construct the script path
+        //string scriptPath = Path.Combine(userHome, @"Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\python", scriptName);
+        string scriptPathRelease = Path.Combine(currentDirectory, @"python", scriptName);
+
+        // Check if the script exists
+        if (File.Exists(scriptPathRelease))
+        {
+            //return scriptPath;
+            return scriptPathRelease;
+        }
+        else
+        {
+            Console.WriteLine($"Script {scriptName} is not found at the expected path.");
+            return null;
+        }
+    }
 
     public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, CameraMouse camera_mouse) // 
     {
@@ -170,14 +214,19 @@ class LiveTranscription
             OperatingMode = OperatingMode.HighQuality
         };
 
+        string pythonExecutablePath = GetPythonExecutablePath();
+
+        string intentScriptPath = GetPythonScriptPath("intent.py");
+        string gridInferenceScriptPath = GetPythonScriptPath("grid_inference_optimized.py");
+
         // initialize python
         // initialize intent recognition
         Task.Run(() =>
         {
             ProcessStartInfo start = new ProcessStartInfo
             {
-                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe",
-                Arguments = "C:\\Users\\super.admin\\Desktop\\Capstone\\ATEDNIULI\\edn-app\\ATEDNIULI\\python\\intent.py",
+                FileName = pythonExecutablePath,
+                Arguments = intentScriptPath,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -212,8 +261,8 @@ class LiveTranscription
         {
             ProcessStartInfo start = new ProcessStartInfo
             {
-                FileName = @"C:\Users\super.admin\AppData\Local\Programs\Python\Python312\python.exe",
-                Arguments = "C:\\Users\\super.admin\\Desktop\\Capstone\\ATEDNIULI\\edn-app\\ATEDNIULI\\python\\grid_inference_optimized.py",
+                FileName = pythonExecutablePath,
+                Arguments = gridInferenceScriptPath,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -1012,7 +1061,7 @@ class LiveTranscription
             UpdateUI(() => FinalizeStream());
         }
 
-        if (transcription.IndexOf("type", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (transcription.IndexOf("typing", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             if (!typing_mode)
             {
@@ -1043,7 +1092,7 @@ class LiveTranscription
 
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
         HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
-        HandleCommand("stop showing", transcription, ref show_items_command_count, () => CloseShowItemsWindow());
+        HandleCommand("stop showing", transcription, ref show_items_command_count, () => RemoveTags());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(Keys.ControlKey)); // Customize as needed
         HandleCommand("open chrome", transcription, ref chrome_command_count, () => StartProcess("chrome"));
@@ -1164,14 +1213,11 @@ class LiveTranscription
 
     private ShowItems showItemsWindow; // Field to hold the window reference
 
-    private void CloseShowItemsWindow()
+    private void RemoveTags()
     {
-        // Check if the window is currently open and close it
-        if (showItemsWindow != null && showItemsWindow.IsVisible)
-        {
-            showItemsWindow.Close();
-            showItemsWindow = null; // Reset the reference after closing
-        }
+        show_items.RemoveTagsNoTimer();
+        showed_detected = false;
+        UpdateUI(() => main_window.HighlightODIcon(showed_detected));
     }
 
     public static void ScrollUp(int steps = 120) // Adjust steps as needed

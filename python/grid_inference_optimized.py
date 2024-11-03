@@ -4,10 +4,15 @@ import numpy as np
 import cv2
 import threading
 import time
+import os
 from ultralytics import YOLO
 
-# Load the YOLO model
-model = YOLO(r'C:\Users\super.admin\Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\assets\models\official-train-1-best-640.pt')
+# # Load the YOLO model
+# model = YOLO(r'C:\Users\super.admin\Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\assets\models\official-train-1-best-640.pt')
+
+# Load the YOLO model from the current directory (RELEASE)
+model_path = os.path.join(os.getcwd(), 'assets', 'models', 'official-train-1-best-640.pt')
+model = YOLO(model_path)
 
 # Set up ZMQ for sending detections to C#
 context = zmq.Context()

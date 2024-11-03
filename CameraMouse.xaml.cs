@@ -104,7 +104,7 @@ namespace ATEDNIULI
         private int webcamHeight = 480;
 
         // precision mode stuff
-        private static int initialPrecisionRadius = 500; // Initial size of the precision area
+        private static int initialPrecisionRadius = 100; // Initial size of the precision area
         private static int reducedPrecisionRadius = 50; // Reduced size of the precision area
         private double precisionFactor = 1.0;
         private static DateTime precisionStartTime;
