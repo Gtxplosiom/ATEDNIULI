@@ -138,6 +138,9 @@ class LiveTranscription
     private static MMDeviceEnumerator deviceEnumerator = new MMDeviceEnumerator();
     private static MMDevice device = deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
 
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
     // waray waray
     //string model_path = @"assets\models\waray_1.pbmm";
     //string scorer_path = @"assets\models\waray_dnc.scorer";
@@ -430,7 +433,7 @@ class LiveTranscription
         typing_appear_timer.Elapsed += TypingMode;
         typing_appear_timer.AutoReset = false; // Timer will only trigger once
 
-        reset_typing_stream_timer = new System.Timers.Timer(typing_appear);
+        reset_typing_stream_timer = new System.Timers.Timer(reset_typing_timeout);
         reset_typing_stream_timer.Elapsed += OnResetTypingTimerElapsed;
         reset_typing_stream_timer.AutoReset = false; // Timer will only trigger once
     }
@@ -834,6 +837,16 @@ class LiveTranscription
             ShowTranscription(lastWord);
             TypeText(lastWord);
             current_word = lastWord;
+        }
+        else if (lastWord == "exit")
+        {
+            typing_mode = false;
+            SwitchScorer(commands_scorer);
+            UpdateUI(() => FinalizeStream());
+
+            StartInactivityTimer();
+            StartWakeWordTimer();
+            StartInputTimer();
         }
     }
 
@@ -1242,12 +1255,12 @@ class LiveTranscription
         }
     }
 
-    private void CloseApp() // pag close hin currently used app/window
+    private void CloseApp() // close the currently used app/window
     {
         IntPtr handle = GetForegroundWindow();
         if (handle != IntPtr.Zero)
         {
-            SendMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+            PostMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
         }
         UpdateUI(() => asr_window.AppendText("Closing current window...", true));
     }
