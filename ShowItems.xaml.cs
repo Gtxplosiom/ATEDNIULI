@@ -70,12 +70,12 @@ namespace ATEDNIULI
 
         private void ProcessDetectionMessage(string message)
         {
-            Console.WriteLine($"Received message: {message}");
+            //Console.WriteLine($"Received message: {message}");
 
             // Check for "no detections" message first
             if (message.Contains("no detections"))
             {
-                Console.WriteLine("No detections found.");
+                //Console.WriteLine("No detections found.");
                 DetectedItemLabel.Visibility = Visibility.Collapsed;
                 DetectedItemText.Visibility = Visibility.Collapsed;
                 ActionList.Visibility = Visibility.Collapsed;

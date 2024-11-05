@@ -51,7 +51,6 @@ namespace ATEDNIULI
             if (isTyping)
             {
                 this.Height = 100;
-                // Optionally adjust Top if Height changes
                 SetInitialPosition();
             }
             else
@@ -59,15 +58,14 @@ namespace ATEDNIULI
                 SetInitialPosition();
             }
 
-            this.Opacity = 0; // Start fully transparent  
-
+            this.Opacity = 0;
             this.Show();
 
             var fadeInAnimation = new DoubleAnimation
             {
                 From = 0,
                 To = 1,
-                Duration = new Duration(TimeSpan.FromMilliseconds(150)), // Increased duration for smoother fade
+                Duration = new Duration(TimeSpan.FromMilliseconds(150)),
                 FillBehavior = FillBehavior.HoldEnd
             };
 
@@ -75,11 +73,10 @@ namespace ATEDNIULI
             {
                 StartBeatingAnimation();
                 allowTextUpdates = true;
+                AnimateWindowGrowth(300);  // Start the growth animation after fade-in
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeInAnimation);
-
-            AnimateWindowGrowth(300);
         }
 
         public void HideWithFadeOut()

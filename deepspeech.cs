@@ -23,7 +23,13 @@ using System.Threading;
 using OpenCvSharp;
 using static ATEDNIULI.ShowItems;
 using System.Linq;
-using OpenQA.Selenium.BiDi.Modules.Network;
+//using OpenQA.Selenium.BiDi.Modules.Network;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
+using System.Windows.Forms;
+using Whisper.net;
+using Whisper.net.Ggml;
+using Whisper.net.Logger;
 
 class LiveTranscription
 {
@@ -148,12 +154,14 @@ class LiveTranscription
     // english
     string model_path = @"assets\models\delta12.pbmm";
     string commands_scorer = @"assets\models\commands.scorer";
-    string typing_scorer = @"assets\models\ef-en-3002.scorer";
+    string typing_scorer = @"assets\models\deepspeech-0.9.3-models.scorer";
 
-    int deepspeech_confidence = -50;
+    int deepspeech_confidence = -100;
 
     // importante para diri mag error an memory corrupt ha deepspeech model
     private readonly object streamLock = new object();
+
+    private IWebDriver driver;
 
     private string GetPythonExecutablePath()
     {
@@ -211,7 +219,7 @@ class LiveTranscription
         {
             SampleRate = WebRtcVadSharp.SampleRate.Is16kHz,
             FrameLength = WebRtcVadSharp.FrameLength.Is20ms,
-            OperatingMode = OperatingMode.HighQuality
+            OperatingMode = OperatingMode.VeryAggressive
         };
 
         string pythonExecutablePath = GetPythonExecutablePath();
@@ -307,6 +315,8 @@ class LiveTranscription
         // timers
         InitializeTimer();
 
+        InitializeWhisper();
+
         show_items.ItemDetected += CheckDetected;
     }
 
@@ -333,7 +343,7 @@ class LiveTranscription
         }
         else
         {
-            Console.WriteLine("No item detected.");
+            //Console.WriteLine("No item detected.");
             itemDetected = false;
         }
     }
@@ -728,6 +738,7 @@ class LiveTranscription
         }
     }
 
+    private MemoryStream audioBuffer = new MemoryStream();
     private void OnDataAvailable(object sender, WaveInEventArgs e)
     {
         if (!is_running || e.BytesRecorded <= 0)
@@ -745,10 +756,6 @@ class LiveTranscription
             StartWakeWordTimer();
 
             StartInputTimer();
-        }
-        else
-        {
-            StartResetTypingTimer();
         }
 
         // Offload audio processing to avoid blocking the main thread
@@ -772,15 +779,30 @@ class LiveTranscription
             {
                 if (vad.HasSpeech(short_buffer))
                 {
-                    is_stream_ready = false; // Block further feeds during processing
-                    
-                    ProcessSpeech(short_buffer);
+                    if (!typing_mode)
+                    {
+                        is_stream_ready = false; // Block further feeds during processing
 
-                    is_stream_ready = true; // Ready for next audio feed
+                        ProcessSpeech(short_buffer);
+
+                        is_stream_ready = true; // Ready for next audio feed
+                    }
+                    else
+                    {
+                        Console.WriteLine($"current audio buffer length: {audioBuffer.Length}");
+                        audioBuffer.Write(buffer, 0, bytesRecorded);
+                    }
                 }
                 else
                 {
-                    HandleNoSpeechDetected(); // Finalizes stream if no speech is detected
+                    if (!typing_mode)
+                    {
+                        HandleNoSpeechDetected(); // Finalizes stream if no speech is detected
+                    }
+                    else
+                    {
+                        SaveBufferedAudioToWavAndTranscribe();
+                    }
                 }
             }
         });
@@ -815,7 +837,11 @@ class LiveTranscription
                 }
                 else
                 {
-                    ShowTranscription(partial_result);
+                    if (confidence > 100)
+                    {
+                        ShowTranscription(partial_result);
+                        ProcessCommand(partial_result);
+                    }
                 }
             }
             catch (AccessViolationException ex)
@@ -848,6 +874,9 @@ class LiveTranscription
                 }
             }
 
+            //ShowTranscription(partial_result);
+            //ProcessCommand(partial_result);
+
             if (partial_result.Contains(wake_word))
             {
                 if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
@@ -869,6 +898,133 @@ class LiveTranscription
         else
         {
             HandleTyping(partial_result);
+        }
+    }
+
+    // WHISPER STUFF
+    private WhisperFactory whisperFactory;
+    private static async Task DownloadModel(string fileName, GgmlType ggmlType)
+    {
+        Console.WriteLine($"Downloading Model {fileName}");
+        using (var modelStream = await WhisperGgmlDownloader.GetGgmlModelAsync(ggmlType))
+        using (var fileWriter = File.OpenWrite(fileName))
+        {
+            await modelStream.CopyToAsync(fileWriter);
+        }
+    }
+    private async void InitializeWhisper()
+    {
+        var ggmlType = GgmlType.Base;
+        var modelFileName = "ggml-base.bin";
+
+        // Check if the model file exists; if not, download it
+        if (!File.Exists(modelFileName))
+        {
+            await DownloadModel(modelFileName, ggmlType);
+        }
+
+        // Optional logging from the native library
+        LogProvider.Instance.OnLog += (level, message) =>
+        {
+            Console.Write($"{level}: {message}");
+        };
+        // Create the whisper factory object to create the processor object
+        whisperFactory = WhisperFactory.FromPath(modelFileName);
+
+        Console.WriteLine("Whisper Initialzed");
+    }
+
+    private async void SaveBufferedAudioToWavAndTranscribe()
+    {
+        // Check if the audio buffer has enough data
+        if (audioBuffer.Length < 16000 * 2) // Assuming you want at least 1 second of audio (16-bit mono)
+        {
+            Console.WriteLine($"Audio buffer is too short for transcription: {audioBuffer.Length}");
+            return; // Skip transcription if the buffer is insufficient
+        }
+
+        Console.WriteLine($"Transcribing buffer with length of {audioBuffer.Length}");
+
+        // Save audioBuffer to a WAV file
+        string tempWavFilePath = Path.GetTempFileName() + ".wav";
+        using (var fileStream = new FileStream(tempWavFilePath, FileMode.Create))
+        {
+            using (var writer = new WaveFileWriter(fileStream, new WaveFormat(16000, 1)))
+            {
+                audioBuffer.Seek(0, SeekOrigin.Begin);
+                byte[] data = new byte[audioBuffer.Length];
+                await audioBuffer.ReadAsync(data, 0, data.Length); // Use ReadAsync
+                writer.Write(data, 0, data.Length);
+            }
+        }
+
+        // Clear the buffer for the next session
+        audioBuffer.SetLength(0);
+
+        // Call the TranscribeWithWhisper method directly
+        await TranscribeWithWhisper(tempWavFilePath);
+    }
+
+    private async Task TranscribeWithWhisper(string wavFilePath)
+    {
+        // Ensure the whisperProcessor is initialized before this method
+        if (whisperFactory == null)
+        {
+            Console.WriteLine("Whisper factory is not initialized.");
+            return;
+        }
+
+        // Create the processor object (no using for whisperFactory)
+        using (var processor = whisperFactory.CreateBuilder()
+                .WithLanguage("en")
+                .Build())
+        {
+            using (var fileStream = File.OpenRead(wavFilePath))
+            {
+                // Check the audio duration
+                var audioDuration = GetAudioDuration(wavFilePath);
+                Console.WriteLine($"Audio Duration: {audioDuration} ms");
+                if (audioDuration < 1000) // Duration is in milliseconds
+                {
+                    UpdateUI(() => asr_window.OutputTextBox.Text = "Audio is too short...");
+                }
+                else
+                {
+                    var results = processor.ProcessAsync(fileStream);
+                    await ProcessResultsAsync(results);
+                }
+            }
+        }
+
+        // Clean up the temporary file
+        File.Delete(wavFilePath);
+    }
+
+    private double GetAudioDuration(string filePath)
+    {
+        using (var reader = new AudioFileReader(filePath))
+        {
+            // Duration is returned in seconds, so multiply by 1000 to convert to milliseconds
+            return reader.TotalTime.TotalMilliseconds;
+        }
+    }
+
+    private async Task ProcessResultsAsync(IAsyncEnumerable<SegmentData> results)
+    {
+        // Create an enumerator for the async enumerable
+        var enumerator = results.GetAsyncEnumerator();
+
+        try
+        {
+            while (await enumerator.MoveNextAsync())
+            {
+                var result = enumerator.Current;
+                UpdateUI(() => asr_window.OutputTextBox.Text += $"{result.Text}\n"); // Append results
+            }
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
         }
     }
 
@@ -897,6 +1053,42 @@ class LiveTranscription
             StartWakeWordTimer();
             StartInputTimer();
         }
+        //else if (lastWord == "clear")
+        //{
+        //    // Step 1: Select all text and copy it to the clipboard
+        //    SendKeys.SendWait("^a"); // Ctrl+A to select all
+        //    Thread.Sleep(500); // Increase sleep time to ensure all text is selected
+        //    SendKeys.SendWait("^c"); // Ctrl+C to copy selection to clipboard
+        //    Thread.Sleep(500); // Increase sleep time to ensure the text is copied
+
+        //    // Step 2: Retrieve the copied text from the clipboard
+        //    string clipboardText = Clipboard.GetText();
+
+        //    // Step 3: Remove the last word from the copied text
+        //    string modifiedText = RemoveLastWord(clipboardText);
+
+        //    // Step 4: Set the modified text back to the clipboard
+        //    Clipboard.SetText(modifiedText);
+        //    Thread.Sleep(500); // Optional: Small delay to ensure the clipboard is updated
+
+        //    // Step 5: Paste the modified text back into the document
+        //    SendKeys.SendWait("^v"); // Ctrl+V to paste
+        //}
+    }
+
+    private string RemoveLastWord(string text)
+    {
+        // Split the text into words
+        var words = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+        // If there's only one word or no words, just return an empty string
+        if (words.Length <= 1)
+        {
+            return string.Empty;
+        }
+
+        // Join all words except the last one to recreate the modified text
+        return string.Join(" ", words.Take(words.Length - 1));
     }
 
     private void TypeText(string text)
@@ -1065,11 +1257,21 @@ class LiveTranscription
         {
             if (!typing_mode)
             {
-                SwitchScorer(typing_scorer);
                 UpdateUI(() => FinalizeStream());
                 typing_appear_timer.Start();
-                commandExecuted = true;
+                audioBuffer.SetLength(0);
             }  
+        }
+
+        if (transcription.IndexOf("search", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            string search_query = transcription.Substring("search".Length).Trim();
+            if (!string.IsNullOrEmpty(search_query))
+            {
+                OpenBrowserWithSearch(search_query);
+                commandExecuted = true;
+                UpdateUI(() => FinalizeStream());
+            }
         }
 
         // type something
@@ -1080,35 +1282,35 @@ class LiveTranscription
         //    UpdateUI(() => asr_window.Show());
         //}
 
-        if (transcription.StartsWith("search", StringComparison.OrdinalIgnoreCase))
-        {
-            string search_query = transcription.Substring("search".Length).Trim();
-            if (!string.IsNullOrEmpty(search_query))
-            {
-                OpenBrowserWithSearch(search_query);
-                return; // Exit after processing this command
-            }
-        }
+        //if (transcription.StartsWith("search", StringComparison.OrdinalIgnoreCase))
+        //{
+        //    string search_query = transcription.Substring("search".Length).Trim();
+        //    if (!string.IsNullOrEmpty(search_query))
+        //    {
+        //        OpenBrowserWithSearch(search_query);
+        //        return; // Exit after processing this command
+        //    }
+        //}
 
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
         HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => RemoveTags());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
-        HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(Keys.ControlKey)); // Customize as needed
+        HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.ControlKey)); // Customize as needed
         HandleCommand("open chrome", transcription, ref chrome_command_count, () => StartProcess("chrome"));
         HandleCommand("open edge", transcription, ref edge_command_count, () => StartProcess("msedge"));
         HandleCommand("open word", transcription, ref word_command_count, () => StartProcess("winword"));
         HandleCommand("open excel", transcription, ref excel_command_count, () => StartProcess("excel"));
         HandleCommand("open powerpoint", transcription, ref powerpoint_command_count, () => StartProcess("powerpnt"));
         HandleCommand("open file manager", transcription, ref file_manager_command_count, () => StartProcess("explorer"));
-        HandleCommand("switch", transcription, ref switch_command_count, () => SimulateKeyPress(Keys.Tab));
+        HandleCommand("switch", transcription, ref switch_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.Tab));
 
         //HandleCommand("left", transcription, ref left_command_count, () => SimulateKeyPress(Keys.Left));
         //HandleCommand("right", transcription, ref right_command_count, () => SimulateKeyPress(Keys.Right));
         //HandleCommand("up", transcription, ref up_command_count, () => SimulateKeyPress(Keys.Up));
         //HandleCommand("down", transcription, ref down_command_count, () => SimulateKeyPress(Keys.Down));
 
-        HandleCommand("enter", transcription, ref enter_command_count, () => SimulateKeyPress(Keys.Enter));
+        HandleCommand("enter", transcription, ref enter_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.Enter));
         HandleCommand("close application", transcription, ref close_calculator_command_count, () => CloseApp());
         HandleCommand("scroll up", transcription, ref scroll_up_command_count, () => ScrollUp(200));
         HandleCommand("scroll down", transcription, ref scroll_down_command_count, () => ScrollDown(-200));
@@ -1240,12 +1442,14 @@ class LiveTranscription
 
     public void OpenBrowserWithSearch(string query)
     {
-        if (!has_searched)
-        {
-            string url = $"https://www.google.com/search?q={Uri.EscapeDataString(query)}";
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-            has_searched = true;
-        }
+        driver = new ChromeDriver();
+        Console.WriteLine("Opening a new tab in Chrome...");
+
+        // Encode the query to ensure special characters are handled correctly in the URL
+        string encodedQuery = Uri.EscapeDataString(query);
+
+        // Use Google search with the encoded query
+        driver.Navigate().GoToUrl("https://www.google.com/search?q=" + encodedQuery);
     }
 
     private void SimulateMouseClick() // pan setup hin click
@@ -1254,31 +1458,31 @@ class LiveTranscription
         mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
     }
 
-    private void SimulateKeyPress(Keys key) // pan enable hin keys ha keyboard
+    private void SimulateKeyPress(System.Windows.Forms.Keys key) // pan enable hin keys ha keyboard
     {
         string keyString;
 
         switch (key)
         {
-            case Keys.Enter:
+            case System.Windows.Forms.Keys.Enter:
                 keyString = "{ENTER}";
                 break;
-            case Keys.Tab:
+            case System.Windows.Forms.Keys.Tab:
                 keyString = "{TAB}";
                 break;
-            case Keys.Escape:
+            case System.Windows.Forms.Keys.Escape:
                 keyString = "{ESC}";
                 break;
-            case Keys.Up:
+            case System.Windows.Forms.Keys.Up:
                 keyString = "{UP}";
                 break;
-            case Keys.Down:
+            case System.Windows.Forms.Keys.Down:
                 keyString = "{DOWN}";
                 break;
-            case Keys.Left:
+            case System.Windows.Forms.Keys.Left:
                 keyString = "{LEFT}";
                 break;
-            case Keys.Right:
+            case System.Windows.Forms.Keys.Right:
                 keyString = "{RIGHT}";
                 break;
             default:
