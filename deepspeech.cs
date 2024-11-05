@@ -30,6 +30,7 @@ using System.Windows.Forms;
 using Whisper.net;
 using Whisper.net.Ggml;
 using Whisper.net.Logger;
+using static System.Net.Mime.MediaTypeNames;
 
 class LiveTranscription
 {
@@ -1022,8 +1023,15 @@ class LiveTranscription
             while (await enumerator.MoveNextAsync())
             {
                 var result = enumerator.Current;
-                UpdateUI(() => asr_window.OutputTextBox.Text += $"{result.Text}\n"); // Append results
-                TypeText(result.Text);
+
+                if (!result.Text.Contains("["))
+                {
+                    string normalized_result = new string(result.Text.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
+
+                    UpdateUI(() => asr_window.OutputTextBox.Text += $"{normalized_result}\n"); // Append results
+
+                    TypeText(result.Text);
+                }
             }
         }
         finally
@@ -1037,7 +1045,7 @@ class LiveTranscription
 
     private void TypeText(string text)
     {
-        if (text.Contains("["))
+        if (text.Contains("[") || text.Contains("("))
         {
             return;
         }
@@ -1048,15 +1056,18 @@ class LiveTranscription
         }
         else
         {
-            foreach (char c in text)
+            string normalized_result = new string(text.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
+
+            foreach (char c in normalized_result)
             {
                 // Send the character and wait briefly to avoid buffering issues
                 SendKeys.SendWait(c.ToString());
                 Thread.Sleep(50); // Adjust delay as needed (e.g., 50 milliseconds)
             }
             SendKeys.SendWait(" ");
+
+            UpdateUI(() => asr_window.OutputTextBox.Text = "");
         }
-        UpdateUI(() => asr_window.OutputTextBox.Text = "");
     }
 
     private void ShowTranscription(string partial_result)
