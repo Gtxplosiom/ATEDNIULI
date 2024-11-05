@@ -219,7 +219,7 @@ class LiveTranscription
         {
             SampleRate = WebRtcVadSharp.SampleRate.Is16kHz,
             FrameLength = WebRtcVadSharp.FrameLength.Is20ms,
-            OperatingMode = OperatingMode.VeryAggressive
+            OperatingMode = OperatingMode.LowBitrate
         };
 
         string pythonExecutablePath = GetPythonExecutablePath();
@@ -858,46 +858,49 @@ class LiveTranscription
 
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        if (!typing_mode)
+        if (itemDetected && confidence > deepspeech_confidence)
         {
-            if (itemDetected && confidence > deepspeech_confidence)
+            for (int number_index = 0; number_index < numberStrings.Count; number_index++)
             {
-                for (int number_index = 0; number_index < numberStrings.Count; number_index++)
+                string number = numberStrings[number_index]; // Get the current number as a string
+
+                // Here we handle the command for each number string
+                HandleCommand(number, partial_result, ref execute_number_command_count, () =>
                 {
-                    string number = numberStrings[number_index]; // Get the current number as a string
-
-                    // Here we handle the command for each number string
-                    HandleCommand(number, partial_result, ref execute_number_command_count, () =>
-                    {
-                        show_items.ExecuteAction(number_index + 1); // Use number_index + 1 if you want to represent 1-based index
-                    });
-                }
-            }
-
-            //ShowTranscription(partial_result);
-            //ProcessCommand(partial_result);
-
-            if (partial_result.Contains(wake_word))
-            {
-                if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    wake_word_detected = true;
-
-                    if (wake_word_timer.Enabled)
-                    {
-                        wake_word_timer.Close();
-                    }
-
-                    partial_result = RemoveWakeWord(partial_result, wake_word);
-
-                    ShowTranscription(partial_result);
-                    ProcessCommand(partial_result);
-                }
+                    show_items.ExecuteAction(number_index + 1); // Use number_index + 1 if you want to represent 1-based index
+                });
             }
         }
-        else
+
+        int new_click_count = partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1; // enable clicks buffer like multiple clicks sunod sunod
+        if (new_click_count > click_command_count)
         {
-            HandleTyping(partial_result);
+            int clicks_to_perform = new_click_count - click_command_count;
+            UpdateUI(() => asr_window.AppendText($"Performing {clicks_to_perform} click(s)...", true));
+            for (int i = 0; i < clicks_to_perform; i++)
+            {
+                SimulateMouseClick();
+            }
+            click_command_count = new_click_count;
+        }
+
+
+        if (partial_result.Contains(wake_word))
+        {
+            if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                wake_word_detected = true;
+
+                if (wake_word_timer.Enabled)
+                {
+                    wake_word_timer.Close();
+                }
+
+                partial_result = RemoveWakeWord(partial_result, wake_word);
+
+                ShowTranscription(partial_result);
+                ProcessCommand(partial_result);
+            }
         }
     }
 
@@ -1020,6 +1023,7 @@ class LiveTranscription
             {
                 var result = enumerator.Current;
                 UpdateUI(() => asr_window.OutputTextBox.Text += $"{result.Text}\n"); // Append results
+                TypeText(result.Text);
             }
         }
         finally
@@ -1031,78 +1035,29 @@ class LiveTranscription
     private int lastTypedWordIndex = -1;
     private string current_word;
 
-    private void HandleTyping(string partial_result)
-    {
-        // Split the result into words, taking only the last word
-        string lastWord = partial_result.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
-
-        // Type and display the word if it’s new
-        if (lastWord != current_word)
-        {
-            ShowTranscription(lastWord);
-            TypeText(lastWord);
-            current_word = lastWord;
-        }
-        else if (lastWord == "exit")
-        {
-            typing_mode = false;
-            SwitchScorer(commands_scorer);
-            UpdateUI(() => FinalizeStream());
-
-            StartInactivityTimer();
-            StartWakeWordTimer();
-            StartInputTimer();
-        }
-        //else if (lastWord == "clear")
-        //{
-        //    // Step 1: Select all text and copy it to the clipboard
-        //    SendKeys.SendWait("^a"); // Ctrl+A to select all
-        //    Thread.Sleep(500); // Increase sleep time to ensure all text is selected
-        //    SendKeys.SendWait("^c"); // Ctrl+C to copy selection to clipboard
-        //    Thread.Sleep(500); // Increase sleep time to ensure the text is copied
-
-        //    // Step 2: Retrieve the copied text from the clipboard
-        //    string clipboardText = Clipboard.GetText();
-
-        //    // Step 3: Remove the last word from the copied text
-        //    string modifiedText = RemoveLastWord(clipboardText);
-
-        //    // Step 4: Set the modified text back to the clipboard
-        //    Clipboard.SetText(modifiedText);
-        //    Thread.Sleep(500); // Optional: Small delay to ensure the clipboard is updated
-
-        //    // Step 5: Paste the modified text back into the document
-        //    SendKeys.SendWait("^v"); // Ctrl+V to paste
-        //}
-    }
-
-    private string RemoveLastWord(string text)
-    {
-        // Split the text into words
-        var words = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-
-        // If there's only one word or no words, just return an empty string
-        if (words.Length <= 1)
-        {
-            return string.Empty;
-        }
-
-        // Join all words except the last one to recreate the modified text
-        return string.Join(" ", words.Take(words.Length - 1));
-    }
-
     private void TypeText(string text)
     {
-        //UpdateUI(() => asr_window.AppendText($"Typing: {text}", true));
-        foreach (char c in text)
+        if (text.Contains("["))
         {
-            // Send the character and wait briefly to avoid buffering issues
-            SendKeys.SendWait(c.ToString());
-            Thread.Sleep(50); // Adjust delay as needed (e.g., 50 milliseconds)
+            return;
         }
-        SendKeys.SendWait(" ");
+        else if (text.Contains("exit") || text.Contains("Exit"))
+        {
+            typing_mode = false;
+            return;
+        }
+        else
+        {
+            foreach (char c in text)
+            {
+                // Send the character and wait briefly to avoid buffering issues
+                SendKeys.SendWait(c.ToString());
+                Thread.Sleep(50); // Adjust delay as needed (e.g., 50 milliseconds)
+            }
+            SendKeys.SendWait(" ");
+        }
+        UpdateUI(() => asr_window.OutputTextBox.Text = "");
     }
-
 
     private void ShowTranscription(string partial_result)
     {
