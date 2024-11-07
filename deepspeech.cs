@@ -220,7 +220,7 @@ class LiveTranscription
         {
             SampleRate = WebRtcVadSharp.SampleRate.Is16kHz,
             FrameLength = WebRtcVadSharp.FrameLength.Is20ms,
-            OperatingMode = OperatingMode.LowBitrate
+            OperatingMode = OperatingMode.VeryAggressive
         };
 
         string pythonExecutablePath = GetPythonExecutablePath();
@@ -416,35 +416,270 @@ class LiveTranscription
     private const int stream_finalize_cooldown = 5000; // 5 seconds cooldown between finalizations
 
     // transcfiption function
+    private const int RequiredDurationMs = 5000; // 5 seconds of audio
+    private const int FrameSize = 320; // 20ms frame at 16kHz for 16-bit mono PCM
+    private List<byte> typingBuffer = new List<byte>(); // To accumulate audio data
+    private bool isProcessing = false; // Flag to manage processing state
+
+    private Queue<byte[]> audioQueue = new Queue<byte[]>(); // Queue for accumulated audio buffers
+    private bool isProcessingQueue = false; // Flag to manage queue processing state
+
     public void StartTranscription()
     {
         try
         {
-            load_model(model_path, commands_scorer);
+            DisposePreviousResources();
 
-            wave_in_event = new WaveInEvent
+            if (!typing_mode)
             {
-                WaveFormat = new WaveFormat(16000, 1),
-                BufferMilliseconds = 500 // no this doesnt affect my problem
-            };
+                load_model(model_path, commands_scorer);
 
-            deep_speech_stream = deep_speech_model.CreateStream();
-            is_running = true;
+                wave_in_event = new WaveInEvent
+                {
+                    WaveFormat = new WaveFormat(16000, 1),
+                    BufferMilliseconds = 500
+                };
 
-            wave_in_event.DataAvailable += OnDataAvailable;
-            wave_in_event.RecordingStopped += OnRecordingStopped;
+                deep_speech_stream = deep_speech_model.CreateStream();
+                is_running = true;
 
-            UpdateUI(() => asr_window.AppendText("Starting microphone..."));
-            wave_in_event.StartRecording();
+                wave_in_event.DataAvailable += OnDataAvailable;
+                wave_in_event.RecordingStopped += OnRecordingStopped;
 
-            UpdateUI(() =>
+                UpdateUI(() => asr_window.AppendText("Starting microphone..."));
+                wave_in_event.StartRecording();
+
+                UpdateUI(() =>
+                {
+                    asr_window.HideWithFadeOut();
+                });
+            }
+            else
             {
-                asr_window.HideWithFadeOut();
-            });
+                Console.WriteLine("Switching to typingmode");
+
+                wave_in_event = new WaveInEvent
+                {
+                    WaveFormat = new WaveFormat(16000, 1) // 16kHz mono for Whisper compatibility
+                };
+
+                wave_in_event.DataAvailable += (s, e) =>
+                {
+                    int availableFrames = e.BytesRecorded / FrameSize;
+
+                    for (int i = 0; i < availableFrames; i++)
+                    {
+                        byte[] frame = new byte[FrameSize];
+                        Array.Copy(e.Buffer, i * FrameSize, frame, 0, FrameSize);
+                        typingBuffer.AddRange(frame); // Continuously add frame to the buffer
+                    }
+
+                    // If there's enough data, enqueue for transcription and clear the buffer
+                    if (typingBuffer.Count >= RequiredDurationMs * wave_in_event.WaveFormat.AverageBytesPerSecond / 1000)
+                    {
+                        byte[] audioToProcess = typingBuffer.ToArray();
+                        typingBuffer.Clear(); // Reset the buffer for the next round
+
+                        audioQueue.Enqueue(audioToProcess); // Enqueue buffer for processing
+                        ProcessAudioQueue(); // Start processing the queue if not already
+                    }
+                };
+
+                wave_in_event.StartRecording();
+            }
         }
         catch (Exception ex)
         {
             UpdateUI(() => asr_window.AppendText($"Error: {ex.Message}"));
+        }
+    }
+
+    private void DisposePreviousResources()
+    {
+        // Stop recording and dispose resources
+        if (wave_in_event != null)
+        {
+            // Unsubscribe from events first
+            wave_in_event.DataAvailable -= OnDataAvailable;
+            wave_in_event.RecordingStopped -= OnRecordingStopped;
+
+            // Stop recording
+            wave_in_event.StopRecording();
+
+            // Dispose of the WaveInEvent instance
+            wave_in_event.Dispose();
+            wave_in_event = null;
+        }
+
+        // Dispose of the deep speech stream if it exists
+        if (deep_speech_stream != null)
+        {
+            deep_speech_stream.Dispose();
+            deep_speech_stream = null;
+        }
+
+        // Clear buffers
+        typingBuffer.Clear();
+    }
+
+    private async Task TranscribeAudioBufferAsync(byte[] buffer, int length)
+    {
+        // Check if already processing; if so, skip this audio buffer
+        if (isProcessing) return;
+
+        // Set processing flag to true
+        isProcessing = true;
+
+        const int minDurationMs = 1020; // Minimum duration Whisper expects in milliseconds
+        int minByteCount = wave_in_event.WaveFormat.AverageBytesPerSecond * minDurationMs / 1000;
+
+        // If buffer length is less than required minimum, add padding
+        if (length < minByteCount)
+        {
+            var paddedBuffer = new byte[minByteCount];
+            Array.Copy(buffer, paddedBuffer, length); // Copy the original audio data
+                                                      // Remaining bytes in paddedBuffer are already initialized to zero (silence)
+            buffer = paddedBuffer;
+            length = minByteCount;
+        }
+
+        using (var processor = whisperFactory.CreateBuilder()
+            .WithLanguage("en")
+            .Build())
+        {
+            using (var memoryStream = new MemoryStream())
+            {
+                WriteWavHeader(memoryStream, length, wave_in_event.WaveFormat);
+                memoryStream.Write(buffer, 0, length); // Write the padded audio data
+
+                memoryStream.Position = 0; // Set the position back to the beginning
+                var results = processor.ProcessAsync(memoryStream);
+                await ProcessResultsAsync(results);
+            }
+        }
+
+        // Reset processing flag after transcription completes
+        isProcessing = false;
+    }
+
+    private async void ProcessAudioQueue()
+    {
+        if (isProcessingQueue || audioQueue.Count == 0) return;
+
+        isProcessingQueue = true;
+
+        while (audioQueue.Count > 0)
+        {
+            var audioBuffer = audioQueue.Dequeue();
+
+            try
+            {
+                await TranscribeAudioBufferAsync(audioBuffer, audioBuffer.Length);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error during transcription: {ex.Message}");
+            }
+        }
+
+        isProcessingQueue = false;
+    }
+
+    private async Task ProcessResultsAsync(IAsyncEnumerable<SegmentData> results)
+    {
+        UpdateUI(() => asr_window.OutputTextBox.Text = "Result: "); // Clear previous results
+
+        var resultList = new List<SegmentData>();
+        var enumerator = results.GetAsyncEnumerator();
+
+        try
+        {
+            while (await enumerator.MoveNextAsync())
+            {
+                resultList.Add(enumerator.Current);
+            }
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+
+        // Append results to the TextBox
+        foreach (var result in resultList)
+        {
+            UpdateUI(() => asr_window.OutputTextBox.Text += $"{result.Text}\n");
+            TypeText(result.Text);
+        }
+    }
+
+    private void TypeText(string text)
+    {
+        Task.Run(() =>
+        {
+            if (text.Contains("[") || text.Contains("("))
+            {
+                return;
+            }
+            else if (text.Contains("exit") || text.Contains("Exit"))
+            {
+                typing_mode = false;
+                wave_in_event.StopRecording();
+                StartTranscription();
+                return;
+            }
+            else
+            {
+                string normalized_result = new string(text.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
+
+                foreach (char c in normalized_result)
+                {
+                    // Send the character and wait briefly to avoid buffering issues
+                    SendKeys.SendWait(c.ToString());
+                    Thread.Sleep(50); // Adjust delay as needed (e.g., 50 milliseconds)
+                }
+                SendKeys.SendWait(" ");
+
+                UpdateUI(() => asr_window.OutputTextBox.Text = "");
+            }
+        });
+    }
+
+    private void WriteWavHeader(Stream stream, int dataLength, WaveFormat format)
+    {
+        int sampleRate = format.SampleRate;
+        short channels = (short)format.Channels;
+        short bitsPerSample = (short)format.BitsPerSample;
+        int byteRate = sampleRate * channels * bitsPerSample / 8;
+        short blockAlign = (short)(channels * bitsPerSample / 8);
+
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true))
+        {
+            writer.Write(System.Text.Encoding.UTF8.GetBytes("RIFF"));
+            writer.Write(36 + dataLength);
+            writer.Write(System.Text.Encoding.UTF8.GetBytes("WAVE"));
+            writer.Write(System.Text.Encoding.UTF8.GetBytes("fmt "));
+            writer.Write(16); // Subchunk1Size for PCM
+            writer.Write((short)1); // AudioFormat for PCM
+            writer.Write(channels);
+            writer.Write(sampleRate);
+            writer.Write(byteRate);
+            writer.Write(blockAlign);
+            writer.Write(bitsPerSample);
+            writer.Write(System.Text.Encoding.UTF8.GetBytes("data"));
+            writer.Write(dataLength);
+        }
+    }
+
+    // Helper method to update UI on the main thread
+    private void UpdateUI(Action action)
+    {
+        if (main_window.Dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            main_window.Dispatcher.Invoke(action);
         }
     }
 
@@ -780,30 +1015,15 @@ class LiveTranscription
             {
                 if (vad.HasSpeech(short_buffer))
                 {
-                    if (!typing_mode)
-                    {
-                        is_stream_ready = false; // Block further feeds during processing
+                    is_stream_ready = false; // Block further feeds during processing
 
-                        ProcessSpeech(short_buffer);
+                    ProcessSpeech(short_buffer);
 
-                        is_stream_ready = true; // Ready for next audio feed
-                    }
-                    else
-                    {
-                        Console.WriteLine($"current audio buffer length: {audioBuffer.Length}");
-                        audioBuffer.Write(buffer, 0, bytesRecorded);
-                    }
+                    is_stream_ready = true; // Ready for next audio feed
                 }
                 else
                 {
-                    if (!typing_mode)
-                    {
-                        HandleNoSpeechDetected(); // Finalizes stream if no speech is detected
-                    }
-                    else
-                    {
-                        SaveBufferedAudioToWavAndTranscribe();
-                    }
+                    HandleNoSpeechDetected(); // Finalizes stream if no speech is detected
                 }
             }
         });
@@ -938,138 +1158,6 @@ class LiveTranscription
         Console.WriteLine("Whisper Initialzed");
     }
 
-    private async void SaveBufferedAudioToWavAndTranscribe()
-    {
-        // Check if the audio buffer has enough data
-        if (audioBuffer.Length < 16000 * 2) // Assuming you want at least 1 second of audio (16-bit mono)
-        {
-            Console.WriteLine($"Audio buffer is too short for transcription: {audioBuffer.Length}");
-            return; // Skip transcription if the buffer is insufficient
-        }
-
-        Console.WriteLine($"Transcribing buffer with length of {audioBuffer.Length}");
-
-        // Save audioBuffer to a WAV file
-        string tempWavFilePath = Path.GetTempFileName() + ".wav";
-        using (var fileStream = new FileStream(tempWavFilePath, FileMode.Create))
-        {
-            using (var writer = new WaveFileWriter(fileStream, new WaveFormat(16000, 1)))
-            {
-                audioBuffer.Seek(0, SeekOrigin.Begin);
-                byte[] data = new byte[audioBuffer.Length];
-                await audioBuffer.ReadAsync(data, 0, data.Length); // Use ReadAsync
-                writer.Write(data, 0, data.Length);
-            }
-        }
-
-        // Clear the buffer for the next session
-        audioBuffer.SetLength(0);
-
-        // Call the TranscribeWithWhisper method directly
-        await TranscribeWithWhisper(tempWavFilePath);
-    }
-
-    private async Task TranscribeWithWhisper(string wavFilePath)
-    {
-        // Ensure the whisperProcessor is initialized before this method
-        if (whisperFactory == null)
-        {
-            Console.WriteLine("Whisper factory is not initialized.");
-            return;
-        }
-
-        // Create the processor object (no using for whisperFactory)
-        using (var processor = whisperFactory.CreateBuilder()
-                .WithLanguage("en")
-                .Build())
-        {
-            using (var fileStream = File.OpenRead(wavFilePath))
-            {
-                // Check the audio duration
-                var audioDuration = GetAudioDuration(wavFilePath);
-                Console.WriteLine($"Audio Duration: {audioDuration} ms");
-                if (audioDuration < 1000) // Duration is in milliseconds
-                {
-                    UpdateUI(() => asr_window.OutputTextBox.Text = "Audio is too short...");
-                }
-                else
-                {
-                    var results = processor.ProcessAsync(fileStream);
-                    await ProcessResultsAsync(results);
-                }
-            }
-        }
-
-        // Clean up the temporary file
-        File.Delete(wavFilePath);
-    }
-
-    private double GetAudioDuration(string filePath)
-    {
-        using (var reader = new AudioFileReader(filePath))
-        {
-            // Duration is returned in seconds, so multiply by 1000 to convert to milliseconds
-            return reader.TotalTime.TotalMilliseconds;
-        }
-    }
-
-    private async Task ProcessResultsAsync(IAsyncEnumerable<SegmentData> results)
-    {
-        // Create an enumerator for the async enumerable
-        var enumerator = results.GetAsyncEnumerator();
-
-        try
-        {
-            while (await enumerator.MoveNextAsync())
-            {
-                var result = enumerator.Current;
-
-                if (!result.Text.Contains("["))
-                {
-                    string normalized_result = new string(result.Text.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
-
-                    UpdateUI(() => asr_window.OutputTextBox.Text += $"{normalized_result}\n"); // Append results
-
-                    TypeText(result.Text);
-                }
-            }
-        }
-        finally
-        {
-            await enumerator.DisposeAsync();
-        }
-    }
-
-    private int lastTypedWordIndex = -1;
-    private string current_word;
-
-    private void TypeText(string text)
-    {
-        if (text.Contains("[") || text.Contains("("))
-        {
-            return;
-        }
-        else if (text.Contains("exit") || text.Contains("Exit"))
-        {
-            typing_mode = false;
-            return;
-        }
-        else
-        {
-            string normalized_result = new string(text.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
-
-            foreach (char c in normalized_result)
-            {
-                // Send the character and wait briefly to avoid buffering issues
-                SendKeys.SendWait(c.ToString());
-                Thread.Sleep(50); // Adjust delay as needed (e.g., 50 milliseconds)
-            }
-            SendKeys.SendWait(" ");
-
-            UpdateUI(() => asr_window.OutputTextBox.Text = "");
-        }
-    }
-
     private void ShowTranscription(string partial_result)
     {
         if (!typing_mode)
@@ -1151,19 +1239,6 @@ class LiveTranscription
         }
     }
 
-    // Helper method to update UI on the main thread
-    private void UpdateUI(Action action)
-    {
-        if (main_window.Dispatcher.CheckAccess())
-        {
-            action();
-        }
-        else
-        {
-            main_window.Dispatcher.Invoke(action);
-        }
-    }
-
     public static void VolumeUp(float amount = 0.1f) // Adjust amount as needed
     {
         float newVolume = Math.Min(device.AudioEndpointVolume.MasterVolumeLevelScalar + amount, 1.0f);
@@ -1224,6 +1299,7 @@ class LiveTranscription
             if (!typing_mode)
             {
                 UpdateUI(() => FinalizeStream());
+                wave_in_event.StopRecording();
                 typing_appear_timer.Start();
                 audioBuffer.SetLength(0);
             }  
@@ -1305,6 +1381,8 @@ class LiveTranscription
     private void TypingMode(object sender, System.Timers.ElapsedEventArgs e)
     {
         typing_mode = true;
+
+        StartTranscription();
 
         if (typing_mode)
         {

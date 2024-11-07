@@ -296,9 +296,6 @@
     <None Include="assets\models\commands.scorer">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="assets\models\deepspeech-0.9.3-models.scorer">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Include="assets\models\delta12.pbmm">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
