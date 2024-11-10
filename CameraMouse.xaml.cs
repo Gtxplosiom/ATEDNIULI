@@ -104,7 +104,7 @@ namespace ATEDNIULI
         private int webcamHeight = 480;
 
         // precision mode stuff
-        private static int initialPrecisionRadius = 100; // Initial size of the precision area
+        private static int initialPrecisionRadius = 200; // Initial size of the precision area
         private static int reducedPrecisionRadius = 50; // Reduced size of the precision area
         private double precisionFactor = 1.0;
         private static DateTime precisionStartTime;
@@ -234,7 +234,6 @@ namespace ATEDNIULI
                 int roiWidth = (int)(webcamWidth * roiPercentage);
                 int roiHeight = (int)(webcamHeight * roiPercentage);
 
-                // Set initial ROI position
                 int roiX = (webcamWidth - roiWidth) / 2;
                 int roiY = (webcamHeight - roiHeight) / 2;
 
@@ -251,41 +250,34 @@ namespace ATEDNIULI
 
                     while (isRunning)
                     {
-                        // Read the frame
                         capture.Read(frame);
-
                         if (frame.Empty())
                         {
                             Console.WriteLine("Error: Failed to grab frame.");
                             break;
                         }
 
-                        // Resize and flip the frame
                         Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
                         Cv2.Flip(frame, frame, FlipMode.Y);
-
-                        // Convert to grayscale
                         Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
 
                         try
                         {
-                            // Perform face detection on every frame
                             using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
                             {
-                                DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
+                                var faces = detector.Operator(dlibImage);
 
                                 foreach (var face in faces)
                                 {
                                     try
                                     {
                                         var landmarks = predictor.Detect(dlibImage, face);
-                                        landmarksList.Clear();  // Clear previous landmarks to reuse list
+                                        landmarksList.Clear(); // Clear for reuse
                                         for (int i = 0; i < (int)landmarks.Parts; i++)
                                         {
                                             landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
                                         }
 
-                                        // Draw landmarks and process the nose position
                                         ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
                                     }
                                     catch (Exception landmarkEx)
@@ -294,29 +286,30 @@ namespace ATEDNIULI
                                     }
                                 }
                             }
-
-                            // Update UI on the main thread without delay
-                            Dispatcher.BeginInvoke(new Action(() =>
-                            {
-                                if (this.Visibility == Visibility.Collapsed)
-                                {
-                                    this.Visibility = Visibility.Visible;
-                                }
-
-                                CameraImageSource = ConvertMatToBitmapSource(frame);
-                            }));
-
                         }
                         catch (Exception dlibEx)
                         {
                             Console.WriteLine($"Error loading Dlib image: {dlibEx.Message}");
                         }
 
-                        // Exit if 'ESC' is pressed
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            if (this.Visibility == Visibility.Collapsed)
+                            {
+                                this.Visibility = Visibility.Visible;
+                            }
+
+                            CameraImageSource = ConvertMatToBitmapSource(frame);
+                        }));
+
                         if (Cv2.WaitKey(1) == 27)
                         {
                             break;
                         }
+
+                        // Optional: Trigger garbage collection to release memory periodically (for debugging only)
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
                     }
                 }
                 catch (Exception ex)
@@ -325,7 +318,6 @@ namespace ATEDNIULI
                 }
                 finally
                 {
-                    // Ensure the capture is released when done
                     capture?.Release();
                     frame?.Dispose();
                     gray?.Dispose();

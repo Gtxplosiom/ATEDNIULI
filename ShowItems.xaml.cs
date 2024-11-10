@@ -362,18 +362,11 @@ namespace ATEDNIULI
                     string windowTitle = currentWindow.Current.Name;
                     bool isBrowser = IsBrowserWindow(windowTitle);
 
-                    var clickableCondition = new OrCondition(
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TreeItem),  // Include TreeItem for sidebar elements
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Pane),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem)// Include Pane for potential container elements
-                );
-
-                    var clickableElements = currentWindow.FindAll(TreeScope.Descendants, clickableCondition);
-
-                    Dispatcher.Invoke(() => ProcessClickableElements(clickableElements, null, isBrowser));
+                    if (isBrowser)
+                    {
+                        Console.WriteLine("Currently on browser");
+                        StartScanning(driver);
+                    }
                 }
 
                 // Ensure ListTaskbarItems runs on the UI thread
@@ -395,7 +388,6 @@ namespace ATEDNIULI
         {
 
             int counter = 1;
-            int browser_counter = 1;
             int desktop_counter = 1;
 
             if (clickableElements != null)
@@ -452,55 +444,7 @@ namespace ATEDNIULI
             } 
             else if (isBrowser)
             {
-                foreach (AutomationElement element in webClickables)
-                {
-                    if (element == null || element.Current.IsOffscreen) continue;
-
-                    var boundingRect = element.Current.BoundingRectangle;
-
-                    if (!boundingRect.IsEmpty)
-                    {
-                        // Adjust the bounding rectangle coordinates for scaling
-                        Rect adjustedBoundingRect = new Rect(
-                            boundingRect.Left / ScalingFactor,
-                            boundingRect.Top / ScalingFactor,
-                            boundingRect.Width / ScalingFactor,
-                            boundingRect.Height / ScalingFactor
-                        );
-
-                        string controlName = element.Current.Name;
-                        Console.WriteLine($"Clickable Item {browser_counter}: {controlName}");
-
-                        // UI updates must be done on the UI thread
-                        Label tag = new Label
-                        {
-                            Content = browser_counter,
-                            Background = Brushes.Yellow,
-                            Foreground = Brushes.Black,
-                            Padding = new Thickness(5),
-                            Opacity = 0.7
-                        };
-
-                        // Set the adjusted position based on the adjusted bounding rectangle
-                        Canvas.SetLeft(tag, adjustedBoundingRect.Left);
-                        Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
-                        OverlayCanvas.Children.Add(tag);
-
-                        // Add the tag to the list
-                        _tags.Add(tag);
-
-                        // Create and store the clickable item with the adjusted bounding rectangle
-                        _clickableItems.Add(new ClickableItem
-                        {
-                            Name = controlName,
-                            BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
-                        });
-
-                        browser_counter++;
-                    }
-                }
-
-                detected = true;
+                // browser show items logic here
             }
             else if (desktopIcons != null)
             {
@@ -711,6 +655,54 @@ namespace ATEDNIULI
 
                 _tags.Clear(); // Clear the list of tags
             });
+        }
+
+        public static void StartScanning(IWebDriver driver)
+        {
+            try
+            {
+                // Find all link elements without navigating again
+                IReadOnlyCollection<IWebElement> linkElements = driver.FindElements(By.CssSelector("a"));
+                int linkCount = 1;
+                int viewportWidth = Convert.ToInt32(((IJavaScriptExecutor)driver).ExecuteScript("return window.innerWidth;"));
+                int viewportHeight = Convert.ToInt32(((IJavaScriptExecutor)driver).ExecuteScript("return window.innerHeight;"));
+                var browserPosition = driver.Manage().Window.Position;
+
+                foreach (IWebElement link in linkElements)
+                {
+                    try
+                    {
+                        var location = link.Location;
+                        var size = link.Size;
+
+                        if (IsInViewport(location.X, location.Y, size.Width, size.Height, viewportWidth, viewportHeight))
+                        {
+                            Console.WriteLine($"Link {linkCount}:");
+                            Console.WriteLine($"Bounding Box (Browser Coordinates) - X: {location.X}, Y: {location.Y}, Width: {size.Width}, Height: {size.Height}");
+                            int adjustedX = location.X + browserPosition.X;
+                            int adjustedY = location.Y + browserPosition.Y;
+                            Console.WriteLine($"Adjusted Bounding Box (Screen Coordinates) - X: {adjustedX}, Y: {adjustedY}");
+                            Console.WriteLine($"Link URL: {link.GetAttribute("href")}");
+                            Console.WriteLine();
+                        }
+
+                        linkCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error processing link: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred during scanning: {ex.Message}");
+            }
+        }
+
+        private static bool IsInViewport(int x, int y, int width, int height, int viewportWidth, int viewportHeight)
+        {
+            return x + width > 0 && x < viewportWidth && y + height > 0 && y < viewportHeight;
         }
 
         [DllImport("user32.dll")]

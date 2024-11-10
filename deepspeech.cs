@@ -23,10 +23,8 @@ using System.Threading;
 using OpenCvSharp;
 using static ATEDNIULI.ShowItems;
 using System.Linq;
-//using OpenQA.Selenium.BiDi.Modules.Network;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
-using System.Windows.Forms;
 using Whisper.net;
 using Whisper.net.Ggml;
 using Whisper.net.Logger;
@@ -96,14 +94,12 @@ class LiveTranscription
 
     private System.Timers.Timer inactivity_timer;
     private System.Timers.Timer intent_window_timer;
-    private System.Timers.Timer input_timer;
     private System.Timers.Timer wake_word_timer;
     private System.Timers.Timer debounce_timer;
     private System.Timers.Timer typing_appear_timer;
     private System.Timers.Timer reset_typing_stream_timer;
     
     private const int debounce_timeout = 1000; // Delay in milliseconds
-    private const int input_timeout = 7000;
     private const int wake_word_timeout = 5000; // 10 seconds timeout for no wake word detection
     private const int typing_appear = 2000;
     private const int reset_typing_timeout = 7000;
@@ -154,8 +150,8 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta12.pbmm";
-    string commands_scorer = @"assets\models\commands.scorer";
-    string typing_scorer = @"assets\models\deepspeech-0.9.3-models.scorer";
+    string commands_scorer = @"assets\models\expanded_commands.scorer";
+    string typing_scorer = @"assets\models\lj_speech.scorer";
 
     int deepspeech_confidence = -100;
 
@@ -228,44 +224,6 @@ class LiveTranscription
         string intentScriptPath = GetPythonScriptPath("intent.py");
         string gridInferenceScriptPath = GetPythonScriptPath("grid_inference_optimized.py");
 
-        // initialize python
-        // initialize intent recognition
-        Task.Run(() =>
-        {
-            ProcessStartInfo start = new ProcessStartInfo
-            {
-                FileName = pythonExecutablePath,
-                Arguments = intentScriptPath,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                EnvironmentVariables =
-                    {
-                        { "PYTHONIOENCODING", "utf-8:replace" }
-                    }
-            };
-
-            using (Process process = Process.Start(start))
-            {
-                // Optionally read the output of the Python script
-                using (var reader = process.StandardOutput)
-                {
-                    string result = reader.ReadToEnd();
-                    Console.WriteLine(result);
-                }
-
-                // Optionally read the error output of the Python script
-                using (var errorReader = process.StandardError)
-                {
-                    string error = errorReader.ReadToEnd();
-                    if (!string.IsNullOrEmpty(error))
-                    {
-                        Console.WriteLine($"Error: {error}");
-                    }
-                }
-            }
-        });
-
         Task.Run(() =>
         {
             ProcessStartInfo start = new ProcessStartInfo
@@ -301,37 +259,12 @@ class LiveTranscription
                 }
             }
         });
-
-        // pag communicate ha python code ha fld nga ma wait anay bago mag load an python bago mag continue ha rest of the program
-        using (var notifySocketIR = new PullSocket("tcp://localhost:6970"))
-        {
-            Console.WriteLine("Waiting for the model to be ready...");
-            string readyMessage = notifySocketIR.ReceiveFrameString();
-            Console.WriteLine(readyMessage); // Print the "ready" message
-        }
-
-        // pan run hin code
-        InitializeIntentSocket();
-
         // timers
         InitializeTimer();
 
         InitializeWhisper();
 
         show_items.ItemDetected += CheckDetected;
-    }
-
-    // zmq stuffs
-    private void InitializeIntentSocket()
-    {
-        if (socket != null && socket.IsDisposed == false)
-        {
-            socket.Close();  // Close the existing socket
-            socket.Dispose(); // Release resources associated with the socket
-        }
-
-        // Create a new socket instance
-        socket = new RequestSocket("tcp://localhost:6969");
     }
 
     private bool itemDetected = false;
@@ -616,11 +549,13 @@ class LiveTranscription
     {
         Task.Run(() =>
         {
+            text = text.ToLower();
+
             if (text.Contains("[") || text.Contains("("))
             {
                 return;
             }
-            else if (text.Contains("exit") || text.Contains("Exit"))
+            else if (text.Contains("stop typing"))
             {
                 typing_mode = false;
                 wave_in_event.StopRecording();
@@ -629,13 +564,38 @@ class LiveTranscription
             }
             else
             {
-                string normalized_result = new string(text.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
+                // Split text into words to handle "capital" functionality
+                var words = text.Split(' ');
+                var processedWords = new List<string>();
 
+                for (int i = 0; i < words.Length; i++)
+                {
+                    if (words[i] == "capital" && i + 1 < words.Length)
+                    {
+                        // Capitalize the following word
+                        processedWords.Add(char.ToUpper(words[i + 1][0]) + words[i + 1].Substring(1));
+                        i++; // Skip the next word since it's already processed
+                    }
+                    else
+                    {
+                        processedWords.Add(words[i]);
+                    }
+                }
+
+                // Join processed words back into a single string and filter out unwanted characters
+                string normalized_result = string.Join(" ", processedWords);
+                normalized_result = new string(normalized_result.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
+
+                // Apply replacements for punctuation words
+                normalized_result = normalized_result.Replace("exclamation", "!")
+                                                     .Replace("period", ".")
+                                                     .Replace("comma", ",");
+
+                // Send each character for typing
                 foreach (char c in normalized_result)
                 {
-                    // Send the character and wait briefly to avoid buffering issues
                     SendKeys.SendWait(c.ToString());
-                    Thread.Sleep(50); // Adjust delay as needed (e.g., 50 milliseconds)
+                    Thread.Sleep(50); // Adjust delay as needed
                 }
                 SendKeys.SendWait(" ");
 
@@ -703,13 +663,9 @@ class LiveTranscription
         inactivity_timer.Elapsed += OnInactivityTimerElapsed;
         inactivity_timer.AutoReset = false; // Do not restart automatically
 
-        intent_window_timer = new System.Timers.Timer(intent_window_timeout); // 3 seconds
-        intent_window_timer.Elapsed += OnIntentTimerElapsed;
-        intent_window_timer.AutoReset = false;
-
-        input_timer = new System.Timers.Timer(input_timeout); // 7 seconds
-        input_timer.Elapsed += OnIntentTimerElapsed;
-        input_timer.AutoReset = false;
+        //intent_window_timer = new System.Timers.Timer(intent_window_timeout); // 3 seconds
+        //intent_window_timer.Elapsed += OnIntentTimerElapsed;
+        //intent_window_timer.AutoReset = false;
 
         // Initialize wake word reset timer
         wake_word_timer = new System.Timers.Timer(wake_word_timeout);
@@ -771,23 +727,6 @@ class LiveTranscription
         //UpdateUI(() => intent_window.Hide());
     }
 
-    private void OnInputTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
-    {
-        try
-        {
-            Console.WriteLine("Input is too long resetting stream");
-            inactivity_timer.Stop();
-            UpdateUI(() =>
-            {
-                FinalizeStream();
-            });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error in Input Timer: {ex.Message}");
-        }
-    }
-
     private void OnResetTypingTimerElapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
         lock (streamLock)
@@ -840,11 +779,6 @@ class LiveTranscription
                     if (!typing_mode)
                     {
                         send_to_intent = RemoveWakeWord(final_result_from_stream, wake_word);
-
-                        // Perform socket operations in a background thread
-                        socket.SendFrame(send_to_intent);
-                        string receivedMessage = socket.ReceiveFrameString();
-                        received = receivedMessage;
 
                         if (wake_word_detected && !commandExecuted)
                         {
@@ -990,8 +924,6 @@ class LiveTranscription
             StartInactivityTimer();
 
             StartWakeWordTimer();
-
-            StartInputTimer();
         }
 
         // Offload audio processing to avoid blocking the main thread
@@ -1219,16 +1151,6 @@ class LiveTranscription
         }
     }
 
-    private void StartInputTimer()
-    {
-        if (!input_timer.Enabled)
-        {
-            input_timer.Stop(); // Stop the timer first
-            input_timer.Start(); // Restart the timer
-            Console.WriteLine("started the input timer");
-        }
-    }
-
     private void StartResetTypingTimer()
     {
         if (!reset_typing_stream_timer.Enabled)
@@ -1294,7 +1216,7 @@ class LiveTranscription
             UpdateUI(() => FinalizeStream());
         }
 
-        if (transcription.IndexOf("typing", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (transcription.IndexOf("start typing", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             if (!typing_mode)
             {
@@ -1386,7 +1308,6 @@ class LiveTranscription
 
         if (typing_mode)
         {
-            input_timer.Stop();
             wake_word_timer.Stop();
             intent_window_timer.Stop();
 
