@@ -365,7 +365,9 @@ namespace ATEDNIULI
                     if (isBrowser)
                     {
                         Console.WriteLine("Currently on browser");
-                        StartScanning(driver);
+
+                        // Call StartScanning and capture the coordinates
+                        Dispatcher.Invoke(() => StartScanning(driver));
                     }
                 }
 
@@ -444,7 +446,7 @@ namespace ATEDNIULI
             } 
             else if (isBrowser)
             {
-                // browser show items logic here
+                
             }
             else if (desktopIcons != null)
             {
@@ -657,8 +659,10 @@ namespace ATEDNIULI
             });
         }
 
-        public static void StartScanning(IWebDriver driver)
+        public void StartScanning(IWebDriver driver)
         {
+            List<(int X, int Y)> coordinates = new List<(int X, int Y)>();
+
             try
             {
                 // Find all link elements without navigating again
@@ -677,6 +681,7 @@ namespace ATEDNIULI
 
                         if (IsInViewport(location.X, location.Y, size.Width, size.Height, viewportWidth, viewportHeight))
                         {
+                            // Log the link data (optional)
                             Console.WriteLine($"Link {linkCount}:");
                             Console.WriteLine($"Bounding Box (Browser Coordinates) - X: {location.X}, Y: {location.Y}, Width: {size.Width}, Height: {size.Height}");
                             int adjustedX = location.X + browserPosition.X;
@@ -684,6 +689,28 @@ namespace ATEDNIULI
                             Console.WriteLine($"Adjusted Bounding Box (Screen Coordinates) - X: {adjustedX}, Y: {adjustedY}");
                             Console.WriteLine($"Link URL: {link.GetAttribute("href")}");
                             Console.WriteLine();
+
+                            // Add the coordinates to the list
+                            coordinates.Add((adjustedX, adjustedY));
+
+                            // Create and store the clickable item (tag)
+                            // Assuming _tags is a static list in your context
+                            Label tag = new Label
+                            {
+                                Content = $"Link {linkCount}",
+                                Background = Brushes.Yellow,
+                                Foreground = Brushes.Black,
+                                Padding = new Thickness(5),
+                                Opacity = 0.7
+                            };
+
+                            // Set the position of the tag (above the link element)
+                            Canvas.SetLeft(tag, adjustedX);
+                            Canvas.SetTop(tag, adjustedY - 20); // Position tag above the link
+                            OverlayCanvas.Children.Add(tag);  // Assuming OverlayCanvas is accessible here
+
+                            // Add the tag to the list
+                            _tags.Add(tag);  // Assuming _tags is globally accessible
                         }
 
                         linkCount++;
