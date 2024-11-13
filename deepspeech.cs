@@ -882,11 +882,7 @@ class LiveTranscription
                     {
                         send_to_intent = RemoveWakeWord(final_result_from_stream, wake_word);
 
-                        //ProcessIntent(send_to_intent);
-
-                        commandExecuted = false;
-                        wake_word_detected = false;
-                        ResetCommandCounts();
+                        Task.Run(() => ProcessIntent(send_to_intent));
                     }
                     
                     // Dispose and reset the stream
@@ -933,82 +929,83 @@ class LiveTranscription
         }
     }
 
-    private async Task ProcessIntent(string send_to_intent)
+    private void ProcessIntent(string send_to_intent)
     {
-        await Task.Run(() =>
+        var prediction = intent_model.PredictSingle(send_to_intent);
+        var intent = prediction.Label.ToString();
+        var confidence = prediction.Probability;
+
+        Console.WriteLine($"{intent} : {confidence}");
+
+        if (wake_word_detected && !commandExecuted && confidence > 0.7)
         {
-            var prediction = intent_model.PredictSingle(send_to_intent);
-            var intent = prediction.Label.ToString();
-            var confidence = prediction.Probability;
-
-            Console.WriteLine($"{intent} : {confidence}");
-
-            if (wake_word_detected && !commandExecuted && confidence > 0.7)
+            UpdateUI(() => show_items.NotificationLabel.Content = $"Executing: {received}");
+            // Check for specific commands
+            if (intent == "__label__open_chrome")
             {
-                UpdateUI(() => show_items.NotificationLabel.Content = $"Executing: {received}");
-                // Check for specific commands
-                if (intent == "__label__open_chrome")
-                {
-                    StartProcess("chrome");
-                }
-                else if (intent == "__label__open_word")
-                {
-                    StartProcess("winword");
-                }
-                else if (intent == "__label__open_excel")
-                {
-                    StartProcess("excel");
-                }
-                else if (intent == "__label__open_powerpoint")
-                {
-                    StartProcess("powerpnt");
-                }
-                else if (intent == "__label__screen_shot")
-                {
-                    ScreenShot();
-                }
-                else if (intent == "__label__close_app")
-                {
-                    CloseApp();
-                }
-                else if (intent == "__label__open_explorer")
-                {
-                    StartProcess("explorer");
-                }
-                else if (intent == "__label__open_settings")
-                {
-                    StartProcess("ms-settings:");
-                }
-                else if (intent == "__label__open_notepad")
-                {
-                    StartProcess("notepad");
-                }
-                else if (intent == "__label__volume_up")
-                {
-                    VolumeUp();
-                }
-                else if (intent == "__label__volume_down")
-                {
-                    VolumeDown();
-                }
-                else if (intent == "__label__mouse_control_on")
-                {
-                    OpenMouse();
-                }
-                else if (intent == "__label__mouse_control_off")
-                {
-                    CloseMouse();
-                }
-                else if (intent == "__label__show_items")
-                {
-                    DetectScreen();
-                }
-                else if (intent == "__label__stop_showing_items")
-                {
-                    RemoveTags();
-                }
+                StartProcess("chrome");
             }
-        });
+            else if (intent == "__label__open_word")
+            {
+                StartProcess("winword");
+            }
+            else if (intent == "__label__open_excel")
+            {
+                StartProcess("excel");
+            }
+            else if (intent == "__label__open_powerpoint")
+            {
+                StartProcess("powerpnt");
+            }
+            else if (intent == "__label__screen_shot")
+            {
+                ScreenShot();
+            }
+            else if (intent == "__label__close_app")
+            {
+                CloseApp();
+            }
+            else if (intent == "__label__open_explorer")
+            {
+                StartProcess("explorer");
+            }
+            else if (intent == "__label__open_settings")
+            {
+                StartProcess("ms-settings:");
+            }
+            else if (intent == "__label__open_notepad")
+            {
+                StartProcess("notepad");
+            }
+            else if (intent == "__label__volume_up")
+            {
+                VolumeUp();
+            }
+            else if (intent == "__label__volume_down")
+            {
+                VolumeDown();
+            }
+            else if (intent == "__label__mouse_control_on")
+            {
+                OpenMouse();
+            }
+            else if (intent == "__label__mouse_control_off")
+            {
+                CloseMouse();
+            }
+            else if (intent == "__label__show_items")
+            {
+                DetectScreen();
+            }
+            else if (intent == "__label__stop_showing_items")
+            {
+                RemoveTags();
+            }
+        }
+
+        commandExecuted = false;
+        wake_word_detected = false;
+        ResetCommandCounts();
     }
 
     private MemoryStream audioBuffer = new MemoryStream();
