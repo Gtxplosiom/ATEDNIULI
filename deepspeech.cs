@@ -334,6 +334,7 @@ class LiveTranscription
         UpdateUI(() => asr_window.AppendText("Loading scorer..."));
         deep_speech_model.EnableExternalScorer(scorer_path);
         deep_speech_model.AddHotWord("thermal", 5);
+        deep_speech_model.AddHotWord("chrome", 5);
 
         UpdateUI(() => asr_window.AppendText("Loading intent model..."));
         intent_model = new FastTextWrapper();
@@ -1371,7 +1372,7 @@ class LiveTranscription
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => RemoveTags());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.ControlKey)); // Customize as needed
-        HandleCommand("open chrome", transcription, ref chrome_command_count, () => StartProcess("chrome"));
+        HandleCommand("open chrome", transcription, ref chrome_command_count, () => OpenBrowserWithSearch("who is the greatest lol player of all time"));
         HandleCommand("open edge", transcription, ref edge_command_count, () => StartProcess("msedge"));
         HandleCommand("open word", transcription, ref word_command_count, () => StartProcess("winword"));
         HandleCommand("open excel", transcription, ref excel_command_count, () => StartProcess("excel"));
@@ -1532,6 +1533,12 @@ class LiveTranscription
 
         // Use Google search with the encoded query
         driver.Navigate().GoToUrl("https://www.google.com/search?q=" + encodedQuery);
+    }
+
+    public void OpenChrome()
+    {
+        driver = new ChromeDriver();
+        Console.WriteLine("Opening Chrome...");
     }
 
     private void SimulateMouseClick() // pan setup hin click

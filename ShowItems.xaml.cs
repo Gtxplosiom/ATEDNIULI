@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Interactions.Internal;
 
 namespace ATEDNIULI
 {
@@ -467,52 +468,74 @@ namespace ATEDNIULI
             }
             else if (isBrowser)
             {
-                foreach (AutomationElement element in webClickables)
+                try
                 {
-                    if (element == null || element.Current.IsOffscreen) continue;
+                    // Find all link elements without navigating again
+                    IReadOnlyCollection<IWebElement> linkElements = driver.FindElements(By.CssSelector("a"));
+                    int linkCount = 1;
+                    int viewportWidth = Convert.ToInt32(((IJavaScriptExecutor)driver).ExecuteScript("return window.innerWidth;"));
+                    int viewportHeight = Convert.ToInt32(((IJavaScriptExecutor)driver).ExecuteScript("return window.innerHeight;"));
+                    var browserPosition = driver.Manage().Window.Position;
 
-                    var boundingRect = element.Current.BoundingRectangle;
-
-                    if (!boundingRect.IsEmpty)
+                    foreach (IWebElement link in linkElements)
                     {
-                        // Adjust the bounding rectangle coordinates for scaling
-                        Rect adjustedBoundingRect = new Rect(
-                            boundingRect.Left / ScalingFactor,
-                            boundingRect.Top / ScalingFactor,
-                            boundingRect.Width / ScalingFactor,
-                            boundingRect.Height / ScalingFactor
-                        );
-
-                        string controlName = element.Current.Name;
-                        Console.WriteLine($"Clickable Item {globalCounter}: {controlName}");
-
-                        // UI updates must be done on the UI thread
-                        Label tag = new Label
+                        try
                         {
-                            Content = globalCounter,
-                            Background = Brushes.Yellow,
-                            Foreground = Brushes.Black,
-                            Padding = new Thickness(5),
-                            Opacity = 0.7
-                        };
+                            var location = link.Location;
+                            var size = link.Size;
 
-                        // Set the adjusted position based on the adjusted bounding rectangle
-                        Canvas.SetLeft(tag, adjustedBoundingRect.Left);
-                        Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
-                        OverlayCanvas.Children.Add(tag);
+                            if (IsInViewport(location.X, location.Y, size.Width, size.Height, viewportWidth, viewportHeight))
+                            {
+                                // Log the link data (optional)
+                                Console.WriteLine($"Link {linkCount}:");
+                                Console.WriteLine($"Bounding Box (Browser Coordinates) - X: {location.X}, Y: {location.Y}, Width: {size.Width}, Height: {size.Height}");
+                                int adjustedX = location.X + browserPosition.X;
+                                int adjustedY = location.Y + browserPosition.Y;
+                                Console.WriteLine($"Adjusted Bounding Box (Screen Coordinates) - X: {adjustedX}, Y: {adjustedY}");
+                                Console.WriteLine($"Link URL: {link.GetAttribute("href")}");
+                                Console.WriteLine();
 
-                        // Add the tag to the list
-                        _tags.Add(tag);
+                                // Create a new ClickableItem with the bounding rectangle and name
+                                var clickableItem = new ClickableItem
+                                {
+                                    Name = $"Link {linkCount}",
+                                    BoundingRectangle = new Rect(adjustedX, adjustedY, size.Width, size.Height)
+                                };
 
-                        // Create and store the clickable item with the adjusted bounding rectangle
-                        _clickableItems.Add(new ClickableItem
+                                // Add the clickable item to the list
+                                _clickableItems.Add(clickableItem);
+
+                                // Create and store the clickable item (tag) to display in UI
+                                Label tag = new Label
+                                {
+                                    Content = $"Link - {globalCounter}",
+                                    Background = Brushes.Yellow,
+                                    Foreground = Brushes.Black,
+                                    Padding = new Thickness(5),
+                                    Opacity = 0.7
+                                };
+
+                                // Set the position of the tag (above the link element)
+                                Canvas.SetLeft(tag, adjustedX);
+                                Canvas.SetTop(tag, adjustedY - 20); // Position tag above the link
+                                OverlayCanvas.Children.Add(tag);  // Assuming OverlayCanvas is accessible here
+
+                                // Add the tag to the list
+                                _tags.Add(tag);  // Assuming _tags is globally accessible
+                            }
+
+                            linkCount++;
+                            globalCounter++;
+                        }
+                        catch (Exception ex)
                         {
-                            Name = controlName,
-                            BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
-                        });
-
-                        globalCounter++;  // Increment the global counter after processing each element
+                            Console.WriteLine($"Error processing link: {ex.Message}");
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"An error occurred during scanning: {ex.Message}");
                 }
 
                 detected = true;
@@ -567,13 +590,13 @@ namespace ATEDNIULI
                     }
                 }
 
-                detected = true;
-                globalCounter = 1;
+                detected = true;;
             }
             else
             {
                 Console.WriteLine("No icons detected");
             }
+            globalCounter = 1;
         }
 
         // Method to check if the current window is a browser
@@ -727,6 +750,11 @@ namespace ATEDNIULI
 
                 _tags.Clear(); // Clear the list of tags
             });
+        }
+
+        private static bool IsInViewport(int x, int y, int width, int height, int viewportWidth, int viewportHeight)
+        {
+            return x + width > 0 && x < viewportWidth && y + height > 0 && y < viewportHeight;
         }
 
         [DllImport("user32.dll")]
