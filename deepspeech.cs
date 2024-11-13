@@ -305,23 +305,22 @@ class LiveTranscription
     public void DetectScreen()
     {
         show_items.RemoveTagsNoTimer();
+        UpdateUI(() => asr_window.HideWithFadeOut());
+        wake_word_detected = false;
+
         showed_detected = false;
 
         if (showed_detected == false)
         {
             show_items.ListClickableItemsInCurrentWindow();
             var clickable_items = show_items.GetClickableItems();
-
-            if (clickable_items != null)
-            {
-                UpdateUI(() => main_window.HighlightODIcon(showed_detected));
-            }
         }
 
         if (number_clicked)
         {
             showed_detected = true;
             StartTranscription();
+            UpdateUI(() => main_window.HighlightODIcon(showed_detected));
             number_clicked = false;
         }
     }
@@ -404,6 +403,7 @@ class LiveTranscription
                 UpdateUI(() =>
                 {
                     asr_window.HideWithFadeOut();
+                    wake_word_detected = false;
                 });
             }
             else if (typing_mode && !showed_detected)
@@ -660,6 +660,7 @@ class LiveTranscription
                 wave_in_event.StopRecording();
                 StartTranscription();
                 UpdateUI(() => show_items.NotificationLabel.Content = "Stopped typing...");
+                UpdateUI(() => main_window.HighlightTypingIcon(typing_mode));
                 return;
             }
             else
@@ -921,6 +922,11 @@ class LiveTranscription
 
                     Console.WriteLine("Stream finalized successfully.");
                 });
+
+                commandExecuted = false;
+                wake_word_detected = false;
+                ResetCommandCounts();
+
             }, TaskScheduler.FromCurrentSynchronizationContext()); // Ensure the continuation runs on the UI thread context
         }
         catch (Exception ex)
@@ -1002,10 +1008,6 @@ class LiveTranscription
                 RemoveTags();
             }
         }
-
-        commandExecuted = false;
-        wake_word_detected = false;
-        ResetCommandCounts();
     }
 
     private MemoryStream audioBuffer = new MemoryStream();
@@ -1412,6 +1414,9 @@ class LiveTranscription
     {
         typing_mode = true;
 
+        UpdateUI(() => main_window.HighlightTypingIcon(typing_mode));
+        UpdateUI(() => asr_window.ShowWithFadeIn(true));
+
         StartTranscription();
 
         UpdateUI(() => show_items.NotificationLabel.Content = "Now Typing...");
@@ -1420,8 +1425,6 @@ class LiveTranscription
         {
             wake_word_timer.Stop();
             intent_window_timer.Stop();
-
-            UpdateUI(() => asr_window.ShowWithFadeIn(true));
         }
     }
 
@@ -1646,6 +1649,7 @@ class LiveTranscription
                 if (asr_window.IsVisible)
                 {
                     asr_window.HideWithFadeOut();
+                    wake_word_detected = false;
                 }
             });
         }

@@ -41,13 +41,9 @@ namespace ATEDNIULI
             };
         }
 
-        private bool allowTextUpdates = false;
-
         // Fade in the window
         public void ShowWithFadeIn(bool isTyping)
         {
-            allowTextUpdates = false;
-
             if (isTyping)
             {
                 this.Height = 100;
@@ -72,7 +68,6 @@ namespace ATEDNIULI
             fadeInAnimation.Completed += (s, e) =>
             {
                 StartBeatingAnimation();
-                allowTextUpdates = true;
                 AnimateWindowGrowth(300);  // Start the growth animation after fade-in
             };
 
@@ -100,7 +95,6 @@ namespace ATEDNIULI
             {
                 this.Hide(); // Hide the window after fade-out
                 StopBeatingAnimation();
-                allowTextUpdates = false;
                 OutputTextBox.Text = "";
 
                 // Optionally reset Width to initial value if necessary
@@ -268,24 +262,17 @@ namespace ATEDNIULI
 
         public void AppendText(string text, bool is_partial = false)
         {
-            if (!allowTextUpdates)
+            if (is_partial)
             {
-                return; // Prevent text updates if animations are in progress
+                // Clear previous partial transcription
+                OutputTextBox.Text = text;
             }
             else
             {
-                if (is_partial)
-                {
-                    // Clear previous partial transcription
-                    OutputTextBox.Text = text;
-                }
-                else
-                {
-                    // Append final transcription
-                    OutputTextBox.AppendText(text + "\n");
-                }
-                OutputTextBox.ScrollToEnd();
+                // Append final transcription
+                OutputTextBox.AppendText(text + "\n");
             }
+            OutputTextBox.ScrollToEnd();
         }
 
         private void StopButton_Click(object sender, RoutedEventArgs e)
