@@ -24,6 +24,9 @@ namespace ATEDNIULI
         private double ScalingFactor; // Declare the scaling factor
         private AutomationElement _taskbarElement; // Cached taskbar element
         private List<ClickableItem> _clickableItems; // List to store clickable items
+                                                     // Declare a global counter at the class level.
+        private int globalCounter = 1;
+
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetDC(IntPtr hWnd);
@@ -329,6 +332,8 @@ namespace ATEDNIULI
                     return; // Early exit if the token was canceled
 
                 IntPtr windowHandle = GetForegroundWindow();
+                IntPtr taskbarHandle = FindWindow("Shell_TrayWnd", null);
+
                 if (windowHandle == IntPtr.Zero)
                 {
                     Console.WriteLine("Currently not focused in a window, processing desktop and taskbar items.");
@@ -369,16 +374,29 @@ namespace ATEDNIULI
                     new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TreeItem),  // Include TreeItem for sidebar elements
                     new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Pane),
                     new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem)// Include Pane for potential container elements
-                );
+                    );
 
                     var clickableElements = currentWindow.FindAll(TreeScope.Descendants, clickableCondition);
 
                     Dispatcher.Invoke(() => ProcessClickableElements(clickableElements, null, isBrowser));
                 }
 
-                // Ensure ListTaskbarItems runs on the UI thread
-                Dispatcher.Invoke(ListTaskbarItems);
-                //Dispatcher.Invoke(StartTagRemovalTimer);
+                if (taskbarHandle != IntPtr.Zero)
+                {
+                    var taskbarElement = AutomationElement.FromHandle(taskbarHandle);
+
+                    if (taskbarElement != null)
+                    {
+                        var clickableCondition = new OrCondition(
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink)
+                        );
+
+                        var taskbarItems = taskbarElement.FindAll(TreeScope.Subtree, clickableCondition);
+
+                        Dispatcher.Invoke(() => ProcessClickableElements(taskbarItems, null));
+                    }
+                }
             }
             catch (TaskCanceledException)
             {
@@ -393,10 +411,7 @@ namespace ATEDNIULI
         public bool detected = false;
         private void ProcessClickableElements(AutomationElementCollection clickableElements = null, AutomationElementCollection webClickables = null, bool isBrowser = false, AutomationElementCollection desktopIcons = null)
         {
-
-            int counter = 1;
-            int browser_counter = 1;
-            int desktop_counter = 1;
+            // Removed local counters, as we're now using globalCounter
 
             if (clickableElements != null)
             {
@@ -417,12 +432,12 @@ namespace ATEDNIULI
                         );
 
                         string controlName = element.Current.Name;
-                        Console.WriteLine($"Clickable Item {counter}: {controlName}");
+                        Console.WriteLine($"Clickable Item {globalCounter}: {controlName}");
 
                         // UI updates must be done on the UI thread
                         Label tag = new Label
                         {
-                            Content = counter,
+                            Content = globalCounter,
                             Background = Brushes.Yellow,
                             Foreground = Brushes.Black,
                             Padding = new Thickness(5),
@@ -444,7 +459,7 @@ namespace ATEDNIULI
                             BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
                         });
 
-                        counter++;
+                        globalCounter++;  // Increment the global counter after processing each element
                     }
                 }
 
@@ -469,12 +484,12 @@ namespace ATEDNIULI
                         );
 
                         string controlName = element.Current.Name;
-                        Console.WriteLine($"Clickable Item {browser_counter}: {controlName}");
+                        Console.WriteLine($"Clickable Item {globalCounter}: {controlName}");
 
                         // UI updates must be done on the UI thread
                         Label tag = new Label
                         {
-                            Content = browser_counter,
+                            Content = globalCounter,
                             Background = Brushes.Yellow,
                             Foreground = Brushes.Black,
                             Padding = new Thickness(5),
@@ -496,7 +511,7 @@ namespace ATEDNIULI
                             BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
                         });
 
-                        browser_counter++;
+                        globalCounter++;  // Increment the global counter after processing each element
                     }
                 }
 
@@ -521,12 +536,12 @@ namespace ATEDNIULI
                         );
 
                         string controlName = element.Current.Name;
-                        Console.WriteLine($"Clickable Item {desktop_counter}: {controlName}");
+                        Console.WriteLine($"Clickable Item {globalCounter}: {controlName}");
 
                         // UI updates must be done on the UI thread
                         Label tag = new Label
                         {
-                            Content = desktop_counter,
+                            Content = globalCounter,
                             Background = Brushes.Yellow,
                             Foreground = Brushes.Black,
                             Padding = new Thickness(5),
@@ -548,11 +563,12 @@ namespace ATEDNIULI
                             BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
                         });
 
-                        desktop_counter++;
+                        globalCounter++;  // Increment the global counter after processing each element
                     }
                 }
 
                 detected = true;
+                globalCounter = 1;
             }
             else
             {
