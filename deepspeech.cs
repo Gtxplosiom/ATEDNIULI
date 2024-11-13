@@ -29,6 +29,7 @@ using Whisper.net;
 using Whisper.net.Ggml;
 using Whisper.net.Logger;
 using static System.Net.Mime.MediaTypeNames;
+using FastText.NetWrapper;
 
 class LiveTranscription
 {
@@ -42,6 +43,8 @@ class LiveTranscription
     private DeepSpeechStream deep_speech_stream;
     private DeepSpeech deep_speech_model;
     private WebRtcVad vad;
+
+    private FastTextWrapper intent_model;
 
     private bool wake_word_detected = false;
     private bool is_running;
@@ -150,8 +153,9 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta12.pbmm";
-    string commands_scorer = @"assets\models\expanded_commands.scorer";
+    string commands_scorer = @"assets\models\expanded_commands_with_numbers.scorer";
     string typing_scorer = @"assets\models\lj_speech.scorer";
+    string intent_model_path = @"assets\models\intent_model_bigrams.bin";
 
     int deepspeech_confidence = -100;
 
@@ -297,8 +301,12 @@ class LiveTranscription
     }
 
     public bool showed_detected = false;
+    public bool number_clicked = true;
     public void DetectScreen()
     {
+        show_items.RemoveTagsNoTimer();
+        showed_detected = false;
+
         if (showed_detected == false)
         {
             show_items.ListClickableItemsInCurrentWindow();
@@ -306,13 +314,19 @@ class LiveTranscription
 
             if (clickable_items != null)
             {
-                showed_detected = true;
                 UpdateUI(() => main_window.HighlightODIcon(showed_detected));
             }
         }
+
+        if (number_clicked)
+        {
+            showed_detected = true;
+            StartTranscription();
+            number_clicked = false;
+        }
     }
 
-    public void load_model(string model_path, string scorer_path)
+    public void load_model(string model_path, string scorer_path, string intent_model_path)
     {
         UpdateUI(() => asr_window.AppendText("Loading model..."));
         deep_speech_model = new DeepSpeech(model_path);
@@ -320,6 +334,11 @@ class LiveTranscription
 
         UpdateUI(() => asr_window.AppendText("Loading scorer..."));
         deep_speech_model.EnableExternalScorer(scorer_path);
+        deep_speech_model.AddHotWord("thermal", 5);
+
+        UpdateUI(() => asr_window.AppendText("Loading intent model..."));
+        intent_model = new FastTextWrapper();
+        intent_model.LoadModel(intent_model_path);
     }
 
     public void SwitchScorer(string scorerPath)
@@ -363,9 +382,9 @@ class LiveTranscription
         {
             DisposePreviousResources();
 
-            if (!typing_mode)
+            if (!typing_mode && !showed_detected)
             {
-                load_model(model_path, commands_scorer);
+                load_model(model_path, commands_scorer, intent_model_path);
 
                 wave_in_event = new WaveInEvent
                 {
@@ -387,13 +406,46 @@ class LiveTranscription
                     asr_window.HideWithFadeOut();
                 });
             }
-            else
+            else if (typing_mode && !showed_detected)
             {
                 Console.WriteLine("Switching to typingmode");
 
                 wave_in_event = new WaveInEvent
                 {
-                    WaveFormat = new WaveFormat(16000, 1) // 16kHz mono for Whisper compatibility
+                    WaveFormat = new WaveFormat(16000, 1) // 16kHz mono 
+                };
+
+                wave_in_event.DataAvailable += (s, e) =>
+                {
+                    int availableFrames = e.BytesRecorded / FrameSize;
+
+                    for (int i = 0; i < availableFrames; i++)
+                    {
+                        byte[] frame = new byte[FrameSize];
+                        Array.Copy(e.Buffer, i * FrameSize, frame, 0, FrameSize);
+                        typingBuffer.AddRange(frame); // Continuously add frame to the buffer
+                    }
+
+                    // If there's enough data, enqueue for transcription and clear the buffer
+                    if (typingBuffer.Count >= RequiredDurationMs * wave_in_event.WaveFormat.AverageBytesPerSecond / 1000)
+                    {
+                        byte[] audioToProcess = typingBuffer.ToArray();
+                        typingBuffer.Clear(); // Reset the buffer for the next round
+
+                        audioQueue.Enqueue(audioToProcess); // Enqueue buffer for processing
+                        ProcessAudioQueue(); // Start processing the queue if not already
+                    }
+                };
+
+                wave_in_event.StartRecording();
+            }
+            else if (showed_detected && !typing_mode)
+            {
+                Console.WriteLine("listening for numbers...");
+
+                wave_in_event = new WaveInEvent
+                {
+                    WaveFormat = new WaveFormat(16000, 1) // 16kHz mono 
                 };
 
                 wave_in_event.DataAvailable += (s, e) =>
@@ -520,28 +572,75 @@ class LiveTranscription
 
     private async Task ProcessResultsAsync(IAsyncEnumerable<SegmentData> results)
     {
-        UpdateUI(() => asr_window.OutputTextBox.Text = "Result: "); // Clear previous results
-
-        var resultList = new List<SegmentData>();
-        var enumerator = results.GetAsyncEnumerator();
-
-        try
+        if (!showed_detected)
         {
-            while (await enumerator.MoveNextAsync())
+            UpdateUI(() => asr_window.OutputTextBox.Text = "Result: "); // Clear previous results
+
+            var resultList = new List<SegmentData>();
+            var enumerator = results.GetAsyncEnumerator();
+
+            try
             {
-                resultList.Add(enumerator.Current);
+                while (await enumerator.MoveNextAsync())
+                {
+                    resultList.Add(enumerator.Current);
+                }
+            }
+            finally
+            {
+                await enumerator.DisposeAsync();
+            }
+
+            // Append results to the TextBox
+            foreach (var result in resultList)
+            {
+                UpdateUI(() => asr_window.OutputTextBox.Text += $"{result.Text}\n");
+                TypeText(result.Text);
             }
         }
-        finally
+        else
         {
-            await enumerator.DisposeAsync();
-        }
+            var resultList = new List<SegmentData>();
+            var enumerator = results.GetAsyncEnumerator();
 
-        // Append results to the TextBox
-        foreach (var result in resultList)
-        {
-            UpdateUI(() => asr_window.OutputTextBox.Text += $"{result.Text}\n");
-            TypeText(result.Text);
+            try
+            {
+                while (await enumerator.MoveNextAsync())
+                {
+                    resultList.Add(enumerator.Current);
+                }
+            }
+            finally
+            {
+                await enumerator.DisposeAsync();
+            }
+
+            // Append results to the TextBox
+            foreach (var result in resultList)
+            {
+                if (result.Text.Contains("stop showing") || result.Text.Contains("Stop showing"))
+                {
+                    number_clicked = true;
+                    showed_detected = false;
+                    show_items.RemoveTagsNoTimer();
+                    StartTranscription();
+                }
+                // Use a regular expression to find all numbers in the result.Text
+                var numberMatches = System.Text.RegularExpressions.Regex.Matches(result.Text, @"\d+");
+
+                foreach (var match in numberMatches)
+                {
+                    // Convert the matched number string to an integer
+                    if (int.TryParse(match.ToString(), out int number))
+                    {
+                        // Here we handle the command for each number found in result.Text
+                        HandleCommand(number.ToString(), result.Text, ref execute_number_command_count, () =>
+                        {
+                            ProcessSpokenTag(number.ToString()); // Use the parsed number
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -560,6 +659,7 @@ class LiveTranscription
                 typing_mode = false;
                 wave_in_event.StopRecording();
                 StartTranscription();
+                UpdateUI(() => show_items.NotificationLabel.Content = "Stopped typing...");
                 return;
             }
             else
@@ -739,6 +839,8 @@ class LiveTranscription
             Console.WriteLine("Stream reset successfully.");
             is_stream_ready = true;
         }
+
+
     }
 
     private string received = "";
@@ -780,84 +882,7 @@ class LiveTranscription
                     {
                         send_to_intent = RemoveWakeWord(final_result_from_stream, wake_word);
 
-                        if (wake_word_detected && !commandExecuted)
-                        {
-                            UpdateUI(() => show_items.NotificationLabel.Content = $"Executing: {received}");
-                            // Check for specific commands
-                            if (received == "OpenChrome")
-                            {
-                                StartProcess("chrome");
-                            }
-                            else if (received == "OpenWord")
-                            {
-                                StartProcess("winword");
-                            }
-                            else if (received == "OpenExcel")
-                            {
-                                StartProcess("excel");
-                            }
-                            else if (received == "OpenPowerpoint")
-                            {
-                                StartProcess("powerpnt");
-                            }
-                            else if (received == "ScreenShot")
-                            {
-                                ScreenShot();
-                            }
-                            else if (received == "CloseApp")
-                            {
-                                CloseApp();
-                            }
-                            else if (received == "OpenExplorer")
-                            {
-                                StartProcess("explorer");
-                            }
-                            else if (received == "OpenSettings")
-                            {
-                                StartProcess("ms-settings:");
-                            }
-                            else if (received == "OpenNotepad")
-                            {
-                                StartProcess("notepad");
-                            }
-                            else if (received == "VolumeUp")
-                            {
-                                VolumeUp();
-                            }
-                            else if (received == "VolumeDown")
-                            {
-                                VolumeDown();
-                            }
-                            else if (received == "MouseControl")
-                            {
-                                OpenMouse();
-                            }
-                            else if (received == "MouseControlOff")
-                            {
-                                CloseMouse();
-                            }
-                            else if (received == "ShowItems")
-                            {
-                                DetectScreen();
-                            }
-                        }
-                        else if (!wake_word_detected && !commandExecuted)
-                        {
-                            if (showed_detected && !itemDetected)
-                            {
-                                // Iterate through the predefined number strings
-                                for (int number_index = 0; number_index < numberStrings.Count; number_index++)
-                                {
-                                    string number = numberStrings[number_index]; // Get the current number as a string
-
-                                    // Here we handle the command for each number string
-                                    HandleCommand(number, final_result_from_stream, ref execute_number_command_count, () =>
-                                    {
-                                        ProcessSpokenTag($"{number_index + 1}"); // Use number_index + 1 if you want to represent 1-based index
-                                    });
-                                }
-                            }
-                        }
+                        //ProcessIntent(send_to_intent);
 
                         commandExecuted = false;
                         wake_word_detected = false;
@@ -906,6 +931,84 @@ class LiveTranscription
         {
             Console.WriteLine($"Error in FinalizeStream: {ex.Message}");
         }
+    }
+
+    private async Task ProcessIntent(string send_to_intent)
+    {
+        await Task.Run(() =>
+        {
+            var prediction = intent_model.PredictSingle(send_to_intent);
+            var intent = prediction.Label.ToString();
+            var confidence = prediction.Probability;
+
+            Console.WriteLine($"{intent} : {confidence}");
+
+            if (wake_word_detected && !commandExecuted && confidence > 0.7)
+            {
+                UpdateUI(() => show_items.NotificationLabel.Content = $"Executing: {received}");
+                // Check for specific commands
+                if (intent == "__label__open_chrome")
+                {
+                    StartProcess("chrome");
+                }
+                else if (intent == "__label__open_word")
+                {
+                    StartProcess("winword");
+                }
+                else if (intent == "__label__open_excel")
+                {
+                    StartProcess("excel");
+                }
+                else if (intent == "__label__open_powerpoint")
+                {
+                    StartProcess("powerpnt");
+                }
+                else if (intent == "__label__screen_shot")
+                {
+                    ScreenShot();
+                }
+                else if (intent == "__label__close_app")
+                {
+                    CloseApp();
+                }
+                else if (intent == "__label__open_explorer")
+                {
+                    StartProcess("explorer");
+                }
+                else if (intent == "__label__open_settings")
+                {
+                    StartProcess("ms-settings:");
+                }
+                else if (intent == "__label__open_notepad")
+                {
+                    StartProcess("notepad");
+                }
+                else if (intent == "__label__volume_up")
+                {
+                    VolumeUp();
+                }
+                else if (intent == "__label__volume_down")
+                {
+                    VolumeDown();
+                }
+                else if (intent == "__label__mouse_control_on")
+                {
+                    OpenMouse();
+                }
+                else if (intent == "__label__mouse_control_off")
+                {
+                    CloseMouse();
+                }
+                else if (intent == "__label__show_items")
+                {
+                    DetectScreen();
+                }
+                else if (intent == "__label__stop_showing_items")
+                {
+                    RemoveTags();
+                }
+            }
+        });
     }
 
     private MemoryStream audioBuffer = new MemoryStream();
@@ -1037,23 +1140,31 @@ class LiveTranscription
             click_command_count = new_click_count;
         }
 
+        if (partial_result.Contains("open"))
+        {
+            if (mouse_activated)
+            {
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                FinalizeStream();
+            }
+        }
 
         if (partial_result.Contains(wake_word))
         {
-            if (partial_result.IndexOf(wake_word, StringComparison.OrdinalIgnoreCase) >= 0)
+            wake_word_detected = true;
+
+            if (wake_word_timer.Enabled)
             {
-                wake_word_detected = true;
-
-                if (wake_word_timer.Enabled)
-                {
-                    wake_word_timer.Close();
-                }
-
-                partial_result = RemoveWakeWord(partial_result, wake_word);
-
-                ShowTranscription(partial_result);
-                ProcessCommand(partial_result);
+                wake_word_timer.Close();
             }
+
+            partial_result = RemoveWakeWord(partial_result, wake_word);
+
+            ShowTranscription(partial_result);
+            ProcessCommand(partial_result);
         }
     }
 
@@ -1086,8 +1197,6 @@ class LiveTranscription
         };
         // Create the whisper factory object to create the processor object
         whisperFactory = WhisperFactory.FromPath(modelFileName);
-
-        Console.WriteLine("Whisper Initialzed");
     }
 
     private void ShowTranscription(string partial_result)
@@ -1100,7 +1209,7 @@ class LiveTranscription
             {
                 try
                 {
-                    if (!asr_window.IsVisible)
+                    if (!asr_window.IsVisible && wake_word_detected)
                     {
                         asr_window.ShowWithFadeIn(false);
                     }
@@ -1192,7 +1301,7 @@ class LiveTranscription
         return transcription;
     }
 
-
+    private bool mouse_activated = false;
     // TODO - himua an tanan na commands na gamiton an HandleCommand function
     private bool commandExecuted = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
@@ -1203,6 +1312,7 @@ class LiveTranscription
         if (transcription.IndexOf("open mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             UpdateUI(() => show_items.NotificationLabel.Content = "Opening Mouse");
+            mouse_activated = true;
             OpenMouse();
             commandExecuted = true;
             UpdateUI(() => FinalizeStream());
@@ -1211,6 +1321,7 @@ class LiveTranscription
         if (transcription.IndexOf("close mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             UpdateUI(() => show_items.NotificationLabel.Content = "Closing Mouse");
+            mouse_activated = false;
             CloseMouse();
             commandExecuted = true;
             UpdateUI(() => FinalizeStream());
@@ -1306,18 +1417,20 @@ class LiveTranscription
 
         StartTranscription();
 
+        UpdateUI(() => show_items.NotificationLabel.Content = "Now Typing...");
+
         if (typing_mode)
         {
             wake_word_timer.Stop();
             intent_window_timer.Stop();
 
             UpdateUI(() => asr_window.ShowWithFadeIn(true));
-            UpdateUI(() => show_items.NotificationLabel.Content = "Now Typing...");
         }
     }
 
     private void ProcessSpokenTag(string spokenTag)
     {
+        Console.WriteLine($"Processing spoken tag: {spokenTag}");  // Add this line for debugging
         var clickableItems = show_items.GetClickableItems();
 
         if (clickableItems == null || clickableItems.Count == 0)
@@ -1332,8 +1445,7 @@ class LiveTranscription
             if (tagNumber > 0 && tagNumber <= clickableItems.Count)
             {
                 var selectedItem = clickableItems[tagNumber - 1]; // 0-based index
-
-                // Convert System.Windows.Rect to OpenCvSharp.Rect
+                                                                  // Convert System.Windows.Rect to OpenCvSharp.Rect
                 var convertedRect = ConvertToOpenCvRect(selectedItem.BoundingRectangle);
 
                 UpdateUI(() => show_items.NotificationLabel.Content = $"Clicking {tagNumber}");
@@ -1341,6 +1453,8 @@ class LiveTranscription
 
                 show_items.RemoveTagsNoTimer();
                 showed_detected = false;
+                number_clicked = true;
+                StartTranscription();
                 UpdateUI(() => main_window.HighlightODIcon(showed_detected));
             }
             else
@@ -1353,6 +1467,7 @@ class LiveTranscription
             Console.WriteLine("Could not recognize a valid tag number");
         }
     }
+
 
     // Method to convert System.Windows.Rect to OpenCvSharp.Rect
     private OpenCvSharp.Rect ConvertToOpenCvRect(System.Windows.Rect rect)
@@ -1374,6 +1489,8 @@ class LiveTranscription
     {
         // Simulate the mouse movement and click event at the specified coordinates
         System.Windows.Forms.Cursor.Position = new System.Drawing.Point((int)x, (int)y);
+        mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+        mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
         mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
         mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
     }

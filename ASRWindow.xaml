@@ -11,7 +11,8 @@
         AllowsTransparency="True"
         Background="Transparent"
         ShowInTaskbar="False"
-        Activated="Window_Activated">
+        Activated="Window_Activated"
+        Focusable="False">
 
     <Grid>
         <Grid.Effect>
