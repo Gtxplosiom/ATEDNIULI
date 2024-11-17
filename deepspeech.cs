@@ -155,7 +155,7 @@ class LiveTranscription
     string model_path = @"assets\models\delta12.pbmm";
     string commands_scorer = @"assets\models\expanded_commands_with_numbers.scorer";
     string typing_scorer = @"assets\models\lj_speech.scorer";
-    string intent_model_path = @"assets\models\intent_model_bigrams.bin";
+    string intent_model_path = @"assets\models\intent_model_trigrams.bin";
 
     int deepspeech_confidence = -100;
 
@@ -333,8 +333,7 @@ class LiveTranscription
 
         UpdateUI(() => asr_window.AppendText("Loading scorer..."));
         deep_speech_model.EnableExternalScorer(scorer_path);
-        deep_speech_model.AddHotWord("thermal", 5);
-        deep_speech_model.AddHotWord("chrome", 5);
+        deep_speech_model.AddHotWord("thermal", 7);
 
         UpdateUI(() => asr_window.AppendText("Loading intent model..."));
         intent_model = new FastTextWrapper();
@@ -655,7 +654,7 @@ class LiveTranscription
             {
                 return;
             }
-            else if (text.Contains("stop typing"))
+            else if (text.Contains("stop typing") || text.Contains("Stop typing") || text.Contains("disable typing") || text.Contains("deactivate typing"))
             {
                 typing_mode = false;
                 wave_in_event.StopRecording();
@@ -879,13 +878,6 @@ class LiveTranscription
                 lock (streamLock)
                 {
                     string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
-
-                    if (!typing_mode)
-                    {
-                        send_to_intent = RemoveWakeWord(final_result_from_stream, wake_word);
-
-                        Task.Run(() => ProcessIntent(send_to_intent));
-                    }
                     
                     // Dispose and reset the stream
                     deep_speech_stream.Dispose();
@@ -1007,6 +999,20 @@ class LiveTranscription
             else if (intent == "__label__stop_showing_items")
             {
                 RemoveTags();
+            }
+            else if (intent == "__label__start_typing")
+            {
+                if (!typing_mode)
+                {
+                    UpdateUI(() => FinalizeStream());
+                    wave_in_event.StopRecording();
+                    typing_appear_timer.Start();
+                    audioBuffer.SetLength(0);
+                }
+                else
+                {
+                    Console.WriteLine("already in typing mode");
+                }
             }
         }
     }
@@ -1165,6 +1171,13 @@ class LiveTranscription
 
             ShowTranscription(partial_result);
             ProcessCommand(partial_result);
+
+            if (!typing_mode)
+            {
+                send_to_intent = RemoveWakeWord(partial_result, wake_word);
+
+                Task.Run(() => ProcessIntent(send_to_intent));
+            }
         }
     }
 
@@ -1309,7 +1322,7 @@ class LiveTranscription
         if (string.IsNullOrEmpty(transcription)) return;
 
         // mouse control commands
-        if (transcription.IndexOf("open mouse", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (transcription.IndexOf("activate mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             UpdateUI(() => show_items.NotificationLabel.Content = "Opening Mouse");
             mouse_activated = true;
@@ -1318,7 +1331,7 @@ class LiveTranscription
             UpdateUI(() => FinalizeStream());
         }
 
-        if (transcription.IndexOf("close mouse", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (transcription.IndexOf("deactivate mouse", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             UpdateUI(() => show_items.NotificationLabel.Content = "Closing Mouse");
             mouse_activated = false;
@@ -1335,7 +1348,11 @@ class LiveTranscription
                 wave_in_event.StopRecording();
                 typing_appear_timer.Start();
                 audioBuffer.SetLength(0);
-            }  
+            }
+            else
+            {
+                Console.WriteLine("already in typing mode");
+            }
         }
 
         if (transcription.IndexOf("search", StringComparison.OrdinalIgnoreCase) >= 0)
