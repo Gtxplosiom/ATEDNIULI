@@ -104,7 +104,7 @@ namespace ATEDNIULI
         private int webcamHeight = 480;
 
         // precision mode stuff
-        private static int initialPrecisionRadius = 200; // Initial size of the precision area
+        private static int initialPrecisionRadius = 150; // Initial size of the precision area
         private static int reducedPrecisionRadius = 50; // Reduced size of the precision area
         private double precisionFactor = 1.0;
         private static DateTime precisionStartTime;
@@ -172,6 +172,10 @@ namespace ATEDNIULI
         {
             isRunning = true;
 
+            baselineHorizontalDistance = 0;
+            baselineVerticalDistance = 0;
+            isDefaultMouthSet = false;
+
             cameraThread = new Thread(CameraLoop);
             cameraThread.IsBackground = true;
             cameraThread.Start();
@@ -184,6 +188,10 @@ namespace ATEDNIULI
         public void StopCameraMouse()
         {
             isRunning = false;
+
+            baselineHorizontalDistance = 0;
+            baselineVerticalDistance = 0;
+            isDefaultMouthSet = false;
 
             // Signal threads to stop and wait for them to finish
             cameraThread?.Join(500); // Give threads a maximum of 500ms to finish gracefully
@@ -348,20 +356,37 @@ namespace ATEDNIULI
             });
         }
 
+        private double baselineHorizontalDistance = 0;
+        private double baselineVerticalDistance = 0;
+        private bool isDefaultMouthSet = false; // Flag to track if the neutral expression is captured
+
         private void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
             // Step 1: Define key landmarks
             var targetNosePoint = landmarksList[30];
-            var leftBrowPoint = landmarksList[19];
-            var rightBrowPoint = landmarksList[24];
-            var leftUpperEyelidPoint = landmarksList[37];
-            var rightUpperEyelidPoint = landmarksList[44];
+            var mouthPoints = landmarksList.GetRange(48, 20);
+
+            // Mouth corners
+            var leftMouthCorner = landmarksList[48];
+            var rightMouthCorner = landmarksList[54];
+
+            // Upper and lower lips (for detecting smile intensity)
+            var upperLip = landmarksList[51];
+            var lowerLip = landmarksList[57];
 
             // Step 2: Check for first frame
             if (isFirstFrame)
             {
                 previousNosePosition = targetNosePoint;
                 isFirstFrame = false;
+
+                // Step 3: Capture the default (neutral) mouth distances if not already set
+                if (!isDefaultMouthSet)
+                {
+                    baselineHorizontalDistance = Math.Sqrt(Math.Pow(rightMouthCorner.X - leftMouthCorner.X, 2) + Math.Pow(rightMouthCorner.Y - leftMouthCorner.Y, 2));
+                    baselineVerticalDistance = Math.Abs(upperLip.Y - lowerLip.Y);
+                    isDefaultMouthSet = true;  // Mark the baseline as captured
+                }
             }
 
             int steps = 10;
@@ -382,50 +407,53 @@ namespace ATEDNIULI
                 previousNosePosition = smoothedNosePoint;
             }
 
-            // Step 4: Detect if brows are raised
-            // Calculate distances between the brow and the upper eyelid for both left and right sides
-            double leftBrowToEyelidDist = Math.Abs(leftBrowPoint.Y - leftUpperEyelidPoint.Y);
-            double rightBrowToEyelidDist = Math.Abs(rightBrowPoint.Y - rightUpperEyelidPoint.Y);
-
-            // Define a threshold for determining if the brow is raised (you can tweak this value based on your tests)
-            double browRaiseThreshold = 35.0;
-
-            bool isLeftBrowRaised = leftBrowToEyelidDist > browRaiseThreshold;
-            bool isRightBrowRaised = rightBrowToEyelidDist > browRaiseThreshold;
-
-            // Step 5: Draw rectangles or markers to visualize the brow status
             Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2);
 
-            Cv2.Circle(frame, new OpenCvSharp.Point(leftBrowPoint.X, leftBrowPoint.Y), 3, Scalar.Blue, -1); // Left Brow Point
-            Cv2.Circle(frame, new OpenCvSharp.Point(rightBrowPoint.X, rightBrowPoint.Y), 3, Scalar.Blue, -1); // Right Brow Point
-            Cv2.Circle(frame, new OpenCvSharp.Point(leftUpperEyelidPoint.X, leftUpperEyelidPoint.Y), 3, Scalar.Green, -1); // Left Upper Eyelid Point
-            Cv2.Circle(frame, new OpenCvSharp.Point(rightUpperEyelidPoint.X, rightUpperEyelidPoint.Y), 3, Scalar.Green, -1); // Right Upper Eyelid Point
-
-            // Optionally, you can draw lines to better visualize the connections
-            //Cv2.Line(frame, new OpenCvSharp.Point(leftBrowPoint.X, leftBrowPoint.Y), new OpenCvSharp.Point(leftUpperEyelidPoint.X, leftUpperEyelidPoint.Y), Scalar.White, 1); // Left side connection
-            //Cv2.Line(frame, new OpenCvSharp.Point(rightBrowPoint.X, rightBrowPoint.Y), new OpenCvSharp.Point(rightUpperEyelidPoint.X, rightUpperEyelidPoint.Y), Scalar.White, 1); // Right side connection
-
-            // Step 6: Display if the brows are raised
-            if (isLeftBrowRaised)
+            foreach (var mouthPoint in mouthPoints)
             {
-                Cv2.PutText(frame, "Left Brow Raised", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
+                // Draw each mouth point as a green circle
+                Cv2.Circle(frame, new OpenCvSharp.Point(mouthPoint.X, mouthPoint.Y), 3, Scalar.Green, -1);
             }
 
-            if (isRightBrowRaised)
+            // Step 6: Calculate current mouth distances
+            double currentHorizontalDistance = Math.Sqrt(Math.Pow(rightMouthCorner.X - leftMouthCorner.X, 2) + Math.Pow(rightMouthCorner.Y - leftMouthCorner.Y, 2));
+            double currentVerticalDistance = Math.Abs(upperLip.Y - lowerLip.Y);
+
+            // Step 7: Calculate smile ratio (compare with baseline)
+            double smileRatio = currentHorizontalDistance / currentVerticalDistance;
+
+            // Step 8: Compare with baseline distances to determine if smiling
+            bool isSmiling = false;
+
+            double horizontalThreshold = 1.2;  // Increase for a less sensitive smile detection, decrease for more sensitive
+            double verticalThreshold = 0.9;    // Increase for more sensitivity to smile height, decrease for less sensitivity
+
+            // Check if the current distances exceed the baseline by the threshold
+            if (currentHorizontalDistance > baselineHorizontalDistance * horizontalThreshold &&
+                currentVerticalDistance < baselineVerticalDistance * verticalThreshold)
             {
-                Cv2.PutText(frame, "Right Brow Raised", new OpenCvSharp.Point(10, 60), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
+                isSmiling = true;
             }
 
-            if (isLeftBrowRaised || isRightBrowRaised)
+            // Step 9: Visualize smile detection result
+            if (isSmiling)
             {
-                //mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                // Draw a green text message indicating the user is smiling
+                Cv2.PutText(frame, "Smiling!", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
             }
             else
             {
-                //mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
             }
-        }
 
+            // Update ROI and target position based on the nose position
+            UpdateRoi(previousNosePosition, ref roiX, ref roiY, roiWidth, roiHeight);
+            UpdateTargetPosition(previousNosePosition, roiX, roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+
+            // Update previous nose position (used for smoothing next time)
+            previousNosePosition = targetNosePoint;
+        }
 
         private void UpdateRoi(Point smoothedNosePoint, ref int roiX, ref int roiY, int roiWidth, int roiHeight)
         {

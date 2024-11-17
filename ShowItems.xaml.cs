@@ -589,14 +589,12 @@ namespace ATEDNIULI
                         globalCounter++;  // Increment the global counter after processing each element
                     }
                 }
-
                 detected = true;;
             }
             else
             {
                 Console.WriteLine("No icons detected");
             }
-            globalCounter = 1;
         }
 
         // Method to check if the current window is a browser
@@ -634,7 +632,6 @@ namespace ATEDNIULI
                         );
 
                         var clickableElements = taskbarElement.FindAll(TreeScope.Subtree, clickableCondition);
-                        int counter = 1;
 
                         foreach (AutomationElement element in clickableElements)
                         {
@@ -653,7 +650,7 @@ namespace ATEDNIULI
                                     );
 
                                     string controlName = element.Current.Name;
-                                    Console.WriteLine($"Taskbar Item {counter}: {controlName}");
+                                    Console.WriteLine($"Taskbar Item {globalCounter}: {controlName}");
 
                                     // Create and store the taskbar item
                                     taskbarItems.Add(new ClickableItem
@@ -665,7 +662,7 @@ namespace ATEDNIULI
                                     // Create a label (tag) for the taskbar item
                                     Label tag = new Label
                                     {
-                                        Content = "T-" + counter, // Prefix with 'T' for taskbar items
+                                        Content = "T-" + globalCounter, // Prefix with 'T' for taskbar items
                                         Background = Brushes.Green,
                                         Foreground = Brushes.White,
                                         Padding = new Thickness(5),
@@ -680,7 +677,7 @@ namespace ATEDNIULI
                                     // Add the tag to the list
                                     _tags.Add(tag);
 
-                                    counter++;
+                                    globalCounter++;
                                 }
                             }
                         }
@@ -736,6 +733,8 @@ namespace ATEDNIULI
             }
 
             _tags.Clear(); // Clear the list of tags
+
+            globalCounter = 1;
         }
 
         public void RemoveTagsNoTimer()
@@ -749,6 +748,8 @@ namespace ATEDNIULI
                 }
 
                 _tags.Clear(); // Clear the list of tags
+
+                globalCounter = 1;
             });
         }
 

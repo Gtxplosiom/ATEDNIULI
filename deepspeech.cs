@@ -30,6 +30,7 @@ using Whisper.net.Ggml;
 using Whisper.net.Logger;
 using static System.Net.Mime.MediaTypeNames;
 using FastText.NetWrapper;
+using System.Text.RegularExpressions;
 
 class LiveTranscription
 {
@@ -603,6 +604,13 @@ class LiveTranscription
             var resultList = new List<SegmentData>();
             var enumerator = results.GetAsyncEnumerator();
 
+            var numberWords = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "one", 1 }, { "two", 2 }, { "three", 3 }, { "four", 4 },
+                { "five", 5 }, { "six", 6 }, { "seven", 7 }, { "eight", 8 },
+                { "nine", 9 }, { "ten", 10 }
+            };
+
             try
             {
                 while (await enumerator.MoveNextAsync())
@@ -618,7 +626,16 @@ class LiveTranscription
             // Append results to the TextBox
             foreach (var result in resultList)
             {
-                if (result.Text.Contains("stop showing") || result.Text.Contains("Stop showing"))
+                string cleanedText = result.Text.Replace(".", " ").Replace(",", " ").Replace("!", " ").Replace("?", " ").ToLower();
+
+                if (Regex.IsMatch(cleanedText, @"[\[\(].*?[\]\)]"))
+                {
+                    cleanedText = Regex.Replace(cleanedText, @"\[[^\]]*\]|\([^\)]*\)", string.Empty);
+                }
+
+                UpdateUI(() => show_items.NotificationLabel.Content = $"{cleanedText}");
+
+                if (cleanedText.Contains("stop showing"))
                 {
                     number_clicked = true;
                     showed_detected = false;
@@ -626,7 +643,8 @@ class LiveTranscription
                     StartTranscription();
                 }
                 // Use a regular expression to find all numbers in the result.Text
-                var numberMatches = System.Text.RegularExpressions.Regex.Matches(result.Text, @"\d+");
+                var numberMatches = System.Text.RegularExpressions.Regex.Matches(cleanedText, @"\d+");
+                var words = cleanedText.Split(' ');
 
                 foreach (var match in numberMatches)
                 {
@@ -634,9 +652,20 @@ class LiveTranscription
                     if (int.TryParse(match.ToString(), out int number))
                     {
                         // Here we handle the command for each number found in result.Text
-                        HandleCommand(number.ToString(), result.Text, ref execute_number_command_count, () =>
+                        HandleCommand(number.ToString(), cleanedText, ref execute_number_command_count, () =>
                         {
                             ProcessSpokenTag(number.ToString()); // Use the parsed number
+                        });
+                    }
+                }
+
+                foreach (var word in words)
+                {
+                    if (numberWords.TryGetValue(word, out int numberWord))
+                    {
+                        HandleCommand(numberWord.ToString(), cleanedText, ref execute_number_command_count, () =>
+                        {
+                            ProcessSpokenTag(numberWord.ToString());
                         });
                     }
                 }
@@ -650,9 +679,9 @@ class LiveTranscription
         {
             text = text.ToLower();
 
-            if (text.Contains("[") || text.Contains("("))
+            if (Regex.IsMatch(text, @"[\[\(].*?[\]\)]"))
             {
-                return;
+                text = Regex.Replace(text, @"\[[^\]]*\]|\([^\)]*\)", string.Empty);
             }
             else if (text.Contains("stop typing") || text.Contains("Stop typing") || text.Contains("disable typing") || text.Contains("deactivate typing"))
             {
@@ -864,6 +893,10 @@ class LiveTranscription
     {
         try
         {
+            commandExecuted = false;
+            wake_word_detected = false;
+            ResetCommandCounts();
+
             // Check if cooldown period has passed
             if ((DateTime.Now - last_stream_finalize_time).TotalMilliseconds < stream_finalize_cooldown)
             {
@@ -916,10 +949,6 @@ class LiveTranscription
                     Console.WriteLine("Stream finalized successfully.");
                 });
 
-                commandExecuted = false;
-                wake_word_detected = false;
-                ResetCommandCounts();
-
             }, TaskScheduler.FromCurrentSynchronizationContext()); // Ensure the continuation runs on the UI thread context
         }
         catch (Exception ex)
@@ -936,7 +965,7 @@ class LiveTranscription
 
         Console.WriteLine($"{intent} : {confidence}");
 
-        if (wake_word_detected && !commandExecuted && confidence > 0.7)
+        if (wake_word_detected && !commandExecuted && confidence > 0.9)
         {
             UpdateUI(() => show_items.NotificationLabel.Content = $"Executing: {received}");
             // Check for specific commands
@@ -1014,6 +1043,7 @@ class LiveTranscription
                     Console.WriteLine("already in typing mode");
                 }
             }
+            UpdateUI(() => FinalizeStream());
         }
     }
 
@@ -1174,11 +1204,18 @@ class LiveTranscription
 
             if (!typing_mode)
             {
-                send_to_intent = RemoveWakeWord(partial_result, wake_word);
+                // Measure word count before processing intent
+                int wordCount = partial_result.Split(new[] { ' ', '\t', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
 
-                Task.Run(() => ProcessIntent(send_to_intent));
+                if (wordCount > 1) // Adjust condition based on your requirement (e.g., > 1 for multiple words)
+                {
+                    send_to_intent = partial_result;
+
+                    Task.Run(() => ProcessIntent(send_to_intent));
+                }
             }
         }
+
     }
 
     // WHISPER STUFF
