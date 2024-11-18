@@ -154,9 +154,8 @@ class LiveTranscription
 
     // english
     string model_path = @"assets\models\delta12.pbmm";
-    string commands_scorer = @"assets\models\expanded_commands_with_numbers.scorer";
-    string typing_scorer = @"assets\models\lj_speech.scorer";
-    string intent_model_path = @"assets\models\intent_model_trigrams.bin";
+    string commands_scorer = @"assets\models\official_commands_scorer.scorer";
+    string intent_model_path = @"assets\models\intent_model_bigrams.bin";
 
     int deepspeech_confidence = -100;
 
@@ -334,7 +333,7 @@ class LiveTranscription
 
         UpdateUI(() => asr_window.AppendText("Loading scorer..."));
         deep_speech_model.EnableExternalScorer(scorer_path);
-        deep_speech_model.AddHotWord("thermal", 7);
+        deep_speech_model.AddHotWord("thermal", 5);
 
         UpdateUI(() => asr_window.AppendText("Loading intent model..."));
         intent_model = new FastTextWrapper();
@@ -633,14 +632,13 @@ class LiveTranscription
                     cleanedText = Regex.Replace(cleanedText, @"\[[^\]]*\]|\([^\)]*\)", string.Empty);
                 }
 
-                UpdateUI(() => show_items.NotificationLabel.Content = $"{cleanedText}");
-
                 if (cleanedText.Contains("stop showing"))
                 {
                     number_clicked = true;
                     showed_detected = false;
                     show_items.RemoveTagsNoTimer();
                     StartTranscription();
+                    UpdateUI(() => main_window.HighlightODIcon(showed_detected));
                 }
                 // Use a regular expression to find all numbers in the result.Text
                 var numberMatches = System.Text.RegularExpressions.Regex.Matches(cleanedText, @"\d+");
@@ -889,14 +887,11 @@ class LiveTranscription
             "forty four", "forty five", "forty six", "forty seven", "forty eight",
             "forty nine", "fifty"
         };
+
     private void FinalizeStream()
     {
         try
         {
-            commandExecuted = false;
-            wake_word_detected = false;
-            ResetCommandCounts();
-
             // Check if cooldown period has passed
             if ((DateTime.Now - last_stream_finalize_time).TotalMilliseconds < stream_finalize_cooldown)
             {
@@ -906,6 +901,20 @@ class LiveTranscription
 
             last_stream_finalize_time = DateTime.Now;
             // Offload work to a background task
+
+            if (!wake_word_detected)
+            {
+                deep_speech_stream.Dispose();
+                deep_speech_stream = deep_speech_model.CreateStream();
+                return;
+            }
+            else
+            {
+                commandExecuted = false;
+                wake_word_detected = false;
+                ResetCommandCounts();
+            }
+
             Task.Run(() =>
             {
                 lock (streamLock)
@@ -918,6 +927,7 @@ class LiveTranscription
                 }
             }).ContinueWith(t =>
             {
+                //if 
                 // Check if an exception was thrown in the Task
                 if (t.Exception != null)
                 {
@@ -985,10 +995,10 @@ class LiveTranscription
             {
                 StartProcess("powerpnt");
             }
-            else if (intent == "__label__screen_shot")
-            {
-                ScreenShot();
-            }
+            //else if (intent == "__label__screen_shot")
+            //{
+            //    ScreenShot();
+            //}
             else if (intent == "__label__close_app")
             {
                 CloseApp();
@@ -1025,7 +1035,7 @@ class LiveTranscription
             {
                 DetectScreen();
             }
-            else if (intent == "__label__stop_showing_items")
+            else if (intent == "__label__stop_showing")
             {
                 RemoveTags();
             }
@@ -1188,10 +1198,13 @@ class LiveTranscription
             }
         }
 
-        if (partial_result.Contains(wake_word))
+        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -30)
         {
             wake_word_detected = true;
+        }
 
+        if (wake_word_detected)
+        {
             if (wake_word_timer.Enabled)
             {
                 wake_word_timer.Close();
@@ -1307,16 +1320,6 @@ class LiveTranscription
             wake_word_timer.Stop(); // Stop the timer first
             wake_word_timer.Start(); // Restart the timer
             Console.WriteLine("started the wake word timer");
-        }
-    }
-
-    private void StartResetTypingTimer()
-    {
-        if (!reset_typing_stream_timer.Enabled)
-        {
-            reset_typing_stream_timer.Stop(); // Stop the timer first
-            reset_typing_stream_timer.Start(); // Restart the timer
-            Console.WriteLine("started the reset typing stream timer");
         }
     }
 

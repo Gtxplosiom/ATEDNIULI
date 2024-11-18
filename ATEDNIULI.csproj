@@ -347,6 +347,9 @@
     <None Include="assets\models\official-train-1-best-640.pt">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="assets\models\official_commands_scorer.scorer">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="assets\models\please_work\intent_labels.pickle">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

@@ -42,8 +42,14 @@ namespace ATEDNIULI
         }
 
         // Fade in the window
+        private bool isAnimating = false;
+
         public void ShowWithFadeIn(bool isTyping)
         {
+            if (isAnimating || this.IsVisible) return; // Prevent retriggering
+
+            isAnimating = true;
+
             if (isTyping)
             {
                 this.Height = 100;
@@ -67,8 +73,9 @@ namespace ATEDNIULI
 
             fadeInAnimation.Completed += (s, e) =>
             {
+                isAnimating = false;
                 StartBeatingAnimation();
-                AnimateWindowGrowth(300);  // Start the growth animation after fade-in
+                AnimateWindowGrowth(300); // Start growth animation after fade-in
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeInAnimation);
@@ -76,7 +83,10 @@ namespace ATEDNIULI
 
         public void HideWithFadeOut()
         {
-            // Stop any ongoing animations to prevent conflicts
+            if (isAnimating || !this.IsVisible) return; // Prevent retriggering
+
+            isAnimating = true;
+
             BeginAnimation(WidthProperty, null);
             BeginAnimation(LeftProperty, null);
             BeginAnimation(Window.OpacityProperty, null);
@@ -87,18 +97,16 @@ namespace ATEDNIULI
             {
                 From = 1,
                 To = 0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(200)), // Increased duration for smoother fade
+                Duration = new Duration(TimeSpan.FromMilliseconds(200)), // Smooth fade
                 FillBehavior = FillBehavior.HoldEnd
             };
 
             fadeOutAnimation.Completed += (s, e) =>
             {
-                this.Hide(); // Hide the window after fade-out
+                isAnimating = false;
+                this.Hide(); // Hide window after fade-out
                 StopBeatingAnimation();
                 OutputTextBox.Text = "";
-
-                // Optionally reset Width to initial value if necessary
-                // this.Width = initialWidth; // Define initialWidth as a class member
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeOutAnimation);
