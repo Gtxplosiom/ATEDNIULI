@@ -419,3 +419,17 @@ models/
 /assets/models/shape_predictor_68_face_landmarks.dat
 /assets/classes.txt
 /assets/train_intents.csv
+/python/cuda_11.2.0_460.89_win10.exe
+/python/mobilenet.h5
+/python/MobileNetV2_Unet_model.pth
+/python/official-train-1-best-640.pt
+/python/sample.png
+/python/sample_2.png
+/python/sample_3.png
+/python/sample_4.png
+/python/sample_5.png
+/python/sample_6.png
+/python/sample_7.png
+/python/sample_8.png
+/python/sample_blank.png
+/python/sample_lines.png
