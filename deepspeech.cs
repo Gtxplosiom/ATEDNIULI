@@ -102,7 +102,7 @@ class LiveTranscription
     private System.Timers.Timer debounce_timer;
     private System.Timers.Timer typing_appear_timer;
     private System.Timers.Timer reset_typing_stream_timer;
-    
+
     private const int debounce_timeout = 1000; // Delay in milliseconds
     private const int wake_word_timeout = 5000; // 10 seconds timeout for no wake word detection
     private const int typing_appear = 2000;
@@ -164,6 +164,50 @@ class LiveTranscription
 
     private IWebDriver driver;
 
+    private string GetPythonExecutablePath()
+    {
+        // Get the user's home directory
+        string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        // Construct the Python executable path
+        string python12Path = Path.Combine(userHome, @"AppData\Local\Programs\Python\Python312\python.exe");
+
+        // Check if the Python executable exists
+        if (File.Exists(python12Path))
+        {
+            return python12Path;
+        }
+        else
+        {
+            Console.WriteLine("Python is not installed at the expected path.");
+            return null;
+        }
+    }
+
+    private string GetPythonScriptPath(string scriptName)
+    {
+        // Get the user's home directory
+        string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        // Get the current directory
+        string currentDirectory = Environment.CurrentDirectory;
+
+        // Construct the script path
+        //string scriptPath = Path.Combine(userHome, @"Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\python", scriptName);
+        string scriptPathRelease = Path.Combine(currentDirectory, @"python", scriptName);
+
+        // Check if the script exists
+        if (File.Exists(scriptPathRelease))
+        {
+            //return scriptPath;
+            return scriptPathRelease;
+        }
+        else
+        {
+            Console.WriteLine($"Script {scriptName} is not found at the expected path.");
+            return null;
+        }
+    }
+
     public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, CameraMouse camera_mouse) // 
     {
         this.asr_window = asr_window ?? throw new ArgumentNullException(nameof(asr_window));
@@ -179,7 +223,46 @@ class LiveTranscription
             OperatingMode = OperatingMode.VeryAggressive
         };
 
-        // timers
+        string pythonExecutablePath = GetPythonExecutablePath();
+
+        string gridInferenceScriptPath = GetPythonScriptPath("od.py");
+
+        Task.Run(() =>
+        {
+            ProcessStartInfo start = new ProcessStartInfo
+            {
+                FileName = pythonExecutablePath,
+                Arguments = gridInferenceScriptPath,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                //CreateNoWindow = true, // Prevents the console window from appearing
+                EnvironmentVariables =
+                {
+                    { "PYTHONIOENCODING", "utf-8:replace" }
+                }
+            };
+            using (Process process = Process.Start(start))
+            {
+                // Optionally read the output of the Python script
+                using (var reader = process.StandardOutput)
+                {
+                    string result = reader.ReadToEnd();
+                    Console.WriteLine(result);
+                }
+
+                // Optionally read the error output of the Python script
+                using (var errorReader = process.StandardError)
+                {
+                    string error = errorReader.ReadToEnd();
+                    if (!string.IsNullOrEmpty(error))
+                    {
+                        Console.WriteLine($"Error: {error}");
+                    }
+                }
+            }
+        });
+
         InitializeTimer();
 
         InitializeWhisper();
@@ -519,13 +602,6 @@ class LiveTranscription
             var resultList = new List<SegmentData>();
             var enumerator = results.GetAsyncEnumerator();
 
-            var numberWords = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "one", 1 }, { "two", 2 }, { "three", 3 }, { "four", 4 },
-                { "five", 5 }, { "six", 6 }, { "seven", 7 }, { "eight", 8 },
-                { "nine", 9 }, { "ten", 10 }
-            };
-
             try
             {
                 while (await enumerator.MoveNextAsync())
@@ -538,16 +614,47 @@ class LiveTranscription
                 await enumerator.DisposeAsync();
             }
 
+            // List of words to replace with numbers
+            var wordToNumberMap = new Dictionary<string, string>
+            {
+                { "one", "1" },
+                { "two", "2" },
+                { "too", "2" },
+                { "do", "2" },
+                { "three", "3" },
+                { "four", "4" },
+                { "five", "5" },
+                { "six", "6" },
+                { "seven", "7" },
+                { "eight", "8" },
+                { "nine", "9" },
+                { "ten", "10" },
+                { "ben", "10" },
+                { "and", "10" },
+                { "then", "10" }
+            };
+
             // Append results to the TextBox
             foreach (var result in resultList)
             {
-                string cleanedText = result.Text.Replace(".", " ").Replace(",", " ").Replace("!", " ").Replace("?", " ").ToLower();
+                string cleanedText = result.Text
+                    .Replace(".", " ")
+                    .Replace(",", " ")
+                    .Replace("!", " ")
+                    .Replace("?", " ")
+                    .ToLower(); // Clean up and standardize to lowercase
 
-                if (Regex.IsMatch(cleanedText, @"[\[\(].*?[\]\)]"))
+                // Remove content inside brackets and parentheses
+                cleanedText = Regex.Replace(cleanedText, @"[\[\(].*?[\]\)]", string.Empty);
+
+                // Replace words with numbers using the dictionary
+                foreach (var word in wordToNumberMap)
                 {
-                    cleanedText = Regex.Replace(cleanedText, @"\[[^\]]*\]|\([^\)]*\)", string.Empty);
+                    // Use word boundaries to replace only whole words
+                    cleanedText = Regex.Replace(cleanedText, @"\b" + Regex.Escape(word.Key) + @"\b", word.Value);
                 }
 
+                // Check if the text contains "stop showing"
                 if (cleanedText.Contains("stop showing"))
                 {
                     number_clicked = true;
@@ -556,30 +663,19 @@ class LiveTranscription
                     StartTranscription();
                     UpdateUI(() => main_window.HighlightODIcon(showed_detected));
                 }
-                // Use a regular expression to find all numbers in the result.Text
-                var numberMatches = System.Text.RegularExpressions.Regex.Matches(cleanedText, @"\d+");
-                var words = cleanedText.Split(' ');
+
+                // Use a regular expression to find all numbers in the cleaned text
+                var numberMatches = Regex.Matches(cleanedText, @"\d+");
 
                 foreach (var match in numberMatches)
                 {
                     // Convert the matched number string to an integer
                     if (int.TryParse(match.ToString(), out int number))
                     {
-                        // Here we handle the command for each number found in result.Text
+                        // Handle the command for each number found in cleanedText
                         HandleCommand(number.ToString(), cleanedText, ref execute_number_command_count, () =>
                         {
-                            ProcessSpokenTag(number.ToString()); // Use the parsed number
-                        });
-                    }
-                }
-
-                foreach (var word in words)
-                {
-                    if (numberWords.TryGetValue(word, out int numberWord))
-                    {
-                        HandleCommand(numberWord.ToString(), cleanedText, ref execute_number_command_count, () =>
-                        {
-                            ProcessSpokenTag(numberWord.ToString());
+                            ProcessSpokenTag(number.ToString()); // Process the parsed number
                         });
                     }
                 }
@@ -836,7 +932,7 @@ class LiveTranscription
                 lock (streamLock)
                 {
                     string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
-                    
+
                     // Dispose and reset the stream
                     deep_speech_stream.Dispose();
                     deep_speech_stream = deep_speech_model.CreateStream();
@@ -1114,7 +1210,7 @@ class LiveTranscription
             }
         }
 
-        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > deepspeech_confidence)
+        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -30)
         {
             wake_word_detected = true;
         }
@@ -1498,14 +1594,14 @@ class LiveTranscription
 
     public void OpenBrowserWithSearch(string query)
     {
-        driver = new ChromeDriver();
+        show_items.OpenChrome();
         Console.WriteLine("Opening a new tab in Chrome...");
 
         // Encode the query to ensure special characters are handled correctly in the URL
         string encodedQuery = Uri.EscapeDataString(query);
 
         // Use Google search with the encoded query
-        driver.Navigate().GoToUrl("https://www.google.com/search?q=" + encodedQuery);
+        show_items.driver.Navigate().GoToUrl("https://www.youtube.com/");
     }
 
     public void OpenChrome()

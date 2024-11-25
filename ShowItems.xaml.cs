@@ -39,7 +39,7 @@ namespace ATEDNIULI
 
         private SubscriberSocket _subscriberSocket; // ZMQ Subscriber Socket
 
-        private IWebDriver driver;
+        public IWebDriver driver;
 
         private void StartZMQListener()
         {
@@ -195,6 +195,15 @@ namespace ATEDNIULI
                     Console.WriteLine("Action not recognized.");
                     break;
             }
+        }
+
+        public void OpenChrome()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
         }
 
         private void OpenNewTab()
@@ -368,18 +377,26 @@ namespace ATEDNIULI
                     string windowTitle = currentWindow.Current.Name;
                     bool isBrowser = IsBrowserWindow(windowTitle);
 
-                    var clickableCondition = new OrCondition(
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TreeItem),  // Include TreeItem for sidebar elements
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Pane),
-                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem)// Include Pane for potential container elements
-                    );
+                    if (!isBrowser)
+                    {
+                        var clickableCondition = new OrCondition(
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TreeItem),  // Include TreeItem for sidebar elements
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Pane),
+                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem)// Include Pane for potential container elements
+                            );
 
-                    var clickableElements = currentWindow.FindAll(TreeScope.Descendants, clickableCondition);
+                        var clickableElements = currentWindow.FindAll(TreeScope.Descendants, clickableCondition);
 
-                    Dispatcher.Invoke(() => ProcessClickableElements(clickableElements, null, isBrowser));
+                        Dispatcher.Invoke(() => ProcessClickableElements(clickableElements));
+                    }
+                    else if (isBrowser)
+                    {
+                        Console.WriteLine("Staring browser scan");
+                        StartScanning(driver);
+                    }
                 }
 
                 if (taskbarHandle != IntPtr.Zero)
@@ -406,6 +423,120 @@ namespace ATEDNIULI
             catch (Exception ex)
             {
                 Dispatcher.Invoke(() => MessageBox.Show($"Error: {ex.Message}"));
+            }
+        }
+
+        public void StartScanning(IWebDriver driver)
+        {
+            try
+            {
+                if (driver == null)
+                {
+                    Console.WriteLine("Driver is null!");
+                    return;
+                }
+
+                IReadOnlyCollection<IWebElement> linkElements = driver.FindElements(By.CssSelector("a"));
+                if (linkElements == null || linkElements.Count == 0)
+                {
+                    Console.WriteLine("No links found.");
+                    return;
+                }
+
+                int linkCount = 1;
+                int viewportWidth = Convert.ToInt32(((IJavaScriptExecutor)driver).ExecuteScript("return window.innerWidth;"));
+                int viewportHeight = Convert.ToInt32(((IJavaScriptExecutor)driver).ExecuteScript("return window.innerHeight;"));
+                var browserPosition = driver.Manage().Window.Position;
+
+                foreach (IWebElement link in linkElements)
+                {
+                    try
+                    {
+                        if (link == null)
+                        {
+                            Console.WriteLine("Link is null, skipping...");
+                            continue; // Skip if link is null
+                        }
+
+                        var location = link.Location;
+                        var size = link.Size;
+
+                        // Check if location or size is invalid
+                        if (location == null || size == null || location.X < 0 || location.Y < 0 || size.Width <= 0 || size.Height <= 0)
+                        {
+                            Console.WriteLine($"Link {linkCount} has invalid location or size.");
+                            continue;
+                        }
+
+                        if (IsInViewport(location.X, location.Y, size.Width, size.Height, viewportWidth, viewportHeight))
+                        {
+                            int adjustedX = location.X + browserPosition.X;
+                            int adjustedY = location.Y + browserPosition.Y + 80;
+
+                            // Create the bounding rectangle
+                            Rect boundingRect = new Rect(adjustedX, adjustedY, size.Width, size.Height);
+
+                            var clickableItem = new ClickableItem
+                            {
+                                Name = $"Link {linkCount}",
+                                BoundingRectangle = boundingRect
+                            };
+
+                            // Ensure _clickableItems is initialized
+                            if (_clickableItems == null)
+                            {
+                                Console.WriteLine("_clickableItems is null!");
+                            }
+                            else
+                            {
+                                _clickableItems.Add(clickableItem);
+                            }
+
+                            // Ensure _tags and OverlayCanvas are initialized
+                            if (_tags == null)
+                            {
+                                Console.WriteLine("_tags list is null!");
+                            }
+
+                            if (OverlayCanvas == null)
+                            {
+                                Console.WriteLine("OverlayCanvas is null!");
+                            }
+                            else
+                            {
+                                // Ensure UI updates are marshaled to the UI thread using Dispatcher
+                                Application.Current.Dispatcher.Invoke(() =>
+                                {
+                                    // Add UI tag for visualization (as before)
+                                    Label tag = new Label
+                                    {
+                                        Content = $"{globalCounter}",
+                                        Background = Brushes.Yellow,
+                                        Foreground = Brushes.Black,
+                                        Padding = new Thickness(5),
+                                        Opacity = 0.7
+                                    };
+
+                                    Canvas.SetLeft(tag, adjustedX);
+                                    Canvas.SetTop(tag, adjustedY); // Position tag above the link
+                                    OverlayCanvas.Children.Add(tag);
+
+                                    _tags.Add(tag);
+                                });
+                            }
+                        }
+
+                        globalCounter++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error processing link {linkCount}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred during scanning: {ex.Message}");
             }
         }
 

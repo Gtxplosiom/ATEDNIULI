@@ -5,24 +5,30 @@ from ultralytics import YOLO
 import mss
 import time
 import threading
+import zmq
+import os
 
-# Load YOLOv8 model using the ultralytics library
-model = YOLO("official-train-1-best-640.pt")  # Load YOLOv8 model
-model.conf = 0.7  # Set the confidence threshold (70%) directly in the model
+# Load the YOLO model
+model_path = os.path.join(os.getcwd(), 'assets', 'models', 'official-train-1-best-640.pt')
+model = YOLO(model_path)
 
-# Set up mouse callback for tracking
-screen_width, screen_height = pyautogui.size()  # Get screen dimensions
-roi_size = 60  # Size of the area where detection happens
+# Set up ZMQ for sending detections to C#
+context = zmq.Context()
+socket = context.socket(zmq.PUB)  # Publisher socket
+socket.bind("tcp://*:5555")  # Binding on port 5555
+
+# Get screen dimensions
+screen_width, screen_height = pyautogui.size()
+
+# Define size for the region of interest (ROI)
+roi_size = 60  # Size of the area around the mouse for detection
 
 # Function to track the mouse cursor
 def get_mouse_position():
     x, y = pyautogui.position()
     return x, y
 
-# Screen capture setup using mss
-previous_detections = []  # To track detections from previous frames
-
-# Function for capturing the screen
+# Function to capture the screen
 def capture_screen(sct, roi_size, screen_width, screen_height):
     # Get the current mouse position
     mouse_x, mouse_y = get_mouse_position()
@@ -64,20 +70,18 @@ def process_detection(screen_bgr):
             class_id = int(result.cls[0])  # Get the class ID
             label = model.names[class_id]  # Get the label (class name)
 
-            # Check if this detection is new (not repeated from previous frame)
-            detection = (label, confidence)  # Simplified to label and confidence tuple
-            if detection not in previous_detections:
-                current_detections.append(detection)
-                detected_any = True
-                cv2.rectangle(screen_rgb, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green box
-                cv2.putText(screen_rgb, f"{label} {confidence:.2f}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                print(f"Detection: {label} {confidence:.2f}")  # Output simplified message
+            # Send the detection details to C# app via ZMQ
+            message = f"{label},{x1},{y1},{x2},{y2}"
+            socket.send_string(message)  # Send the message to C#
+            print(f"Detection: {label} at [{x1}, {y1}, {x2}, {y2}] with confidence {confidence:.2f}")  # Output simplified message
 
-    # If no detections in current frame, print "No Detection"
+            detected_any = True
+
+    # If no detections in current frame, send a "no detections" message
     if not detected_any:
-        print("No Detection")
+        socket.send_string("no detections")
 
-    return screen_rgb, current_detections
+    return screen_rgb
 
 # Setup and initialize mss
 with mss.mss() as sct:
@@ -86,13 +90,10 @@ with mss.mss() as sct:
         screen_bgr = capture_screen(sct, roi_size, screen_width, screen_height)
 
         # Process the captured screen for detections
-        screen_rgb, current_detections = process_detection(screen_bgr)
-
-        # Update the previous detections to current detections
-        previous_detections = current_detections
+        screen_rgb = process_detection(screen_bgr)
 
         # Display the screen area with detection in a window
-        cv2.imshow("Live Detection", screen_rgb)
+        # cv2.imshow("Live Detection", screen_rgb)
 
         # Exit on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):

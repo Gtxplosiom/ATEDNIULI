@@ -13,6 +13,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Windows.Controls;
+using System.Drawing;
 
 namespace ATEDNIULI
 {
@@ -181,10 +182,6 @@ namespace ATEDNIULI
             cameraThread = new Thread(CameraLoop);
             cameraThread.IsBackground = true;
             cameraThread.Start();
-
-            mouseThread = new Thread(MouseMovementLoop);
-            mouseThread.IsBackground = true;
-            mouseThread.Start();
         }
 
         public void StopCameraMouse()
@@ -359,154 +356,163 @@ namespace ATEDNIULI
         private double baselineHorizontalDistance = 0;
         private double baselineVerticalDistance = 0;
         private bool isDefaultMouthSet = false; // Flag to track if the neutral expression is captured
+        private Point currentMousePosition = new Point(0, 0);
 
         private void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
-            // Step 1: Define key landmarks
+            var screenWidth = (int)SystemParameters.PrimaryScreenWidth;
+            var screenHeight = (int)SystemParameters.PrimaryScreenHeight;
+
+            // Step 1: Define key landmarks (using the face edge points)
+            var chinPoint = landmarksList[8];   // Chin
+            var leftCheekPoint = landmarksList[0];  // Left edge of the face
+            var rightCheekPoint = landmarksList[16]; // Right edge of the face
+
+            // Calculate the approximate center of the face edge
+            roiX = (chinPoint.X + leftCheekPoint.X + rightCheekPoint.X) / 3;
+            roiY = (chinPoint.Y + leftCheekPoint.Y + rightCheekPoint.Y) / 3;
+
+            // Inner and Outer Circle Radii
+            int innerCircleRadius = 10; // Neutral area
+            int outerCircleRadius = 50; // Max movement area
+
+            // Step 2: Define the nose landmark for movement calculation
             var targetNosePoint = landmarksList[30];
-            var mouthPoints = landmarksList.GetRange(48, 20);
 
-            // Mouth corners
-            var leftMouthCorner = landmarksList[48];
-            var rightMouthCorner = landmarksList[54];
+            // Calculate distance between the nose and the center of the outer circle
+            double distanceFromCenter = Math.Sqrt(Math.Pow(targetNosePoint.X - roiX, 2) + Math.Pow(targetNosePoint.Y - roiY, 2));
 
-            // Upper and lower lips (for detecting smile intensity)
-            var upperLip = landmarksList[51];
-            var lowerLip = landmarksList[57];
-
-            // Step 2: Check for first frame
-            if (isFirstFrame)
+            // Step 3: If the nose is inside the inner circle, don't move the cursor (neutral area)
+            if (distanceFromCenter <= innerCircleRadius)
             {
-                previousNosePosition = targetNosePoint;
-                isFirstFrame = false;
-
-                // Step 3: Capture the default (neutral) mouth distances if not already set
-                if (!isDefaultMouthSet)
-                {
-                    baselineHorizontalDistance = Math.Sqrt(Math.Pow(rightMouthCorner.X - leftMouthCorner.X, 2) + Math.Pow(rightMouthCorner.Y - leftMouthCorner.Y, 2));
-                    baselineVerticalDistance = Math.Abs(upperLip.Y - lowerLip.Y);
-                    isDefaultMouthSet = true;  // Mark the baseline as captured
-                }
+                return; // No movement if inside the inner circle
             }
 
-            int steps = 10;
-            double smoothingFactor = 0.5;
+            // Step 4: Calculate the direction of movement
+            double moveX = targetNosePoint.X - roiX; // X direction of the nose from the center
+            double moveY = targetNosePoint.Y - roiY; // Y direction of the nose from the center
 
-            // Step 3: Process smoothing for nose movement
+            // Normalize the direction vector
+            double magnitude = Math.Sqrt(moveX * moveX + moveY * moveY);
+            if (magnitude > 0)
+            {
+                moveX /= magnitude;
+                moveY /= magnitude;
+            }
+
+            // Step 5: Calculate the distance from the nose to the inner circle edge
+            double distanceToInnerCircleEdge = distanceFromCenter - innerCircleRadius;
+
+            // Step 6: Scale the speed based on the distance from the inner circle edge
+            double speed = Math.Min(distanceToInnerCircleEdge, 25); // Cap the speed to a reasonable limit (e.g., 20)
+
+            // Step 7: Gradually move the mouse in the direction of the nose
+            double incrementX = (moveX * speed) * 2;
+            double incrementY = (moveY * speed) * 2;
+
+            // Update the current mouse position
+            currentMousePosition.X += (int)incrementX;
+            currentMousePosition.Y += (int)incrementY;
+
+            // Ensure the mouse stays within the screen boundaries
+            currentMousePosition.X = Clamp(currentMousePosition.X, 0, screenWidth);
+            currentMousePosition.Y = Clamp(currentMousePosition.Y, 0, screenHeight);
+
+            // Update the mouse cursor position
+            Task.Run(() => SmoothMoveTo(currentMousePosition.X, currentMousePosition.Y));
+
+            // Visualize the inner and outer circles
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
+            Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1); // Nose point
+
+            // Visualize the line representing the distance from the nose to the inner circle edge
+            // Visualize the line representing the distance from the nose to the inner circle edge
+            double innerCircleEdgeX = roiX + innerCircleRadius * moveX;
+            double innerCircleEdgeY = roiY + innerCircleRadius * moveY;
+            OpenCvSharp.Point innerCircleEdgePoint = new OpenCvSharp.Point(innerCircleEdgeX, innerCircleEdgeY);
+
+            // Draw the line from the edge of the inner circle to the nose point
+            Cv2.Line(frame, new OpenCvSharp.Point(innerCircleEdgeX, innerCircleEdgeY),
+                     new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), Scalar.Yellow, 2);
+
+            // Visualize the face edge points
+            Cv2.Circle(frame, new OpenCvSharp.Point(chinPoint.X, chinPoint.Y), 5, Scalar.Magenta, -1); // Chin point
+            Cv2.Circle(frame, new OpenCvSharp.Point(leftCheekPoint.X, leftCheekPoint.Y), 5, Scalar.Cyan, -1); // Left cheek
+            Cv2.Circle(frame, new OpenCvSharp.Point(rightCheekPoint.X, rightCheekPoint.Y), 5, Scalar.Cyan, -1); // Right cheek
+        }
+
+        private void SmoothMoveTo(int targetX, int targetY, int duration = 100, int steps = 10)
+        {
+            // Null check for Kalman filters
+            if (kalmanFilterX == null || kalmanFilterY == null)
+            {
+                throw new InvalidOperationException("Kalman filter not initialized. Call InitializeKalmanFilter first.");
+            }
+
+            GetCursorPos(out Point currentPos);
+            int startX = currentPos.X;
+            int startY = currentPos.Y;
+
+            double deltaX = targetX - startX;
+            double deltaY = targetY - startY;
+
+            double smoothingFactor = 0.6; // Smoothing factor for low-pass filter
+
             for (int i = 0; i <= steps; i++)
             {
-                int smoothedNoseX = (int)(previousNosePosition.X + (targetNosePoint.X - previousNosePosition.X) * (i / (double)steps) * (1 - smoothingFactor));
-                int smoothedNoseY = (int)(previousNosePosition.Y + (targetNosePoint.Y - previousNosePosition.Y) * (i / (double)steps) * (1 - smoothingFactor));
+                // Prediction step for Kalman filter (using last known state)
+                Mat predictedX = kalmanFilterX.Predict();
+                Mat predictedY = kalmanFilterY.Predict();
 
-                var smoothedNosePoint = new Point(smoothedNoseX, smoothedNoseY);
-                Cv2.Circle(frame, new OpenCvSharp.Point(smoothedNosePoint.X, smoothedNosePoint.Y), 4, Scalar.Red, -1);
+                // Correct the prediction with the actual target position (the measurement)
+                Mat measurementX = new Mat(2, 1, MatType.CV_32F);
+                measurementX.Set<float>(0, targetX);
+                measurementX.Set<float>(1, 0); // Assuming you want to ignore the second measurement
 
-                UpdateRoi(smoothedNosePoint, ref roiX, ref roiY, roiWidth, roiHeight);
-                UpdateTargetPosition(smoothedNosePoint, roiX, roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                Mat measurementY = new Mat(2, 1, MatType.CV_32F);
+                measurementY.Set<float>(0, targetY);
+                measurementY.Set<float>(1, 0); // Assuming you want to ignore the second measurement
 
-                previousNosePosition = smoothedNosePoint;
-            }
+                kalmanFilterX.Correct(measurementX);
+                kalmanFilterY.Correct(measurementY);
 
-            Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2);
+                // Get smoothed position
+                float smoothedX = kalmanFilterX.StatePost.Get<float>(0);
+                float smoothedY = kalmanFilterY.StatePost.Get<float>(0);
 
-            foreach (var mouthPoint in mouthPoints)
-            {
-                // Draw each mouth point as a green circle
-                Cv2.Circle(frame, new OpenCvSharp.Point(mouthPoint.X, mouthPoint.Y), 3, Scalar.Green, -1);
-            }
+                //// If transitioning to precision mode, adjust precisionFactor
+                //if (preparingPrecision == true)
+                //{
+                //    // Only set transition time once when transitioning begins
+                //    if (transitionPrecision == null)
+                //    {
+                //        transitionPrecision = DateTime.Now; // Set when transitioning begins
+                //    }
 
-            // Step 6: Calculate current mouth distances
-            double currentHorizontalDistance = Math.Sqrt(Math.Pow(rightMouthCorner.X - leftMouthCorner.X, 2) + Math.Pow(rightMouthCorner.Y - leftMouthCorner.Y, 2));
-            double currentVerticalDistance = Math.Abs(upperLip.Y - lowerLip.Y);
+                //    double elapsedTime = (DateTime.Now - transitionPrecision).TotalMilliseconds;
 
-            // Step 7: Calculate smile ratio (compare with baseline)
-            double smileRatio = currentHorizontalDistance / currentVerticalDistance;
+                //    if (elapsedTime <= 1500)
+                //    {
+                //        precisionFactor = 1.0 - (0.95 * (elapsedTime / 1500.0)); // Linear transition
+                //    }
+                //    else
+                //    {
+                //        precisionFactor = 0.1; // Cap at 10% after 2 seconds
+                //    }
+                //}
 
-            // Step 8: Compare with baseline distances to determine if smiling
-            bool isSmiling = false;
+                // Calculate smoothed movement with adjusted precision factor
+                smoothedX = (float)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
+                smoothedY = (float)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
 
-            double horizontalThreshold = 1.2;  // Increase for a less sensitive smile detection, decrease for more sensitive
-            double verticalThreshold = 0.9;    // Increase for more sensitivity to smile height, decrease for less sensitivity
+                // Set the cursor position
+                SetCursorPos((int)smoothedX, (int)smoothedY);
 
-            // Check if the current distances exceed the baseline by the threshold
-            if (currentHorizontalDistance > baselineHorizontalDistance * horizontalThreshold &&
-                currentVerticalDistance < baselineVerticalDistance * verticalThreshold)
-            {
-                isSmiling = true;
-            }
-
-            // Step 9: Visualize smile detection result
-            if (isSmiling)
-            {
-                // Draw a green text message indicating the user is smiling
-                Cv2.PutText(frame, "Smiling!", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
-                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-            }
-            else
-            {
-                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-            }
-
-            // Update ROI and target position based on the nose position
-            UpdateRoi(previousNosePosition, ref roiX, ref roiY, roiWidth, roiHeight);
-            UpdateTargetPosition(previousNosePosition, roiX, roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
-
-            // Update previous nose position (used for smoothing next time)
-            previousNosePosition = targetNosePoint;
-        }
-
-        private void UpdateRoi(Point smoothedNosePoint, ref int roiX, ref int roiY, int roiWidth, int roiHeight)
-        {
-            int edgeThreshold = 0;
-
-            if (smoothedNosePoint.X < roiX + edgeThreshold)
-            {
-                roiX = Clamp(roiX - (roiX + edgeThreshold - smoothedNosePoint.X), 0, webcamWidth - roiWidth);
-            }
-            else if (smoothedNosePoint.X > roiX + roiWidth - edgeThreshold)
-            {
-                roiX = Clamp(roiX + (smoothedNosePoint.X - (roiX + roiWidth - edgeThreshold)), 0, webcamWidth - roiWidth);
-            }
-
-            if (smoothedNosePoint.Y < roiY + edgeThreshold)
-            {
-                roiY = Clamp(roiY - (roiY + edgeThreshold - smoothedNosePoint.Y), 0, webcamHeight - roiHeight);
-            }
-            else if (smoothedNosePoint.Y > roiY + roiHeight - edgeThreshold)
-            {
-                roiY = Clamp(roiY + (smoothedNosePoint.Y - (roiY + roiHeight - edgeThreshold)), 0, webcamHeight - roiHeight);
+                Thread.Sleep(duration / steps); // Wait between steps
             }
         }
 
-        private void UpdateTargetPosition(Point smoothedNosePoint, int roiX, int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
-        {
-            if (smoothedNosePoint.X >= roiX && smoothedNosePoint.X <= roiX + roiWidth &&
-                smoothedNosePoint.Y >= roiY && smoothedNosePoint.Y <= roiY + roiHeight)
-            {
-                lock (positionLock)
-                {
-                    targetPosition = new TargetPosition(
-                        (int)((smoothedNosePoint.X - roiX) * scalingFactorX),
-                        (int)((smoothedNosePoint.Y - roiY) * scalingFactorY)
-                    );
-                }
-            }
-        }
-
-        private void MouseMovementLoop()
-        {
-            while (isRunning)
-            {
-                // Get the current target position
-                TargetPosition currentTargetPosition;
-                lock (positionLock) // Lock access to targetPosition
-                {
-                    currentTargetPosition = targetPosition;
-                }
-                SmoothMoveTo(currentTargetPosition.X, currentTargetPosition.Y);
-                Thread.Sleep(50); // Adjust the delay to manage the mouse movement frequency
-            }
-        }
 
         private KalmanFilter kalmanFilterX;
         private KalmanFilter kalmanFilterY;
@@ -556,77 +562,6 @@ namespace ATEDNIULI
             kalmanFilterY.StatePost.Set<float>(1, 0);
             kalmanFilterY.StatePost.Set<float>(2, 0);
             kalmanFilterY.StatePost.Set<float>(3, 0);
-        }
-
-        private void SmoothMoveTo(int targetX, int targetY, int duration = 100, int steps = 10)
-        {
-            // Null check for Kalman filters
-            if (kalmanFilterX == null || kalmanFilterY == null)
-            {
-                throw new InvalidOperationException("Kalman filter not initialized. Call InitializeKalmanFilter first.");
-            }
-
-            GetCursorPos(out Point currentPos);
-            int startX = currentPos.X;
-            int startY = currentPos.Y;
-
-            double deltaX = targetX - startX;
-            double deltaY = targetY - startY;
-
-            double smoothingFactor = 0.6; // Smoothing factor for low-pass filter
-
-            for (int i = 0; i <= steps; i++)
-            {
-                // Prediction step for Kalman filter (using last known state)
-                Mat predictedX = kalmanFilterX.Predict();
-                Mat predictedY = kalmanFilterY.Predict();
-
-                // Correct the prediction with the actual target position (the measurement)
-                Mat measurementX = new Mat(2, 1, MatType.CV_32F);
-                measurementX.Set<float>(0, targetX);
-                measurementX.Set<float>(1, 0); // Assuming you want to ignore the second measurement
-
-                Mat measurementY = new Mat(2, 1, MatType.CV_32F);
-                measurementY.Set<float>(0, targetY);
-                measurementY.Set<float>(1, 0); // Assuming you want to ignore the second measurement
-
-                kalmanFilterX.Correct(measurementX);
-                kalmanFilterY.Correct(measurementY);
-
-                // Get smoothed position
-                float smoothedX = kalmanFilterX.StatePost.Get<float>(0);
-                float smoothedY = kalmanFilterY.StatePost.Get<float>(0);
-
-                // If transitioning to precision mode, adjust precisionFactor
-                if (preparingPrecision == true)
-                {
-                    // Only set transition time once when transitioning begins
-                    if (transitionPrecision == null)
-                    {
-                        transitionPrecision = DateTime.Now; // Set when transitioning begins
-                    }
-
-                    double elapsedTime = (DateTime.Now - transitionPrecision).TotalMilliseconds;
-
-                    if (elapsedTime <= 1500)
-                    {
-                        precisionFactor = 1.0 - (0.95 * (elapsedTime / 1500.0)); // Linear transition
-                    }
-                    else
-                    {
-                        precisionFactor = 0.1; // Cap at 10% after 2 seconds
-                    }
-                }
-
-                // Calculate smoothed movement with adjusted precision factor
-                smoothedX = (float)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-                smoothedY = (float)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-
-                // Set the cursor position
-                SetCursorPos((int)smoothedX, (int)smoothedY);
-
-                Thread.Sleep(duration / steps); // Wait between steps
-            }
         }
 
         private void PrecisionMode()
