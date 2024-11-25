@@ -164,50 +164,6 @@ class LiveTranscription
 
     private IWebDriver driver;
 
-    private string GetPythonExecutablePath()
-    {
-        // Get the user's home directory
-        string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-        // Construct the Python executable path
-        string python12Path = Path.Combine(userHome, @"AppData\Local\Programs\Python\Python312\python.exe");
-
-        // Check if the Python executable exists
-        if (File.Exists(python12Path))
-        {
-            return python12Path;
-        }
-        else
-        {
-            Console.WriteLine("Python is not installed at the expected path.");
-            return null;
-        }
-    }
-
-    private string GetPythonScriptPath(string scriptName)
-    {
-        // Get the user's home directory
-        string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        // Get the current directory
-        string currentDirectory = Environment.CurrentDirectory;
-
-        // Construct the script path
-        //string scriptPath = Path.Combine(userHome, @"Desktop\Capstone\ATEDNIULI\edn-app\ATEDNIULI\python", scriptName);
-        string scriptPathRelease = Path.Combine(currentDirectory, @"python", scriptName);
-
-        // Check if the script exists
-        if (File.Exists(scriptPathRelease))
-        {
-            //return scriptPath;
-            return scriptPathRelease;
-        }
-        else
-        {
-            Console.WriteLine($"Script {scriptName} is not found at the expected path.");
-            return null;
-        }
-    }
-
     public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, CameraMouse camera_mouse) // 
     {
         this.asr_window = asr_window ?? throw new ArgumentNullException(nameof(asr_window));
@@ -223,46 +179,6 @@ class LiveTranscription
             OperatingMode = OperatingMode.VeryAggressive
         };
 
-        string pythonExecutablePath = GetPythonExecutablePath();
-
-        string intentScriptPath = GetPythonScriptPath("intent.py");
-        string gridInferenceScriptPath = GetPythonScriptPath("grid_inference_optimized.py");
-
-        Task.Run(() =>
-        {
-            ProcessStartInfo start = new ProcessStartInfo
-            {
-                FileName = pythonExecutablePath,
-                Arguments = gridInferenceScriptPath,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                //CreateNoWindow = true, // Prevents the console window from appearing
-                EnvironmentVariables =
-                {
-                    { "PYTHONIOENCODING", "utf-8:replace" }
-                }
-            };
-            using (Process process = Process.Start(start))
-            {
-                // Optionally read the output of the Python script
-                using (var reader = process.StandardOutput)
-                {
-                    string result = reader.ReadToEnd();
-                    Console.WriteLine(result);
-                }
-
-                // Optionally read the error output of the Python script
-                using (var errorReader = process.StandardError)
-                {
-                    string error = errorReader.ReadToEnd();
-                    if (!string.IsNullOrEmpty(error))
-                    {
-                        Console.WriteLine($"Error: {error}");
-                    }
-                }
-            }
-        });
         // timers
         InitializeTimer();
 
@@ -1198,7 +1114,7 @@ class LiveTranscription
             }
         }
 
-        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -30)
+        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > deepspeech_confidence)
         {
             wake_word_detected = true;
         }

@@ -172,6 +172,8 @@ namespace ATEDNIULI
         {
             isRunning = true;
 
+            InitializeKalmanFilter();
+
             baselineHorizontalDistance = 0;
             baselineVerticalDistance = 0;
             isDefaultMouthSet = false;
@@ -198,8 +200,6 @@ namespace ATEDNIULI
             mouseThread?.Join(500);
 
             Cv2.DestroyAllWindows();
-            capture?.Release();
-            capture = null;
 
             ClosePreview();
         }
@@ -508,8 +508,64 @@ namespace ATEDNIULI
             }
         }
 
+        private KalmanFilter kalmanFilterX;
+        private KalmanFilter kalmanFilterY;
+
+        private void InitializeKalmanFilter()
+        {
+            // Kalman filter for X and Y coordinates
+            kalmanFilterX = new KalmanFilter(4, 2, 0);  // State: [x, dx] (position and velocity), Measurement: [x]
+            kalmanFilterY = new KalmanFilter(4, 2, 0);  // State: [y, dy] (position and velocity), Measurement: [y]
+
+            // Create and populate transition matrix (A) - assuming constant velocity model
+            kalmanFilterX.TransitionMatrix = new Mat(4, 4, MatType.CV_32F);
+            kalmanFilterX.TransitionMatrix.Set<float>(0, 0, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(0, 2, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(1, 1, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(1, 3, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(2, 2, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(3, 3, 1);
+
+            kalmanFilterY.TransitionMatrix = new Mat(4, 4, MatType.CV_32F);
+            kalmanFilterY.TransitionMatrix.Set<float>(0, 0, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(0, 2, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(1, 1, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(1, 3, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(2, 2, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(3, 3, 1);
+
+            // Measurement matrix (H)
+            kalmanFilterX.MeasurementMatrix = new Mat(2, 4, MatType.CV_32F);
+            kalmanFilterX.MeasurementMatrix.Set<float>(0, 0, 1);
+            kalmanFilterX.MeasurementMatrix.Set<float>(1, 2, 1);
+
+            kalmanFilterY.MeasurementMatrix = new Mat(2, 4, MatType.CV_32F);
+            kalmanFilterY.MeasurementMatrix.Set<float>(0, 1, 1);
+            kalmanFilterY.MeasurementMatrix.Set<float>(1, 3, 1);
+
+            // Set initial state estimate (set to initial cursor position)
+            GetCursorPos(out Point currentPos);
+            kalmanFilterX.StatePost = new Mat(4, 1, MatType.CV_32F);
+            kalmanFilterX.StatePost.Set<float>(0, currentPos.X);
+            kalmanFilterX.StatePost.Set<float>(1, 0);
+            kalmanFilterX.StatePost.Set<float>(2, 0);
+            kalmanFilterX.StatePost.Set<float>(3, 0);
+
+            kalmanFilterY.StatePost = new Mat(4, 1, MatType.CV_32F);
+            kalmanFilterY.StatePost.Set<float>(0, currentPos.Y);
+            kalmanFilterY.StatePost.Set<float>(1, 0);
+            kalmanFilterY.StatePost.Set<float>(2, 0);
+            kalmanFilterY.StatePost.Set<float>(3, 0);
+        }
+
         private void SmoothMoveTo(int targetX, int targetY, int duration = 100, int steps = 10)
         {
+            // Null check for Kalman filters
+            if (kalmanFilterX == null || kalmanFilterY == null)
+            {
+                throw new InvalidOperationException("Kalman filter not initialized. Call InitializeKalmanFilter first.");
+            }
+
             GetCursorPos(out Point currentPos);
             int startX = currentPos.X;
             int startY = currentPos.Y;
@@ -521,14 +577,31 @@ namespace ATEDNIULI
 
             for (int i = 0; i <= steps; i++)
             {
-                int newX = 0;
-                int newY = 0;
+                // Prediction step for Kalman filter (using last known state)
+                Mat predictedX = kalmanFilterX.Predict();
+                Mat predictedY = kalmanFilterY.Predict();
 
-                // Start transitioning to precision mode if necessary
+                // Correct the prediction with the actual target position (the measurement)
+                Mat measurementX = new Mat(2, 1, MatType.CV_32F);
+                measurementX.Set<float>(0, targetX);
+                measurementX.Set<float>(1, 0); // Assuming you want to ignore the second measurement
+
+                Mat measurementY = new Mat(2, 1, MatType.CV_32F);
+                measurementY.Set<float>(0, targetY);
+                measurementY.Set<float>(1, 0); // Assuming you want to ignore the second measurement
+
+                kalmanFilterX.Correct(measurementX);
+                kalmanFilterY.Correct(measurementY);
+
+                // Get smoothed position
+                float smoothedX = kalmanFilterX.StatePost.Get<float>(0);
+                float smoothedY = kalmanFilterY.StatePost.Get<float>(0);
+
+                // If transitioning to precision mode, adjust precisionFactor
                 if (preparingPrecision == true)
                 {
                     // Only set transition time once when transitioning begins
-                    if (transitionPrecision == default)
+                    if (transitionPrecision == null)
                     {
                         transitionPrecision = DateTime.Now; // Set when transitioning begins
                     }
@@ -545,10 +618,12 @@ namespace ATEDNIULI
                     }
                 }
 
-                // Calculate smoothed movement
-                newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-                newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-                SetCursorPos(newX, newY);
+                // Calculate smoothed movement with adjusted precision factor
+                smoothedX = (float)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
+                smoothedY = (float)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
+
+                // Set the cursor position
+                SetCursorPos((int)smoothedX, (int)smoothedY);
 
                 Thread.Sleep(duration / steps); // Wait between steps
             }

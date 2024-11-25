@@ -29,6 +29,7 @@
                Content="Detected Item:" 
                Foreground="#031926"
                Background="#f4e9cd"
+               Canvas.Top="30"
                Padding="5"
                Opacity="1"
                FontSize="16" 
@@ -38,7 +39,7 @@
                    Foreground="#031926" 
                    Background="#f4e9cd"
                    FontSize="16"
-                   Canvas.Top="25"
+                   Canvas.Top="60"
                    Padding="5"
                    Visibility="Collapsed"/>
 
