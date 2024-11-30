@@ -371,6 +371,9 @@
     <None Include="assets\models\my_model.h5">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="assets\models\wake_word.scorer">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="assets\train_intents.csv">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

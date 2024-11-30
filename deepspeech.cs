@@ -155,6 +155,7 @@ class LiveTranscription
     // english
     string model_path = @"assets\models\delta12.pbmm";
     string commands_scorer = @"assets\models\official_commands_scorer.scorer";
+    string wake_word_scorer = @"assets\models\wake_word.scorer";
     string intent_model_path = @"assets\models\intent_model_bigrams.bin";
 
     int deepspeech_confidence = -100;
@@ -374,6 +375,7 @@ class LiveTranscription
     private Queue<byte[]> audioQueue = new Queue<byte[]>(); // Queue for accumulated audio buffers
     private bool isProcessingQueue = false; // Flag to manage queue processing state
 
+    private bool app_start = false;
     public void StartTranscription()
     {
         try
@@ -382,7 +384,17 @@ class LiveTranscription
 
             if (!typing_mode && !showed_detected)
             {
-                load_model(model_path, commands_scorer, intent_model_path);
+                if (!app_start)
+                {
+                    load_model(model_path, wake_word_scorer, intent_model_path);
+                    app_start = true;
+                }
+                else
+                {
+                    SwitchScorer(wake_word_scorer);
+                    switched = false;
+                    wake_word_detected = false;
+                }
 
                 wave_in_event = new WaveInEvent
                 {
@@ -402,7 +414,6 @@ class LiveTranscription
                 UpdateUI(() =>
                 {
                     asr_window.HideWithFadeOut();
-                    wake_word_detected = false;
                 });
             }
             else if (typing_mode && !showed_detected)
@@ -927,6 +938,9 @@ class LiveTranscription
                 ResetCommandCounts();
             }
 
+            SwitchScorer(wake_word_scorer);
+            switched = false;
+
             Task.Run(() =>
             {
                 lock (streamLock)
@@ -1170,6 +1184,7 @@ class LiveTranscription
         }
     }
 
+    private bool switched = false;
     private void HandleWakeWord(string partial_result, double confidence)
     {
         if (itemDetected && confidence > deepspeech_confidence)
@@ -1220,6 +1235,15 @@ class LiveTranscription
             if (wake_word_timer.Enabled)
             {
                 wake_word_timer.Close();
+            }
+
+            if (!switched)
+            {
+                SwitchScorer(commands_scorer);
+                deep_speech_model.FreeStream(deep_speech_stream);
+                deep_speech_stream.Dispose();
+                deep_speech_stream = deep_speech_model.CreateStream();
+                switched = true;
             }
 
             partial_result = RemoveWakeWord(partial_result, wake_word);
@@ -1310,7 +1334,7 @@ class LiveTranscription
         {
             if (!asr_window.IsVisible) return;
 
-            FinalizeStream(); // Finalize the stream when no speech is detected
+            UpdateUI(() => FinalizeStream()); // Finalize the stream when no speech is detected
         });
     }
 

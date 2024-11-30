@@ -385,6 +385,9 @@ namespace ATEDNIULI
             // Step 3: If the nose is inside the inner circle, don't move the cursor (neutral area)
             if (distanceFromCenter <= innerCircleRadius)
             {
+                Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
+                Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
+                Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1); // Nose point
                 return; // No movement if inside the inner circle
             }
 
