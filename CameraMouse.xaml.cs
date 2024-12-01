@@ -358,7 +358,56 @@ namespace ATEDNIULI
         private bool isDefaultMouthSet = false; // Flag to track if the neutral expression is captured
         private Point currentMousePosition = new Point(0, 0);
 
-        private void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
+        private bool IsUserSmiling(List<Point> landmarksList, Mat frame)
+        {
+            if (landmarksList == null || landmarksList.Count < 68)
+            {
+                Console.WriteLine("Invalid landmarks detected.");
+                return false; // Ensure landmarks are valid
+            }
+
+            // Get key points for the mouth
+            var leftMouthCorner = landmarksList[48];
+            var rightMouthCorner = landmarksList[54];
+            var topLip = landmarksList[51];
+            var bottomLip = landmarksList[57];
+
+            // Calculate dimensions
+            double mouthWidth = Math.Sqrt(Math.Pow(rightMouthCorner.X - leftMouthCorner.X, 2) +
+                                          Math.Pow(rightMouthCorner.Y - leftMouthCorner.Y, 2));
+            double mouthHeight = Math.Sqrt(Math.Pow(topLip.X - bottomLip.X, 2) +
+                                           Math.Pow(topLip.Y - bottomLip.Y, 2));
+
+            // Calculate the width-to-height ratio
+            double ratio = mouthWidth / mouthHeight;
+
+            // Visualize metrics on the frame
+            Cv2.PutText(frame, $"Width: {mouthWidth:F1}, Height: {mouthHeight:F1}, Ratio: {ratio:F2}",
+                        new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 0.6, Scalar.White, 2);
+
+            // Define a static threshold for smile detection
+            double smileThreshold = 4.0; // Adjust as needed
+            return ratio > smileThreshold;
+        }
+
+        private int GetQuadrant(Point targetNosePoint, int roiX, int roiY)
+        {
+            int quadrant = 0;
+
+            // Determine which quadrant the nose point is in, based on the position relative to roiX and roiY
+            if (targetNosePoint.X < roiX && targetNosePoint.Y < roiY)
+                quadrant = 1; // Top-left quadrant
+            else if (targetNosePoint.X >= roiX && targetNosePoint.Y < roiY)
+                quadrant = 2; // Top-right quadrant
+            else if (targetNosePoint.X < roiX && targetNosePoint.Y >= roiY)
+                quadrant = 3; // Bottom-left quadrant
+            else if (targetNosePoint.X >= roiX && targetNosePoint.Y >= roiY)
+                quadrant = 4; // Bottom-right quadrant
+
+            return quadrant;
+        }
+
+        public void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
             var screenWidth = (int)SystemParameters.PrimaryScreenWidth;
             var screenHeight = (int)SystemParameters.PrimaryScreenHeight;
@@ -368,30 +417,128 @@ namespace ATEDNIULI
             var leftCheekPoint = landmarksList[0];  // Left edge of the face
             var rightCheekPoint = landmarksList[16]; // Right edge of the face
 
-            // Calculate the approximate center of the face edge
-            roiX = (chinPoint.X + leftCheekPoint.X + rightCheekPoint.X) / 3;
-            roiY = (chinPoint.Y + leftCheekPoint.Y + rightCheekPoint.Y) / 3;
+            var leftMouthCorner = landmarksList[48];
+            var rightMouthCorner = landmarksList[54];
+            var topLip = landmarksList[51];
+            var bottomLip = landmarksList[57];
 
-            // Inner and Outer Circle Radii
-            int innerCircleRadius = 10; // Neutral area
-            int outerCircleRadius = 50; // Max movement area
+            // Step 2: Calculate a reference distance (e.g., face width)
+            double referenceWidth = Math.Sqrt(Math.Pow(rightCheekPoint.X - leftCheekPoint.X, 2) +
+                                              Math.Pow(rightCheekPoint.Y - leftCheekPoint.Y, 2));
 
-            // Step 2: Define the nose landmark for movement calculation
-            var targetNosePoint = landmarksList[30];
-
-            // Calculate distance between the nose and the center of the outer circle
-            double distanceFromCenter = Math.Sqrt(Math.Pow(targetNosePoint.X - roiX, 2) + Math.Pow(targetNosePoint.Y - roiY, 2));
-
-            // Step 3: If the nose is inside the inner circle, don't move the cursor (neutral area)
-            if (distanceFromCenter <= innerCircleRadius)
+            // Step 3: Normalize the landmarks
+            List<PointF> normalizedLandmarks = new List<PointF>();
+            foreach (var landmark in landmarksList)
             {
-                Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
-                Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
-                Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1); // Nose point
-                return; // No movement if inside the inner circle
+                float normalizedX = (float)(landmark.X - leftCheekPoint.X) / (float)referenceWidth;
+                float normalizedY = (float)(landmark.Y - leftCheekPoint.Y) / (float)referenceWidth;
+                normalizedLandmarks.Add(new PointF(normalizedX, normalizedY));
             }
 
-            // Step 4: Calculate the direction of movement
+            // Step 4: Scale landmarks back to actual size based on current face width
+            double currentWidth = Math.Sqrt(Math.Pow(rightCheekPoint.X - leftCheekPoint.X, 2) +
+                                            Math.Pow(rightCheekPoint.Y - leftCheekPoint.Y, 2));
+
+            List<Point> scaledLandmarks = new List<Point>();
+            foreach (var normalized in normalizedLandmarks)
+            {
+                int scaledX = (int)(normalized.X * currentWidth + leftCheekPoint.X);
+                int scaledY = (int)(normalized.Y * currentWidth + leftCheekPoint.Y);
+                scaledLandmarks.Add(new Point(scaledX, scaledY));
+            }
+
+            // Use `scaledLandmarks` for further calculations or visualization
+            var targetNosePoint = scaledLandmarks[30]; // Nose
+            roiX = (scaledLandmarks[8].X + scaledLandmarks[0].X + scaledLandmarks[16].X) / 3;
+            roiY = (scaledLandmarks[8].Y + scaledLandmarks[0].Y + scaledLandmarks[16].Y) / 3;
+
+            // Inner and Outer Circle Radii
+            int innerCircleRadius = 15; // Neutral area
+            int outerCircleRadius = 50; // Max movement area
+
+            if (IsUserSmiling(scaledLandmarks, frame))
+            {
+                innerCircleRadius = 50; // Update inner circle radius dynamically
+            }
+            else
+            {
+                innerCircleRadius = 15;
+            }
+            // Step 5: Calculate the distance from the nose to the center
+            double distanceFromCenter = Math.Sqrt(Math.Pow(targetNosePoint.X - roiX, 2) + Math.Pow(targetNosePoint.Y - roiY, 2));
+
+            // Step 6: Check if the nose is within the neutral area
+            if (distanceFromCenter <= innerCircleRadius)
+            {
+                // Draw the mouth region on the original frame
+                Cv2.Circle(frame, new OpenCvSharp.Point(leftMouthCorner.X, leftMouthCorner.Y), 3, Scalar.Cyan, -1);  // Left corner
+                Cv2.Circle(frame, new OpenCvSharp.Point(rightMouthCorner.X, rightMouthCorner.Y), 3, Scalar.Cyan, -1); // Right corner
+                Cv2.Circle(frame, new OpenCvSharp.Point(topLip.X, topLip.Y), 3, Scalar.Green, -1);  // Top lip
+                Cv2.Circle(frame, new OpenCvSharp.Point(bottomLip.X, bottomLip.Y), 3, Scalar.Green, -1);  // Bottom lip
+
+                if (IsUserSmiling(scaledLandmarks, frame))
+                {
+                    Cv2.PutText(frame, "Smile Detected", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Green, 2);
+
+                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
+                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
+
+                    int lineLength = outerCircleRadius;
+                    Cv2.Line(frame, new OpenCvSharp.Point(roiX - lineLength, roiY), new OpenCvSharp.Point(roiX + lineLength, roiY), Scalar.Cyan, 2); // Horizontal line
+                    Cv2.Line(frame, new OpenCvSharp.Point(roiX, roiY - lineLength), new OpenCvSharp.Point(roiX, roiY + lineLength), Scalar.Cyan, 2); // Vertical line
+
+                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), 15, Scalar.Black, -1); // Filled black circle (neutral area)
+
+                    Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1); // Nose point
+
+                    // Check if the nose is inside the filled black circle (15 radius)
+                    double distanceFromCenterToBlackCircle = Math.Sqrt(Math.Pow(targetNosePoint.X - roiX, 2) + Math.Pow(targetNosePoint.Y - roiY, 2));
+
+                    if (distanceFromCenterToBlackCircle <= 15) // If inside the black circle
+                    {
+                        Cv2.PutText(frame, "Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
+                    }
+                    else
+                    {
+                        // If the nose is outside the black circle, calculate the quadrant
+                        int quadrant = GetQuadrant(targetNosePoint, roiX, roiY);
+
+                        // Check if the nose is inside the outer circle (max movement area)
+                        double distanceFromCenterToOuterCircle = Math.Sqrt(Math.Pow(targetNosePoint.X - roiX, 2) + Math.Pow(targetNosePoint.Y - roiY, 2));
+                        if (distanceFromCenterToOuterCircle <= outerCircleRadius)
+                        {
+                            if (quadrant == 1)
+                            {
+                                Cv2.PutText(frame, "Double Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
+                            }
+                            else if (quadrant == 2)
+                            {
+                                Cv2.PutText(frame, "Right Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
+                            }
+                            else if (quadrant == 3)
+                            {
+                                Cv2.PutText(frame, "Hold", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
+                            }
+                            else if (quadrant == 4)
+                            {
+                                Cv2.PutText(frame, "Scroll Lock", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
+                            }
+                        }
+                    }
+
+                    return;
+                }
+                else
+                {
+                    Cv2.PutText(frame, "No Smile", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Red, 2);
+                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
+                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
+                    Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1); // Nose point
+                    return; // No movement if not smiling
+                }
+            }
+
+            // Step 7: Calculate the direction of movement
             double moveX = targetNosePoint.X - roiX; // X direction of the nose from the center
             double moveY = targetNosePoint.Y - roiY; // Y direction of the nose from the center
 
@@ -403,17 +550,14 @@ namespace ATEDNIULI
                 moveY /= magnitude;
             }
 
-            // Step 5: Calculate the distance from the nose to the inner circle edge
+            // Step 8: Scale the movement based on the distance from the inner circle edge
             double distanceToInnerCircleEdge = distanceFromCenter - innerCircleRadius;
+            double speed = Math.Min(distanceToInnerCircleEdge, 25); // Cap speed
 
-            // Step 6: Scale the speed based on the distance from the inner circle edge
-            double speed = Math.Min(distanceToInnerCircleEdge, 25); // Cap the speed to a reasonable limit (e.g., 20)
-
-            // Step 7: Gradually move the mouse in the direction of the nose
             double incrementX = (moveX * speed) * 2;
             double incrementY = (moveY * speed) * 2;
 
-            // Update the current mouse position
+            // Step 9: Update mouse position
             currentMousePosition.X += (int)incrementX;
             currentMousePosition.Y += (int)incrementY;
 
@@ -424,25 +568,11 @@ namespace ATEDNIULI
             // Update the mouse cursor position
             Task.Run(() => SmoothMoveTo(currentMousePosition.X, currentMousePosition.Y));
 
-            // Visualize the inner and outer circles
-            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
-            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
-            Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1); // Nose point
-
-            // Visualize the line representing the distance from the nose to the inner circle edge
-            // Visualize the line representing the distance from the nose to the inner circle edge
-            double innerCircleEdgeX = roiX + innerCircleRadius * moveX;
-            double innerCircleEdgeY = roiY + innerCircleRadius * moveY;
-            OpenCvSharp.Point innerCircleEdgePoint = new OpenCvSharp.Point(innerCircleEdgeX, innerCircleEdgeY);
-
-            // Draw the line from the edge of the inner circle to the nose point
-            Cv2.Line(frame, new OpenCvSharp.Point(innerCircleEdgeX, innerCircleEdgeY),
-                     new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), Scalar.Yellow, 2);
-
-            // Visualize the face edge points
-            Cv2.Circle(frame, new OpenCvSharp.Point(chinPoint.X, chinPoint.Y), 5, Scalar.Magenta, -1); // Chin point
-            Cv2.Circle(frame, new OpenCvSharp.Point(leftCheekPoint.X, leftCheekPoint.Y), 5, Scalar.Cyan, -1); // Left cheek
-            Cv2.Circle(frame, new OpenCvSharp.Point(rightCheekPoint.X, rightCheekPoint.Y), 5, Scalar.Cyan, -1); // Right cheek
+            // Visualization
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2);
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2);
+            Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1);
+            Cv2.Line(frame, new OpenCvSharp.Point(roiX, roiY), new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), Scalar.Yellow, 2);
         }
 
         private void SmoothMoveTo(int targetX, int targetY, int duration = 100, int steps = 10)
