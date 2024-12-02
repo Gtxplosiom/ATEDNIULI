@@ -221,112 +221,133 @@ namespace ATEDNIULI
 
         private void CameraLoop()
         {
-            using (var detector = Dlib.GetFrontalFaceDetector())
-            using (var predictor = ShapePredictor.Deserialize("assets/models/shape_predictor_68_face_landmarks.dat"))
+            try
             {
-                capture = IsCameraAvailable(1) ? new VideoCapture(1) : new VideoCapture(0);
-
-                if (!capture.IsOpened())
+                using (var detector = Dlib.GetFrontalFaceDetector())
+                using (var predictor = ShapePredictor.Deserialize("assets/models/shape_predictor_68_face_landmarks.dat"))
                 {
-                    Console.WriteLine("Error: Could not open webcam.");
-                    return;
-                }
+                    capture = IsCameraAvailable(1) ? new VideoCapture(1) : new VideoCapture(0);
 
-                int screenWidth = GetSystemMetrics(0);
-                int screenHeight = GetSystemMetrics(1);
+                    if (!capture.IsOpened())
+                    {
+                        Console.WriteLine("Error: Could not open webcam.");
+                        return;
+                    }
 
-                double roiPercentage = 0.05;
-                int roiWidth = (int)(webcamWidth * roiPercentage);
-                int roiHeight = (int)(webcamHeight * roiPercentage);
+                    int screenWidth = GetSystemMetrics(0);
+                    int screenHeight = GetSystemMetrics(1);
 
-                int roiX = (webcamWidth - roiWidth) / 2;
-                int roiY = (webcamHeight - roiHeight) / 2;
+                    double roiPercentage = 0.05;
+                    int roiWidth = (int)(webcamWidth * roiPercentage);
+                    int roiHeight = (int)(webcamHeight * roiPercentage);
+                    int roiX = (webcamWidth - roiWidth) / 2;
+                    int roiY = (webcamHeight - roiHeight) / 2;
+                    double scalingFactorX = screenWidth / (double)roiWidth;
+                    double scalingFactorY = screenHeight / (double)roiHeight;
 
-                double scalingFactorX = screenWidth / (double)roiWidth;
-                double scalingFactorY = screenHeight / (double)roiHeight;
-
-                var frame = new Mat();
-                var gray = new Mat();
-                var landmarksList = new List<Point>();
-
-                try
-                {
-                    Task.Run(() => PrecisionMode());
+                    int retryCount = 0;
 
                     while (isRunning)
                     {
-                        capture.Read(frame);
-                        if (frame.Empty())
+                        using (var frame = new Mat())
+                        using (var gray = new Mat())
                         {
-                            Console.WriteLine("Error: Failed to grab frame.");
-                            break;
-                        }
-
-                        Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
-                        Cv2.Flip(frame, frame, FlipMode.Y);
-                        Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
-
-                        try
-                        {
-                            using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
+                            try
                             {
-                                var faces = detector.Operator(dlibImage);
+                                capture.Read(frame);
 
-                                foreach (var face in faces)
+                                if (frame.Empty())
                                 {
-                                    try
-                                    {
-                                        var landmarks = predictor.Detect(dlibImage, face);
-                                        landmarksList.Clear(); // Clear for reuse
-                                        for (int i = 0; i < (int)landmarks.Parts; i++)
-                                        {
-                                            landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
-                                        }
+                                    Console.WriteLine("Warning: Failed to grab frame.");
+                                    if (retryCount++ > 5) break;
+                                    continue;
+                                }
+                                retryCount = 0;
 
-                                        ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
-                                    }
-                                    catch (Exception landmarkEx)
+                                Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
+                                Cv2.Flip(frame, frame, FlipMode.Y);
+                                Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
+
+                                if (gray.Empty() || gray.Data == IntPtr.Zero)
+                                {
+                                    Console.WriteLine("Error: Invalid grayscale data.");
+                                    continue;
+                                }
+
+                                byte[] imageData = new byte[gray.Rows * gray.Cols];
+                                Marshal.Copy(gray.Data, imageData, 0, imageData.Length);
+
+                                // Debugging: Check the image data dimensions and steps
+                                uint steps = (uint)gray.Step();
+                                uint rows = (uint)gray.Rows;
+                                uint columns = (uint)gray.Cols;
+
+                                Console.WriteLine($"Rows: {rows}, Columns: {columns}, Steps: {steps}");
+
+                                using (var dlibImage = Dlib.LoadImageData<byte>(imageData, rows, columns, steps))
+                                {
+                                    var faces = detector.Operator(dlibImage);
+
+                                    foreach (var face in faces)
                                     {
-                                        Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
+                                        try
+                                        {
+                                            var landmarks = predictor.Detect(dlibImage, face);
+                                            var landmarksList = new List<Point>();
+                                            for (int i = 0; i < (int)landmarks.Parts; i++)
+                                            {
+                                                landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
+                                            }
+                                            ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                                        }
+                                        catch (Exception landmarkEx)
+                                        {
+                                            Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
+                                        }
                                     }
                                 }
-                            }
-                        }
-                        catch (Exception dlibEx)
-                        {
-                            Console.WriteLine($"Error loading Dlib image: {dlibEx.Message}");
-                        }
 
-                        Dispatcher.BeginInvoke(new Action(() =>
-                        {
-                            if (this.Visibility == Visibility.Collapsed)
+                                // Ensure the frame is valid before updating the UI
+                                if (frame != null && !frame.Empty())
+                                {
+                                    Dispatcher.Invoke(new Action(() =>
+                                    {
+                                        if (this.Visibility == Visibility.Collapsed)
+                                        {
+                                            this.Visibility = Visibility.Visible;
+                                        }
+
+                                        try
+                                        {
+                                            CameraImageSource = ConvertMatToBitmapSource(frame);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Console.WriteLine($"Error converting frame to BitmapSource: {ex.Message}");
+                                        }
+                                    }));
+                                }
+                            }
+                            catch (Exception loopEx)
                             {
-                                this.Visibility = Visibility.Visible;
+                                Console.WriteLine($"Error during frame processing: {loopEx.Message}");
                             }
-
-                            CameraImageSource = ConvertMatToBitmapSource(frame);
-                        }));
-
-                        if (Cv2.WaitKey(1) == 27)
-                        {
-                            break;
                         }
-
-                        // Optional: Trigger garbage collection to release memory periodically (for debugging only)
-                        GC.Collect();
-                        GC.WaitForPendingFinalizers();
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error in CameraLoop: {ex.Message}");
-                }
-                finally
-                {
-                    capture?.Release();
-                    frame?.Dispose();
-                    gray?.Dispose();
-                }
+            }
+            catch (AccessViolationException avEx)
+            {
+                Console.WriteLine($"Memory access violation error: {avEx.Message}");
+                // Log or handle the memory access violation specifically
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Fatal error in CameraLoop: {ex.Message}");
+            }
+            finally
+            {
+                capture?.Release();
             }
         }
 
