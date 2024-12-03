@@ -31,6 +31,7 @@ using Whisper.net.Logger;
 using static System.Net.Mime.MediaTypeNames;
 using FastText.NetWrapper;
 using System.Text.RegularExpressions;
+using System.Windows.Controls;
 
 class LiveTranscription
 {
@@ -269,6 +270,39 @@ class LiveTranscription
         InitializeWhisper();
 
         show_items.ItemDetected += CheckDetected;
+
+        UpdateMouseActionLabel();
+    }
+
+    public string action = "none";
+    private void UpdateMouseActionLabel()
+    {
+        Thread labelthread = new Thread(() =>
+        {
+            while (true)
+            {
+                action = camera_mouse.action;
+
+                show_items.Dispatcher.Invoke(() =>
+                {
+                    show_items.MouseActionLabel.Content = action;  // Update label content when action changes
+
+                    if (action != "none")
+                    {
+                        show_items.MouseActionLabel.Visibility = System.Windows.Visibility.Visible;
+                    }
+                    else
+                    {
+                        show_items.MouseActionLabel.Visibility = System.Windows.Visibility.Collapsed;
+                    }
+                });
+
+                Thread.Sleep(50); // Sleep for 50 milliseconds
+            }
+        });
+
+        labelthread.IsBackground = true;
+        labelthread.Start();
     }
 
     private bool itemDetected = false;

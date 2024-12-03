@@ -497,11 +497,30 @@ namespace ATEDNIULI
             return false; // No smile detected
         }
 
-        private string action = "none";
+        public string action = "none";
         private bool isHolding = false;
 
         private DateTime? smileStartTime = null; // Nullable DateTime to track when the smile started
         private TimeSpan smileDuration = TimeSpan.Zero;
+
+        public void UpdateAction(string newAction)
+        {
+            lock (_lock) // Ensure that only one thread can modify the action at a time
+            {
+                action = newAction;
+            }
+        }
+
+        public string GetAction()
+        {
+            lock (_lock) // Ensure that the action is not changed while we're reading it
+            {
+                return action;
+            }
+        }
+
+        private readonly object _lock = new object();
+
         public void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
             var screenWidth = (int)SystemParameters.PrimaryScreenWidth;
@@ -559,26 +578,27 @@ namespace ATEDNIULI
                     if (smileDuration.TotalSeconds >= 1 && smileDuration.TotalSeconds < 2)
                     {
                         Cv2.PutText(frame, "Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
-                        action = "left_click";
+                        UpdateAction("Click");
                     }
                     else if (smileDuration.TotalSeconds >= 2 && smileDuration.TotalSeconds < 3)
                     {
                         Cv2.PutText(frame, "Double Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
-                        action = "double_click";
+                        UpdateAction("Double Click");
                     }
                     else if (smileDuration.TotalSeconds >= 3 && smileDuration.TotalSeconds < 4)
                     {
                         Cv2.PutText(frame, "Right Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
-                        action = "right_click";
+                        UpdateAction("Right Click");
                     }
                     else if (smileDuration.TotalSeconds >= 4 && smileDuration.TotalSeconds < 5)
                     {
                         Cv2.PutText(frame, "Hold", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
-                        action = "hold";
+                        UpdateAction("Hold");
                     }
                     else if (smileDuration.TotalSeconds >= 5 && smileDuration.TotalSeconds < 6)
                     {
                         Cv2.PutText(frame, "Scroll Lock", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        UpdateAction("Scroll Lock");
                     }
                     else if (smileDuration.TotalSeconds >= 6)
                     {
@@ -587,7 +607,7 @@ namespace ATEDNIULI
                     }
                     else if (smileDuration.TotalSeconds < 1)
                     {
-                        action = "none";
+                        UpdateAction("none");
                     }
 
                     return;
@@ -601,26 +621,26 @@ namespace ATEDNIULI
                     {
 
                     }
-                    else if (action == "left_click")
+                    else if (action == "Click")
                     {
                         MouseSimulator.LeftClick();
                     }
-                    else if (action == "double_click")
+                    else if (action == "Double Click")
                     {
                         MouseSimulator.DoubleClick();
                     }
-                    else if (action == "right_click")
+                    else if (action == "Right Click")
                     {
                         MouseSimulator.RightClick();
                     }
-                    else if (action == "hold")
+                    else if (action == "Hold")
                     {
                         MouseSimulator.HoldLeftClick();
                     }
 
                     Cv2.PutText(frame, "No Smile", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Red, 2);
 
-                    action = "none";
+                    UpdateAction("none");
 
                     return;
                 }

@@ -25,7 +25,7 @@ namespace ATEDNIULI
         private double ScalingFactor; // Declare the scaling factor
         private AutomationElement _taskbarElement; // Cached taskbar element
         private List<ClickableItem> _clickableItems; // List to store clickable items
-                                                     // Declare a global counter at the class level.
+        private CameraMouse camera_mouse;
         private int globalCounter = 1;
 
         [DllImport("user32.dll")]
@@ -270,10 +270,60 @@ namespace ATEDNIULI
         public ShowItems()
         {
             InitializeComponent();
+            camera_mouse = new CameraMouse();
             _tags = new List<Label>(); // Initialize the tag list
             ScalingFactor = GetScalingFactor();
             Show();
             StartZMQListener();
+            TrackMouse();
+        }
+
+        private static (int X, int Y) GetMousePosition()
+        {
+            // Get the current mouse position using Cursor.Position
+            var mousePosition = System.Windows.Forms.Cursor.Position;
+            return (mousePosition.X, mousePosition.Y);
+        }
+
+        private void TrackMouse()
+        {
+            Thread trackingThread = new Thread(() =>
+            {
+                while (true)
+                {
+                    var currentMousePosition = GetMousePosition();
+
+                    // Get the screen width and height
+                    int screenWidth = (int)System.Windows.SystemParameters.PrimaryScreenWidth;
+                    int screenHeight = (int)System.Windows.SystemParameters.PrimaryScreenHeight;
+
+                    // Default offset
+                    int offsetX = 15;  // You can adjust this for more fine-grained positioning
+                    int offsetY = 50;
+
+                    // Check if the label would exceed the screen boundaries
+                    if (currentMousePosition.Y - offsetY < 0) // Top side
+                    {
+                        offsetY = -30; // Move the label below
+                    }
+                    else if (currentMousePosition.Y + offsetY > screenHeight) // Bottom side
+                    {
+                        offsetY = 50; // Move the label above
+                    }
+
+                    // Adjust label position based on mouse position and offset
+                    Application.Current.Dispatcher.Invoke(new Action(() =>
+                    {
+                        Canvas.SetLeft(MouseActionLabel, currentMousePosition.X - offsetX);
+                        Canvas.SetTop(MouseActionLabel, currentMousePosition.Y - offsetY);
+                    }));
+
+                    Thread.Sleep(50); // Sleep for 50 milliseconds
+                }
+            });
+
+            trackingThread.IsBackground = true;
+            trackingThread.Start();
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)

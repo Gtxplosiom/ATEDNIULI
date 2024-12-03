@@ -43,8 +43,18 @@
                    Padding="5"
                    Visibility="Collapsed"/>
 
+        <Label x:Name="MouseActionLabel" 
+                Content=""
+                Foreground="#031926"
+                Background="#f4e9cd"
+                Canvas.Top="30"
+                Padding="5"
+                Opacity="1"
+                FontSize="10" 
+                Visibility="Visible"/>     
+
         <!-- ListBox for displaying actions related to the detected item -->
-        <ListBox x:Name="ActionList" 
+        <ListBox x:Name="ActionList"
                  Foreground="#031926" 
                  Background="#f4e9cd"
                  FontSize="14"
