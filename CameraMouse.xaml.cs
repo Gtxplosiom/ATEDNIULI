@@ -126,6 +126,55 @@ namespace ATEDNIULI
 
         private BitmapSource ConvertMat;
 
+        public static class MouseSimulator
+        {
+            public static void LeftClick()
+            {
+                MouseEvent(MouseEventFlags.LeftDown | MouseEventFlags.LeftUp);
+            }
+
+            public static void RightClick()
+            {
+                MouseEvent(MouseEventFlags.RightDown | MouseEventFlags.RightUp);
+            }
+
+            public static void DoubleClick()
+            {
+                LeftClick();
+                System.Threading.Thread.Sleep(100);  // Short delay between clicks
+                LeftClick();
+            }
+
+            public static void HoldLeftClick()
+            {
+                MouseEvent(MouseEventFlags.LeftDown); // Press down the left mouse button
+            }
+
+            public static void ReleaseLeftClick()
+            {
+                MouseEvent(MouseEventFlags.LeftUp); // Press down the left mouse button
+            }
+
+            private static void MouseEvent(MouseEventFlags value)
+            {
+                mouse_event((int)value, 0, 0, 0, 0);
+            }
+
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            private static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
+
+            [Flags]
+            private enum MouseEventFlags
+            {
+                LeftDown = 0x02,
+                LeftUp = 0x04,
+                RightDown = 0x08,
+                RightUp = 0x10,
+                MiddleDown = 0x20,
+                MiddleUp = 0x40
+            }
+        }
+
         private void PositionWindow()
         {
             // Get the dimensions of the primary screen
@@ -293,11 +342,14 @@ namespace ATEDNIULI
                                         try
                                         {
                                             var landmarks = predictor.Detect(dlibImage, face);
+
                                             var landmarksList = new List<Point>();
+
                                             for (int i = 0; i < (int)landmarks.Parts; i++)
                                             {
                                                 landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
                                             }
+
                                             ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
                                         }
                                         catch (Exception landmarkEx)
@@ -379,55 +431,77 @@ namespace ATEDNIULI
         private bool isDefaultMouthSet = false; // Flag to track if the neutral expression is captured
         private Point currentMousePosition = new Point(0, 0);
 
+        private double mouthToHeadRatio = 0;
+
         private bool IsUserSmiling(List<Point> landmarksList, Mat frame)
         {
+            // Define a base smile threshold in pixel-based measurements
+            double smileThreshold = 0.43; // Base value, adjustable
+
             if (landmarksList == null || landmarksList.Count < 68)
             {
                 Console.WriteLine("Invalid landmarks detected.");
                 return false; // Ensure landmarks are valid
             }
 
-            // Get key points for the mouth
+            // Smooth key mouth landmarks
             var leftMouthCorner = landmarksList[48];
             var rightMouthCorner = landmarksList[54];
             var topLip = landmarksList[51];
             var bottomLip = landmarksList[57];
 
-            // Calculate dimensions
+            // Smooth face side landmarks
+            var leftFace = landmarksList[0];
+            var rightFace = landmarksList[16];
+
+            // Head size (distance between left and right side of the face)
+            double headWidth = Math.Sqrt(Math.Pow(rightFace.X - leftFace.X, 2) +
+                                         Math.Pow(rightFace.Y - leftFace.Y, 2));
+
+            Console.WriteLine($"Head width: {headWidth}");
+
+            // Apply a minimum threshold for head width to avoid extremely small values
+            if (headWidth < 10.0) // Threshold is 10 pixels
+            {
+                Console.WriteLine("Head width too small, skipping frame.");
+                return false; // Prevents NaN or invalid results
+            }
+
+            // Calculate mouth dimensions in pixels
             double mouthWidth = Math.Sqrt(Math.Pow(rightMouthCorner.X - leftMouthCorner.X, 2) +
                                           Math.Pow(rightMouthCorner.Y - leftMouthCorner.Y, 2));
             double mouthHeight = Math.Sqrt(Math.Pow(topLip.X - bottomLip.X, 2) +
                                            Math.Pow(topLip.Y - bottomLip.Y, 2));
 
-            // Calculate the width-to-height ratio
-            double ratio = mouthWidth / mouthHeight;
+            // Apply a minimum threshold for mouth height to avoid division by zero or very small values
+            if (mouthHeight < 5.0) // Minimum value for mouth height in pixels
+            {
+                Console.WriteLine("Mouth height too small, skipping frame.");
+                return false; // Prevents NaN or invalid results
+            }
+
+            // Calculate the mouth-to-head width ratio (using pixel dimensions)
+            mouthToHeadRatio = mouthWidth / headWidth;
 
             // Visualize metrics on the frame
-            Cv2.PutText(frame, $"Width: {mouthWidth:F1}, Height: {mouthHeight:F1}, Ratio: {ratio:F2}",
-                        new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 0.6, Scalar.White, 2);
+            Cv2.PutText(frame, $"Ratio: {mouthToHeadRatio:F2}", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 0.6, Scalar.White, 2);
 
-            // Define a static threshold for smile detection
-            double smileThreshold = 4.0; // Adjust as needed
-            return ratio > smileThreshold;
+            // Check if the mouth-to-head ratio is greater than the smile threshold
+            if (mouthToHeadRatio > smileThreshold)
+            {
+                Console.WriteLine($"Smile Detected!{smileThreshold}:{mouthToHeadRatio}");
+                return true; // Smile detected
+            }
+
+            Console.WriteLine($"No Smile Detected...{smileThreshold}:{mouthToHeadRatio}");
+            return false; // No smile detected
         }
 
-        private int GetQuadrant(Point targetNosePoint, int roiX, int roiY)
-        {
-            int quadrant = 0;
+        private string action = "none";
+        private bool isHolding = false;
 
-            // Determine which quadrant the nose point is in, based on the position relative to roiX and roiY
-            if (targetNosePoint.X < roiX && targetNosePoint.Y < roiY)
-                quadrant = 1; // Top-left quadrant
-            else if (targetNosePoint.X >= roiX && targetNosePoint.Y < roiY)
-                quadrant = 2; // Top-right quadrant
-            else if (targetNosePoint.X < roiX && targetNosePoint.Y >= roiY)
-                quadrant = 3; // Bottom-left quadrant
-            else if (targetNosePoint.X >= roiX && targetNosePoint.Y >= roiY)
-                quadrant = 4; // Bottom-right quadrant
-
-            return quadrant;
-        }
-
+        private DateTime? smileStartTime = null; // Nullable DateTime to track when the smile started
+        private TimeSpan smileDuration = TimeSpan.Zero;
         public void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
             var screenWidth = (int)SystemParameters.PrimaryScreenWidth;
@@ -442,126 +516,119 @@ namespace ATEDNIULI
             var rightMouthCorner = landmarksList[54];
             var topLip = landmarksList[51];
             var bottomLip = landmarksList[57];
+            var nosePoint = landmarksList[30]; // Nose point
 
-            // Step 2: Calculate a reference distance (e.g., face width)
-            double referenceWidth = Math.Sqrt(Math.Pow(rightCheekPoint.X - leftCheekPoint.X, 2) +
-                                              Math.Pow(rightCheekPoint.Y - leftCheekPoint.Y, 2));
-
-            // Step 3: Normalize the landmarks
-            List<PointF> normalizedLandmarks = new List<PointF>();
-            foreach (var landmark in landmarksList)
-            {
-                float normalizedX = (float)(landmark.X - leftCheekPoint.X) / (float)referenceWidth;
-                float normalizedY = (float)(landmark.Y - leftCheekPoint.Y) / (float)referenceWidth;
-                normalizedLandmarks.Add(new PointF(normalizedX, normalizedY));
-            }
-
-            // Step 4: Scale landmarks back to actual size based on current face width
-            double currentWidth = Math.Sqrt(Math.Pow(rightCheekPoint.X - leftCheekPoint.X, 2) +
-                                            Math.Pow(rightCheekPoint.Y - leftCheekPoint.Y, 2));
-
-            List<Point> scaledLandmarks = new List<Point>();
-            foreach (var normalized in normalizedLandmarks)
-            {
-                int scaledX = (int)(normalized.X * currentWidth + leftCheekPoint.X);
-                int scaledY = (int)(normalized.Y * currentWidth + leftCheekPoint.Y);
-                scaledLandmarks.Add(new Point(scaledX, scaledY));
-            }
-
-            // Use `scaledLandmarks` for further calculations or visualization
-            var targetNosePoint = scaledLandmarks[30]; // Nose
-            roiX = (scaledLandmarks[8].X + scaledLandmarks[0].X + scaledLandmarks[16].X) / 3;
-            roiY = (scaledLandmarks[8].Y + scaledLandmarks[0].Y + scaledLandmarks[16].Y) / 3;
+            // Step 2: Calculate the ROI center based on the face landmarks
+            roiX = (chinPoint.X + leftCheekPoint.X + rightCheekPoint.X) / 3;
+            roiY = (chinPoint.Y + leftCheekPoint.Y + rightCheekPoint.Y) / 3;
 
             // Inner and Outer Circle Radii
             int innerCircleRadius = 15; // Neutral area
             int outerCircleRadius = 50; // Max movement area
 
-            if (IsUserSmiling(scaledLandmarks, frame))
-            {
-                innerCircleRadius = 50; // Update inner circle radius dynamically
-            }
-            else
-            {
-                innerCircleRadius = 15;
-            }
-            // Step 5: Calculate the distance from the nose to the center
-            double distanceFromCenter = Math.Sqrt(Math.Pow(targetNosePoint.X - roiX, 2) + Math.Pow(targetNosePoint.Y - roiY, 2));
+            // Step 3: Calculate the distance from the nose to the ROI center
+            double distanceFromCenter = Math.Sqrt(Math.Pow(nosePoint.X - roiX, 2) + Math.Pow(nosePoint.Y - roiY, 2));
 
-            // Step 6: Check if the nose is within the neutral area
+            // Draw the mouth region on the original frame
+            Cv2.Circle(frame, new OpenCvSharp.Point(leftMouthCorner.X, leftMouthCorner.Y), 3, Scalar.Cyan, -1);  // Left corner
+            Cv2.Circle(frame, new OpenCvSharp.Point(rightMouthCorner.X, rightMouthCorner.Y), 3, Scalar.Cyan, -1); // Right corner
+            Cv2.Circle(frame, new OpenCvSharp.Point(topLip.X, topLip.Y), 3, Scalar.Green, -1);  // Top lip
+            Cv2.Circle(frame, new OpenCvSharp.Point(bottomLip.X, bottomLip.Y), 3, Scalar.Green, -1);  // Bottom lip
+
+            // circles
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
+
+            // nose point
+            Cv2.Circle(frame, new OpenCvSharp.Point(nosePoint.X, nosePoint.Y), 5, Scalar.Red, -1); // Nose point
+
+            // Step 4: Handle actions based on the distance from the center
             if (distanceFromCenter <= innerCircleRadius)
             {
-                // Draw the mouth region on the original frame
-                Cv2.Circle(frame, new OpenCvSharp.Point(leftMouthCorner.X, leftMouthCorner.Y), 3, Scalar.Cyan, -1);  // Left corner
-                Cv2.Circle(frame, new OpenCvSharp.Point(rightMouthCorner.X, rightMouthCorner.Y), 3, Scalar.Cyan, -1); // Right corner
-                Cv2.Circle(frame, new OpenCvSharp.Point(topLip.X, topLip.Y), 3, Scalar.Green, -1);  // Top lip
-                Cv2.Circle(frame, new OpenCvSharp.Point(bottomLip.X, bottomLip.Y), 3, Scalar.Green, -1);  // Bottom lip
-
-                if (IsUserSmiling(scaledLandmarks, frame))
+                if (IsUserSmiling(landmarksList, frame))
                 {
-                    Cv2.PutText(frame, "Smile Detected", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Green, 2);
-
-                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
-                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
-
-                    int lineLength = outerCircleRadius;
-                    Cv2.Line(frame, new OpenCvSharp.Point(roiX - lineLength, roiY), new OpenCvSharp.Point(roiX + lineLength, roiY), Scalar.Cyan, 2); // Horizontal line
-                    Cv2.Line(frame, new OpenCvSharp.Point(roiX, roiY - lineLength), new OpenCvSharp.Point(roiX, roiY + lineLength), Scalar.Cyan, 2); // Vertical line
-
-                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), 15, Scalar.Black, -1); // Filled black circle (neutral area)
-
-                    Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1); // Nose point
-
-                    // Check if the nose is inside the filled black circle (15 radius)
-                    double distanceFromCenterToBlackCircle = Math.Sqrt(Math.Pow(targetNosePoint.X - roiX, 2) + Math.Pow(targetNosePoint.Y - roiY, 2));
-
-                    if (distanceFromCenterToBlackCircle <= 15) // If inside the black circle
+                    if (smileStartTime == null)
                     {
-                        Cv2.PutText(frame, "Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
+                        smileStartTime = DateTime.Now;
                     }
-                    else
-                    {
-                        // If the nose is outside the black circle, calculate the quadrant
-                        int quadrant = GetQuadrant(targetNosePoint, roiX, roiY);
 
-                        // Check if the nose is inside the outer circle (max movement area)
-                        double distanceFromCenterToOuterCircle = Math.Sqrt(Math.Pow(targetNosePoint.X - roiX, 2) + Math.Pow(targetNosePoint.Y - roiY, 2));
-                        if (distanceFromCenterToOuterCircle <= outerCircleRadius)
-                        {
-                            if (quadrant == 1)
-                            {
-                                Cv2.PutText(frame, "Double Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
-                            }
-                            else if (quadrant == 2)
-                            {
-                                Cv2.PutText(frame, "Right Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
-                            }
-                            else if (quadrant == 3)
-                            {
-                                Cv2.PutText(frame, "Hold", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
-                            }
-                            else if (quadrant == 4)
-                            {
-                                Cv2.PutText(frame, "Scroll Lock", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.White, 2);
-                            }
-                        }
+                    smileDuration = DateTime.Now - smileStartTime.Value;
+
+                    Cv2.PutText(frame, $"Smile Detected: {smileDuration.Seconds}s", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Green, 2);
+
+                    if (smileDuration.TotalSeconds >= 1 && smileDuration.TotalSeconds < 2)
+                    {
+                        Cv2.PutText(frame, "Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        action = "left_click";
+                    }
+                    else if (smileDuration.TotalSeconds >= 2 && smileDuration.TotalSeconds < 3)
+                    {
+                        Cv2.PutText(frame, "Double Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        action = "double_click";
+                    }
+                    else if (smileDuration.TotalSeconds >= 3 && smileDuration.TotalSeconds < 4)
+                    {
+                        Cv2.PutText(frame, "Right Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        action = "right_click";
+                    }
+                    else if (smileDuration.TotalSeconds >= 4 && smileDuration.TotalSeconds < 5)
+                    {
+                        Cv2.PutText(frame, "Hold", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        action = "hold";
+                    }
+                    else if (smileDuration.TotalSeconds >= 5 && smileDuration.TotalSeconds < 6)
+                    {
+                        Cv2.PutText(frame, "Scroll Lock", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                    }
+                    else if (smileDuration.TotalSeconds >= 6)
+                    {
+                        smileStartTime = null; // Reset
+                        smileDuration = TimeSpan.Zero;
+                    }
+                    else if (smileDuration.TotalSeconds < 1)
+                    {
+                        action = "none";
                     }
 
                     return;
                 }
                 else
                 {
+                    smileStartTime = null; // Reset
+                    smileDuration = TimeSpan.Zero;
+
+                    if (action == "none")
+                    {
+
+                    }
+                    else if (action == "left_click")
+                    {
+                        MouseSimulator.LeftClick();
+                    }
+                    else if (action == "double_click")
+                    {
+                        MouseSimulator.DoubleClick();
+                    }
+                    else if (action == "right_click")
+                    {
+                        MouseSimulator.RightClick();
+                    }
+                    else if (action == "hold")
+                    {
+                        MouseSimulator.HoldLeftClick();
+                    }
+
                     Cv2.PutText(frame, "No Smile", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Red, 2);
-                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
-                    Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
-                    Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1); // Nose point
-                    return; // No movement if not smiling
+
+                    action = "none";
+
+                    return;
                 }
             }
 
-            // Step 7: Calculate the direction of movement
-            double moveX = targetNosePoint.X - roiX; // X direction of the nose from the center
-            double moveY = targetNosePoint.Y - roiY; // Y direction of the nose from the center
+            // Step 5: Calculate movement based on nose position
+            double moveX = nosePoint.X - roiX; // X direction of the nose from the center
+            double moveY = nosePoint.Y - roiY; // Y direction of the nose from the center
 
             // Normalize the direction vector
             double magnitude = Math.Sqrt(moveX * moveX + moveY * moveY);
@@ -571,29 +638,29 @@ namespace ATEDNIULI
                 moveY /= magnitude;
             }
 
-            // Step 8: Scale the movement based on the distance from the inner circle edge
+            // Scale movement based on distance
             double distanceToInnerCircleEdge = distanceFromCenter - innerCircleRadius;
             double speed = Math.Min(distanceToInnerCircleEdge, 25); // Cap speed
 
-            double incrementX = (moveX * speed) * 2;
-            double incrementY = (moveY * speed) * 2;
+            double incrementX = moveX * speed * 2;
+            double incrementY = moveY * speed * 2;
 
-            // Step 9: Update mouse position
+            // Update mouse position
             currentMousePosition.X += (int)incrementX;
             currentMousePosition.Y += (int)incrementY;
 
-            // Ensure the mouse stays within the screen boundaries
+            // Clamp to screen boundaries
             currentMousePosition.X = Clamp(currentMousePosition.X, 0, screenWidth);
             currentMousePosition.Y = Clamp(currentMousePosition.Y, 0, screenHeight);
 
-            // Update the mouse cursor position
+            // Move cursor
             Task.Run(() => SmoothMoveTo(currentMousePosition.X, currentMousePosition.Y));
 
             // Visualization
             Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2);
             Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2);
-            Cv2.Circle(frame, new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), 5, Scalar.Red, -1);
-            Cv2.Line(frame, new OpenCvSharp.Point(roiX, roiY), new OpenCvSharp.Point(targetNosePoint.X, targetNosePoint.Y), Scalar.Yellow, 2);
+            Cv2.Circle(frame, new OpenCvSharp.Point(nosePoint.X, nosePoint.Y), 5, Scalar.Red, -1);
+            Cv2.Line(frame, new OpenCvSharp.Point(roiX, roiY), new OpenCvSharp.Point(nosePoint.X, nosePoint.Y), Scalar.Yellow, 2);
         }
 
         private void SmoothMoveTo(int targetX, int targetY, int duration = 100, int steps = 10)
@@ -635,6 +702,7 @@ namespace ATEDNIULI
                 float smoothedX = kalmanFilterX.StatePost.Get<float>(0);
                 float smoothedY = kalmanFilterY.StatePost.Get<float>(0);
 
+                // PRECISION MODE
                 //// If transitioning to precision mode, adjust precisionFactor
                 //if (preparingPrecision == true)
                 //{

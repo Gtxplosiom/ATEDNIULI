@@ -28,7 +28,6 @@ namespace ATEDNIULI
                                                      // Declare a global counter at the class level.
         private int globalCounter = 1;
 
-
         [DllImport("user32.dll")]
         private static extern IntPtr GetDC(IntPtr hWnd);
 
