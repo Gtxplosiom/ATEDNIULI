@@ -15,6 +15,7 @@ using System.Windows.Media.Imaging;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions.Internal;
+using System.Windows.Shapes;
 
 namespace ATEDNIULI
 {
@@ -285,6 +286,12 @@ namespace ATEDNIULI
             return (mousePosition.X, mousePosition.Y);
         }
 
+        public double lastDirectionX = 0;
+        public double lastDirectionY = 0;
+
+        public double lastSpeed = 0;
+
+        // TrackMouse method to update label position and direction arrow
         private void TrackMouse()
         {
             Thread trackingThread = new Thread(() =>
@@ -312,11 +319,14 @@ namespace ATEDNIULI
                     }
 
                     // Adjust label position based on mouse position and offset
-                    Application.Current.Dispatcher.Invoke(new Action(() =>
+                    Application.Current.Dispatcher.Invoke(() =>
                     {
                         Canvas.SetLeft(MouseActionLabel, currentMousePosition.X - offsetX);
                         Canvas.SetTop(MouseActionLabel, currentMousePosition.Y - offsetY);
-                    }));
+
+                        // Draw arrow on transparent canvas
+                        DrawArrowOnCanvas(new Point(currentMousePosition.X, currentMousePosition.Y), lastDirectionX, lastDirectionY, lastSpeed);
+                    });
 
                     Thread.Sleep(50); // Sleep for 50 milliseconds
                 }
@@ -324,6 +334,61 @@ namespace ATEDNIULI
 
             trackingThread.IsBackground = true;
             trackingThread.Start();
+        }
+
+        // Method to draw arrow on the transparent canvas
+        // List to track arrow elements
+        private List<UIElement> arrowElements = new List<UIElement>();
+
+        private void DrawArrowOnCanvas(Point mousePosition, double directionX, double directionY, double speed)
+        {
+            // Clear only the previous arrow visuals
+            foreach (var element in arrowElements)
+            {
+                OverlayCanvas.Children.Remove(element);
+            }
+            arrowElements.Clear();
+
+            // Normalize direction
+            double magnitude = Math.Sqrt(directionX * directionX + directionY * directionY);
+            if (magnitude > 0)
+            {
+                directionX /= magnitude;
+                directionY /= magnitude;
+            }
+
+            // Stretch factor based on speed (the higher the speed, the longer the arrowhead)
+            double stretchFactor = Math.Min(1 + speed * 0.1, 3); // Adjust the scaling factor as needed, capped at 3
+
+            // Adjust arrow so it starts ahead of the cursor
+            double cursorOffset = 30; // Distance between the cursor and the start of the arrow
+            Point arrowStart = new Point(
+                mousePosition.X + directionX * cursorOffset,  // Move the start ahead of the cursor
+                mousePosition.Y + directionY * cursorOffset);
+
+            // Calculate the stretched arrowhead points
+            double arrowHeadLength = 5 * stretchFactor; // Base length of arrowhead stretched by speed
+            Point arrowEnd = new Point(
+                arrowStart.X + directionX * arrowHeadLength,
+                arrowStart.Y + directionY * arrowHeadLength);
+
+            // Draw stretched arrowhead (triangle)
+            Polygon arrowHead = new Polygon
+            {
+                Points = new PointCollection
+        {
+            arrowEnd,
+            new Point(arrowEnd.X - directionY * arrowHeadLength / 2 - directionX * arrowHeadLength / 2,
+                      arrowEnd.Y + directionX * arrowHeadLength / 2 - directionY * arrowHeadLength / 2),
+            new Point(arrowEnd.X + directionY * arrowHeadLength / 2 - directionX * arrowHeadLength / 2,
+                      arrowEnd.Y - directionX * arrowHeadLength / 2 - directionY * arrowHeadLength / 2)
+        },
+                Fill = Brushes.Yellow
+            };
+
+            // Add the new arrowhead to the canvas
+            OverlayCanvas.Children.Add(arrowHead);
+            arrowElements.Add(arrowHead); // Keep track of the arrowhead
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)

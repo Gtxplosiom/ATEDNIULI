@@ -521,6 +521,11 @@ namespace ATEDNIULI
 
         private readonly object _lock = new object();
 
+        public double lastDirectionX = 0;
+        public double lastDirectionY = 0;
+
+        public double lastSpeed = 0;
+
         public void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
             var screenWidth = (int)SystemParameters.PrimaryScreenWidth;
@@ -617,6 +622,8 @@ namespace ATEDNIULI
                     smileStartTime = null; // Reset
                     smileDuration = TimeSpan.Zero;
 
+                    lastSpeed = 0;
+
                     if (action == "none")
                     {
 
@@ -658,9 +665,14 @@ namespace ATEDNIULI
                 moveY /= magnitude;
             }
 
+            lastDirectionX = moveX;
+            lastDirectionY = moveY;
+
             // Scale movement based on distance
             double distanceToInnerCircleEdge = distanceFromCenter - innerCircleRadius;
             double speed = Math.Min(distanceToInnerCircleEdge, 25); // Cap speed
+
+            lastSpeed = speed;
 
             double incrementX = moveX * speed * 2;
             double incrementY = moveY * speed * 2;

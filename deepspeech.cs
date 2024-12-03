@@ -275,6 +275,7 @@ class LiveTranscription
     }
 
     public string action = "none";
+
     private void UpdateMouseActionLabel()
     {
         Thread labelthread = new Thread(() =>
@@ -282,6 +283,11 @@ class LiveTranscription
             while (true)
             {
                 action = camera_mouse.action;
+
+                show_items.lastDirectionX = camera_mouse.lastDirectionX;
+                show_items.lastDirectionY = camera_mouse.lastDirectionY;
+
+                show_items.lastSpeed = camera_mouse.lastSpeed;
 
                 show_items.Dispatcher.Invoke(() =>
                 {
