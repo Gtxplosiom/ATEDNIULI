@@ -31,7 +31,6 @@ using Whisper.net.Logger;
 using static System.Net.Mime.MediaTypeNames;
 using FastText.NetWrapper;
 using System.Text.RegularExpressions;
-using System.Windows.Controls;
 
 class LiveTranscription
 {
@@ -373,6 +372,7 @@ class LiveTranscription
 
         UpdateUI(() => asr_window.AppendText("Loading scorer..."));
         deep_speech_model.EnableExternalScorer(scorer_path);
+        deep_speech_model.AddHotWord("thermal", 5);
 
         UpdateUI(() => asr_window.AppendText("Loading intent model..."));
         intent_model = new FastTextWrapper();
@@ -977,11 +977,11 @@ class LiveTranscription
                 ResetCommandCounts();
             }
 
-            SwitchScorer(wake_word_scorer);
-            switched = false;
-
             Task.Run(() =>
             {
+                SwitchScorer(wake_word_scorer);
+                switched = false;
+
                 lock (streamLock)
                 {
                     string final_result_from_stream = deep_speech_model.FinishStream(deep_speech_stream);
@@ -1436,26 +1436,95 @@ class LiveTranscription
     {
         if (string.IsNullOrEmpty(transcription)) return;
 
-        //HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
-        //HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
-        //HandleCommand("stop showing", transcription, ref show_items_command_count, () => RemoveTags());
-        //HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
-        //HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.ControlKey)); // Customize as needed
-        //HandleCommand("open chrome", transcription, ref chrome_command_count, () => OpenBrowserWithSearch("who is the greatest lol player of all time"));
-        //HandleCommand("open edge", transcription, ref edge_command_count, () => StartProcess("msedge"));
-        //HandleCommand("open word", transcription, ref word_command_count, () => StartProcess("winword"));
-        //HandleCommand("open excel", transcription, ref excel_command_count, () => StartProcess("excel"));
-        //HandleCommand("open powerpoint", transcription, ref powerpoint_command_count, () => StartProcess("powerpnt"));
-        //HandleCommand("open file manager", transcription, ref file_manager_command_count, () => StartProcess("explorer"));
-        //HandleCommand("switch", transcription, ref switch_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.Tab));
-        //HandleCommand("enter", transcription, ref enter_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.Enter));
-        //HandleCommand("close application", transcription, ref close_calculator_command_count, () => CloseApp());
-        //HandleCommand("scroll up", transcription, ref scroll_up_command_count, () => ScrollUp(200));
-        //HandleCommand("scroll down", transcription, ref scroll_down_command_count, () => ScrollDown(-200));
-        //HandleCommand("screenshot", transcription, ref screenshot_command_count, () => ScreenShot());
-        //HandleCommand("volume up", transcription, ref volume_up_command_count, () => VolumeUp());
-        //HandleCommand("volume down", transcription, ref volume_down_command_count, () => VolumeDown());
-        //HandleCommand("open settings", transcription, ref settings_command_count, () => StartProcess("ms-settings:"));
+        // mouse control commands
+        if (transcription.IndexOf("activate mouse", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            UpdateUI(() => show_items.NotificationLabel.Content = "Opening Mouse");
+            mouse_activated = true;
+            OpenMouse();
+            commandExecuted = true;
+            UpdateUI(() => FinalizeStream());
+        }
+
+        if (transcription.IndexOf("deactivate mouse", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            UpdateUI(() => show_items.NotificationLabel.Content = "Closing Mouse");
+            mouse_activated = false;
+            CloseMouse();
+            commandExecuted = true;
+            UpdateUI(() => FinalizeStream());
+        }
+
+        if (transcription.IndexOf("start typing", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            if (!typing_mode)
+            {
+                UpdateUI(() => FinalizeStream());
+                wave_in_event.StopRecording();
+                typing_appear_timer.Start();
+                audioBuffer.SetLength(0);
+            }
+            else
+            {
+                Console.WriteLine("already in typing mode");
+            }
+        }
+
+        if (transcription.IndexOf("search", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            string search_query = transcription.Substring("search".Length).Trim();
+            if (!string.IsNullOrEmpty(search_query))
+            {
+                OpenBrowserWithSearch(search_query);
+                commandExecuted = true;
+                UpdateUI(() => FinalizeStream());
+            }
+        }
+
+        // type something
+        //if (transcription.IndexOf("type", StringComparison.OrdinalIgnoreCase) >= 0)
+        //{
+        //    SwitchScorer(typing_scorer);
+        //    UpdateUI(() => FinalizeStream());
+        //    UpdateUI(() => asr_window.Show());
+        //}
+
+        //if (transcription.StartsWith("search", StringComparison.OrdinalIgnoreCase))
+        //{
+        //    string search_query = transcription.Substring("search".Length).Trim();
+        //    if (!string.IsNullOrEmpty(search_query))
+        //    {
+        //        OpenBrowserWithSearch(search_query);
+        //        return; // Exit after processing this command
+        //    }
+        //}
+
+        HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
+        HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
+        HandleCommand("stop showing", transcription, ref show_items_command_count, () => RemoveTags());
+        HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
+        HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.ControlKey)); // Customize as needed
+        HandleCommand("open chrome", transcription, ref chrome_command_count, () => OpenBrowserWithSearch("who is the greatest lol player of all time"));
+        HandleCommand("open edge", transcription, ref edge_command_count, () => StartProcess("msedge"));
+        HandleCommand("open word", transcription, ref word_command_count, () => StartProcess("winword"));
+        HandleCommand("open excel", transcription, ref excel_command_count, () => StartProcess("excel"));
+        HandleCommand("open powerpoint", transcription, ref powerpoint_command_count, () => StartProcess("powerpnt"));
+        HandleCommand("open file manager", transcription, ref file_manager_command_count, () => StartProcess("explorer"));
+        HandleCommand("switch", transcription, ref switch_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.Tab));
+
+        //HandleCommand("left", transcription, ref left_command_count, () => SimulateKeyPress(Keys.Left));
+        //HandleCommand("right", transcription, ref right_command_count, () => SimulateKeyPress(Keys.Right));
+        //HandleCommand("up", transcription, ref up_command_count, () => SimulateKeyPress(Keys.Up));
+        //HandleCommand("down", transcription, ref down_command_count, () => SimulateKeyPress(Keys.Down));
+
+        HandleCommand("enter", transcription, ref enter_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.Enter));
+        HandleCommand("close application", transcription, ref close_calculator_command_count, () => CloseApp());
+        HandleCommand("scroll up", transcription, ref scroll_up_command_count, () => ScrollUp(200));
+        HandleCommand("scroll down", transcription, ref scroll_down_command_count, () => ScrollDown(-200));
+        HandleCommand("screenshot", transcription, ref screenshot_command_count, () => ScreenShot());
+        HandleCommand("volume up", transcription, ref volume_up_command_count, () => VolumeUp());
+        HandleCommand("volume down", transcription, ref volume_down_command_count, () => VolumeDown());
+        HandleCommand("open settings", transcription, ref settings_command_count, () => StartProcess("ms-settings:"));
     }
 
     private bool HandleCommand(string commandPhrase, string transcription, ref int commandCount, Action action)
