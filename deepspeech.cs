@@ -1343,7 +1343,7 @@ class LiveTranscription
 
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        if (itemDetected && confidence > -50 && mouse_steady)
+        if (itemDetected && confidence > -100 && mouse_steady)
         {
             for (int number_index = 0; number_index < numberStrings.Count; number_index++)
             {
@@ -1360,18 +1360,6 @@ class LiveTranscription
                     deep_speech_stream = deep_speech_model.CreateStream();
                 });
             }
-        }
-
-        int new_click_count = partial_result.Split(new[] { "click" }, StringSplitOptions.None).Length - 1; // enable clicks buffer like multiple clicks sunod sunod
-        if (new_click_count > click_command_count)
-        {
-            int clicks_to_perform = new_click_count - click_command_count;
-            UpdateUI(() => asr_window.AppendText($"Performing {clicks_to_perform} click(s)...", true));
-            for (int i = 0; i < clicks_to_perform; i++)
-            {
-                SimulateMouseClick();
-            }
-            click_command_count = new_click_count;
         }
 
         if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -25)
@@ -1938,6 +1926,8 @@ class LiveTranscription
         if (!camera_mouse_opened)
         {
             camera_mouse_opened = true;
+            show_items.mouse_active = true;
+
             Task.Run(() =>
             {
                 // Assuming you have a method StartCameraMouse in your cameramouse class
@@ -1954,7 +1944,7 @@ class LiveTranscription
     private void CloseMouse()
     {
         camera_mouse_opened = false;
-        // Assuming you have a method StopCameraMouse in your cameramouse class to stop the mouse functionality
+        show_items.mouse_active = false;
 
         UpdateUI(() =>
         {

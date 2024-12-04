@@ -17,13 +17,16 @@ using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions.Internal;
 using System.Windows.Shapes;
 using System.IO;
+using Microsoft.Office.Interop.Word;
+using Microsoft.Office.Interop.Excel;
+using Microsoft.Office.Interop.PowerPoint;
 
 namespace ATEDNIULI
 {
-    public partial class ShowItems : Window
+    public partial class ShowItems : System.Windows.Window
     {
         private DispatcherTimer _tagRemovalTimer; // Timer for removing tags
-        private List<Label> _tags; // List to store tags
+        private List<System.Windows.Controls.Label> _tags; // List to store tags
         private double ScalingFactor; // Declare the scaling factor
         private AutomationElement _taskbarElement; // Cached taskbar element
         private List<ClickableItem> _clickableItems; // List to store clickable items
@@ -172,6 +175,21 @@ namespace ATEDNIULI
                         "4. View comments",
                         "5. Share video link"
                     };
+                case "microsoft word":
+                    return new string[]
+                    {
+                        "1. New Document"
+                    };
+                case "excel":
+                    return new string[]
+                    {
+                        "1. New Workbook"
+                    };
+                case "powerpoint":
+                    return new string[]
+                    {
+                        "1. New Presentation"
+                    };
                 default:
                     return null; // No actions for unrecognized labels
             }
@@ -209,13 +227,102 @@ namespace ATEDNIULI
                     ExecuteYouTubeAction(actionNumber);
                     break;
 
+                case "microsoft word":
+                    ExecuteWordAction(actionNumber);
+                    break;
+
+                case "powerpoint":
+                    ExecutePowerPointAction(actionNumber);
+                    break;
+
+                case "excel":
+                    ExecuteExcelAction(actionNumber);
+                    break;
+
                 default:
                     Console.WriteLine($"No actions available for label: {label}");
                     break;
             }
         }
 
+        private Microsoft.Office.Interop.Word.Application wordApp;
+
         // Define methods for each label's actions
+        private void ExecuteWordAction(int actionNumber)
+        {
+            wordApp = new Microsoft.Office.Interop.Word.Application { Visible = true };
+            switch (actionNumber)
+            {
+                case 1: CreateNewDocument(); break;
+                default: Console.WriteLine("Action not recognized for Chrome."); break;
+            }
+        }
+
+        private void CreateNewDocument()
+        {
+            try
+            {
+                Document newDoc = wordApp.Documents.Add();
+                Console.WriteLine("New Word document created.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating new document: {ex.Message}");
+            }
+        }
+
+        private Microsoft.Office.Interop.Excel.Application excelApp;
+
+        private void ExecuteExcelAction(int actionNumber)
+        {
+            excelApp = new Microsoft.Office.Interop.Excel.Application { Visible = true };
+
+            switch (actionNumber)
+            {
+                case 1: CreateNewWorkbook(); break;
+                default: Console.WriteLine("Action not recognized for Chrome."); break;
+            }
+        }
+
+        private void CreateNewWorkbook()
+        {
+            try
+            {
+                Workbook newWorkbook = excelApp.Workbooks.Add();
+                Console.WriteLine("New Excel workbook created.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating new workbook: {ex.Message}");
+            }
+        }
+
+        private Microsoft.Office.Interop.PowerPoint.Application powerpointApp;
+
+        private void ExecutePowerPointAction(int actionNumber)
+        {
+            powerpointApp = new Microsoft.Office.Interop.PowerPoint.Application { Visible = Microsoft.Office.Core.MsoTriState.msoTrue };
+
+            switch (actionNumber)
+            {
+                case 1: CreateNewPresentation(); break;
+                default: Console.WriteLine("Action not recognized for Chrome."); break;
+            }
+        }
+
+        private void CreateNewPresentation()
+        {
+            try
+            {
+                Presentation newPresentation = powerpointApp.Presentations.Add(Microsoft.Office.Core.MsoTriState.msoTrue);
+                Console.WriteLine("New PowerPoint presentation created.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating new presentation: {ex.Message}");
+            }
+        }
+
         private void ExecuteChromeAction(int actionNumber)
         {
             switch (actionNumber)
@@ -392,7 +499,7 @@ namespace ATEDNIULI
         {
             InitializeComponent();
             camera_mouse = new CameraMouse();
-            _tags = new List<Label>(); // Initialize the tag list
+            _tags = new List<System.Windows.Controls.Label>(); // Initialize the tag list
             ScalingFactor = GetScalingFactor();
             Show();
             StartZMQListener();
@@ -439,13 +546,13 @@ namespace ATEDNIULI
                     }
 
                     // Adjust label position based on mouse position and offset
-                    Application.Current.Dispatcher.Invoke(() =>
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
                     {
                         Canvas.SetLeft(MouseActionLabel, currentMousePosition.X - offsetX);
                         Canvas.SetTop(MouseActionLabel, currentMousePosition.Y - offsetY);
 
                         // Draw arrow on transparent canvas
-                        DrawArrowOnCanvas(new Point(currentMousePosition.X, currentMousePosition.Y), lastDirectionX, lastDirectionY, lastSpeed);
+                        DrawArrowOnCanvas(new System.Windows.Point(currentMousePosition.X, currentMousePosition.Y), lastDirectionX, lastDirectionY, lastSpeed);
                     });
 
                     Thread.Sleep(50); // Sleep for 50 milliseconds
@@ -470,7 +577,7 @@ namespace ATEDNIULI
         // List to track arrow elements
         public static List<UIElement> arrowElements = new List<UIElement>();
 
-        private void DrawArrowOnCanvas(Point mousePosition, double directionX, double directionY, double speed)
+        private void DrawArrowOnCanvas(System.Windows.Point mousePosition, double directionX, double directionY, double speed)
         {
             // Clear only the previous arrow visuals
             foreach (var element in arrowElements)
@@ -492,13 +599,13 @@ namespace ATEDNIULI
 
             // Adjust arrow so it starts ahead of the cursor
             double cursorOffset = 30; // Distance between the cursor and the start of the arrow
-            Point arrowStart = new Point(
+            System.Windows.Point arrowStart = new System.Windows.Point(
                 mousePosition.X + directionX * cursorOffset,  // Move the start ahead of the cursor
                 mousePosition.Y + directionY * cursorOffset);
 
             // Calculate the stretched arrowhead points
             double arrowHeadLength = 5 * stretchFactor; // Base length of arrowhead stretched by speed
-            Point arrowEnd = new Point(
+            System.Windows.Point arrowEnd = new System.Windows.Point(
                 arrowStart.X + directionX * arrowHeadLength,
                 arrowStart.Y + directionY * arrowHeadLength);
 
@@ -508,9 +615,9 @@ namespace ATEDNIULI
                 Points = new PointCollection
         {
             arrowEnd,
-            new Point(arrowEnd.X - directionY * arrowHeadLength / 2 - directionX * arrowHeadLength / 2,
+            new System.Windows.Point(arrowEnd.X - directionY * arrowHeadLength / 2 - directionX * arrowHeadLength / 2,
                       arrowEnd.Y + directionX * arrowHeadLength / 2 - directionY * arrowHeadLength / 2),
-            new Point(arrowEnd.X + directionY * arrowHeadLength / 2 - directionX * arrowHeadLength / 2,
+            new System.Windows.Point(arrowEnd.X + directionY * arrowHeadLength / 2 - directionX * arrowHeadLength / 2,
                       arrowEnd.Y - directionX * arrowHeadLength / 2 - directionY * arrowHeadLength / 2)
         },
                 Fill = Brushes.Yellow
@@ -571,16 +678,16 @@ namespace ATEDNIULI
             _cancellationTokenSource = new CancellationTokenSource();
 
             // Start processing clickable items with a new token
-            Task.Run(() => ProcessClickableItems(_cancellationTokenSource.Token));
+            System.Threading.Tasks.Task.Run(() => ProcessClickableItems(_cancellationTokenSource.Token));
         }
 
-        private async Task ProcessClickableItems(CancellationToken token)
+        private async System.Threading.Tasks.Task ProcessClickableItems(CancellationToken token)
         {
             AutomationElement currentWindow = null;
             try
             {
                 // Throttle the execution to prevent overlap
-                await Task.Delay(200, token);
+                await System.Threading.Tasks.Task.Delay(200, token);
 
                 if (token.IsCancellationRequested)
                     return; // Early exit if the token was canceled
@@ -749,10 +856,10 @@ namespace ATEDNIULI
                             else
                             {
                                 // Ensure UI updates are marshaled to the UI thread using Dispatcher
-                                Application.Current.Dispatcher.Invoke(() =>
+                                System.Windows.Application.Current.Dispatcher.Invoke(() =>
                                 {
                                     // Add UI tag for visualization (as before)
-                                    Label tag = new Label
+                                    System.Windows.Controls.Label tag = new System.Windows.Controls.Label
                                     {
                                         Content = $"{globalCounter}",
                                         Background = Brushes.Yellow,
@@ -811,7 +918,7 @@ namespace ATEDNIULI
                         Console.WriteLine($"Clickable Item {globalCounter}: {controlName}");
 
                         // UI updates must be done on the UI thread
-                        Label tag = new Label
+                        System.Windows.Controls.Label tag = new System.Windows.Controls.Label
                         {
                             Content = globalCounter,
                             Background = Brushes.Yellow,
@@ -881,7 +988,7 @@ namespace ATEDNIULI
                                 _clickableItems.Add(clickableItem);
 
                                 // Create and store the clickable item (tag) to display in UI
-                                Label tag = new Label
+                                System.Windows.Controls.Label tag = new System.Windows.Controls.Label
                                 {
                                     Content = $"Link - {globalCounter}",
                                     Background = Brushes.Yellow,
@@ -937,7 +1044,7 @@ namespace ATEDNIULI
                         Console.WriteLine($"Clickable Item {globalCounter}: {controlName}");
 
                         // UI updates must be done on the UI thread
-                        Label tag = new Label
+                        System.Windows.Controls.Label tag = new System.Windows.Controls.Label
                         {
                             Content = globalCounter,
                             Background = Brushes.Yellow,
@@ -1035,7 +1142,7 @@ namespace ATEDNIULI
                                     });
 
                                     // Create a label (tag) for the taskbar item
-                                    Label tag = new Label
+                                    System.Windows.Controls.Label tag = new System.Windows.Controls.Label
                                     {
                                         Content = "T-" + globalCounter, // Prefix with 'T' for taskbar items
                                         Background = Brushes.Green,
