@@ -1224,6 +1224,7 @@ class LiveTranscription
     }
 
     private bool switched = false;
+    private string detected_item = "";
     private void HandleWakeWord(string partial_result, double confidence)
     {
         if (itemDetected && confidence > deepspeech_confidence)
@@ -1232,10 +1233,12 @@ class LiveTranscription
             {
                 string number = numberStrings[number_index]; // Get the current number as a string
 
+                detected_item = show_items.detected_item;
+
                 // Here we handle the command for each number string
                 HandleCommand(number, partial_result, ref execute_number_command_count, () =>
                 {
-                    show_items.ExecuteAction(number_index + 1); // Use number_index + 1 if you want to represent 1-based index
+                    show_items.ExecuteAction(detected_item, number_index + 1); // Use number_index + 1 if you want to represent 1-based index
                 });
             }
         }
@@ -1817,7 +1820,7 @@ class LiveTranscription
                 camera_mouse.StartCameraMouse();
                 UpdateUI(() =>
                 {
-                    asr_window.AppendText("Camera mouse activated.");
+                    show_items.NotificationLabel.Content = "Camera mouse activated.";
                 });
             });
         }
@@ -1828,11 +1831,15 @@ class LiveTranscription
     {
         camera_mouse_opened = false;
         // Assuming you have a method StopCameraMouse in your cameramouse class to stop the mouse functionality
-        camera_mouse.StopCameraMouse(); // Implement this in cameramouse.cs
+
         UpdateUI(() =>
         {
-            asr_window.AppendText("Camera mouse deactivated.");
+            show_items.ClearArrowDrawings();
+
+            show_items.NotificationLabel.Content = "Camera mouse deactivated.";
         });
+
+        camera_mouse.StopCameraMouse(); // Implement this in cameramouse.cs
     }
 
     public bool IsActiveWindow(string applicationName)

@@ -16,6 +16,7 @@ using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions.Internal;
 using System.Windows.Shapes;
+using System.IO;
 
 namespace ATEDNIULI
 {
@@ -72,6 +73,7 @@ namespace ATEDNIULI
         // Add an event using the delegate
         public event ItemDetectedEventHandler ItemDetected;
 
+        public string detected_item = "";
         private void ProcessDetectionMessage(string message)
         {
             //Console.WriteLine($"Received message: {message}");
@@ -102,6 +104,7 @@ namespace ATEDNIULI
 
                 // Display numbered actions based on the detected label
                 var actions = GetActionsForLabel(label);
+                detected_item = label;
                 if (actions != null && actions.Length > 0)
                 {
                     ActionList.ItemsSource = actions;
@@ -116,6 +119,7 @@ namespace ATEDNIULI
             }
             else
             {
+                detected_item = "";
                 Console.WriteLine("Invalid detection message.");
                 DetectedItemLabel.Visibility = Visibility.Collapsed;
                 DetectedItemText.Visibility = Visibility.Collapsed;
@@ -133,28 +137,37 @@ namespace ATEDNIULI
                 case "chrome":
                     return new string[]
                     {
-                "1. Open new tab",
-                "2. Open last visited website",
-                "3. Bookmark this page",
-                "4. Close tab",
-                "5. Open incognito window"
+                        "1. Open new tab",
+                        "2. Open last visited website",
+                        "3. Bookmark this page",
+                        "4. Close tab",
+                        "5. Open incognito window"
                     };
                 case "folder":
                     return new string[]
                     {
-                "1. Open folder",
-                "2. Copy folder path",
-                "3. View properties",
-                "4. Share folder"
+                        "1. Open folder",
+                        "2. Rename folder",
+                        "3. View properties",
+                        "4. Share folder"
+                    };
+                case "file manager":
+                    return new string[]
+                    {
+                        "1. Open Desktop folder",
+                        "2. Open Downloads folder",
+                        "3. Open Documents folder",
+                        "4. Open Videos folder",
+                        "5. Open Pictures folder"
                     };
                 case "youtube":
                     return new string[]
                     {
-                "1. Play/Pause video",
-                "2. Like video",
-                "3. Subscribe to channel",
-                "4. View comments",
-                "5. Share video link"
+                        "1. Play/Pause video",
+                        "2. Like video",
+                        "3. Subscribe to channel",
+                        "4. View comments",
+                        "5. Share video link"
                     };
                 default:
                     return null; // No actions for unrecognized labels
@@ -167,35 +180,139 @@ namespace ATEDNIULI
             {
                 // Parse the selected action number
                 int actionNumber = int.Parse(ActionList.SelectedItem.ToString().Split('.')[0]);
-                ExecuteAction(actionNumber);
+                ExecuteAction(detected_item, actionNumber);
             }
         }
 
         // Map action numbers to action methods
-        public void ExecuteAction(int actionNumber)
+        // Dynamically execute actions based on the label and selected action number
+        public void ExecuteAction(string label, int actionNumber)
         {
-            switch (actionNumber)
+            switch (label.ToLower())
             {
-                case 1:
-                    OpenNewTab();
+                case "chrome":
+                    ExecuteChromeAction(actionNumber);
                     break;
-                case 2:
-                    OpenLastVisitedWebsite();
+
+                case "folder":
+                    ExecuteFolderAction(actionNumber);
                     break;
-                case 3:
-                    BookmarkPage();
+
+                case "file manager":
+                    ExecuteFileManagerAction(actionNumber);
                     break;
-                case 4:
-                    CloseTab();
+
+                case "youtube":
+                    ExecuteYouTubeAction(actionNumber);
                     break;
-                case 5:
-                    OpenIncognitoWindow();
-                    break;
+
                 default:
-                    Console.WriteLine("Action not recognized.");
+                    Console.WriteLine($"No actions available for label: {label}");
                     break;
             }
         }
+
+        // Define methods for each label's actions
+        private void ExecuteChromeAction(int actionNumber)
+        {
+            switch (actionNumber)
+            {
+                case 1: OpenNewTab(); break;
+                case 2: OpenLastVisitedWebsite(); break;
+                case 3: BookmarkPage(); break;
+                case 4: CloseTab(); break;
+                case 5: OpenIncognitoWindow(); break;
+                default: Console.WriteLine("Action not recognized for Chrome."); break;
+            }
+        }
+
+        private void ExecuteFolderAction(int actionNumber)
+        {
+            switch (actionNumber)
+            {
+                //case 1: OpenFolder(); break;
+                //case 2: RenameFolder(); break;
+                //case 3: ViewFolderProperties(); break;
+                //case 4: ShareFolder(); break;
+                default: Console.WriteLine("Action not recognized for Folder."); break;
+            }
+        }
+
+        private void ExecuteFileManagerAction(int actionNumber)
+        {
+            switch (actionNumber)
+            {
+                case 1: OpenDesktopFolder(); break;
+                case 2: OpenDownloadsFolder(); break;
+                case 3: OpenDocumentsFolder(); break;
+                case 4: OpenVideosFolder(); break;
+                case 5: OpenPicturesFolder(); break;
+                default: Console.WriteLine("Action not recognized for File Manager."); break;
+            }
+        }
+
+        private void ExecuteYouTubeAction(int actionNumber)
+        {
+            switch (actionNumber)
+            {
+                //case 1: PlayPauseVideo(); break;
+                //case 2: LikeVideo(); break;
+                //case 3: SubscribeToChannel(); break;
+                //case 4: ViewComments(); break;
+                //case 5: ShareVideoLink(); break;
+                default: Console.WriteLine("Action not recognized for YouTube."); break;
+            }
+        }
+
+        private void OpenDesktopFolder()
+        {
+            string path = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            OpenFolderPath(path);
+        }
+
+        private void OpenDownloadsFolder()
+        {
+            string path = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads";
+            OpenFolderPath(path);
+        }
+
+        private void OpenDocumentsFolder()
+        {
+            string path = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            OpenFolderPath(path);
+        }
+
+        private void OpenVideosFolder()
+        {
+            string path = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+            OpenFolderPath(path);
+        }
+
+        private void OpenPicturesFolder()
+        {
+            string path = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            OpenFolderPath(path);
+        }
+
+        private void OpenFolderPath(string folderPath)
+        {
+            try
+            {
+                if (Directory.Exists(folderPath))
+                {
+                    System.Diagnostics.Process.Start("explorer.exe", folderPath);
+                }
+                else
+                {
+                    Console.WriteLine($"The folder path does not exist: {folderPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error opening folder: {ex.Message}");
+            }
+        }
+
 
         public void OpenChrome()
         {
@@ -336,9 +453,19 @@ namespace ATEDNIULI
             trackingThread.Start();
         }
 
+        public void ClearArrowDrawings()
+        {
+            Console.WriteLine($"Clearing {arrowElements.Count} arrow elements.");
+            foreach (var element in arrowElements)
+            {
+                OverlayCanvas.Children.Remove(element);
+            }
+            arrowElements.Clear();
+        }
+
         // Method to draw arrow on the transparent canvas
         // List to track arrow elements
-        private List<UIElement> arrowElements = new List<UIElement>();
+        public static List<UIElement> arrowElements = new List<UIElement>();
 
         private void DrawArrowOnCanvas(Point mousePosition, double directionX, double directionY, double speed)
         {
