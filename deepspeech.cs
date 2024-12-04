@@ -101,11 +101,13 @@ class LiveTranscription
     private System.Timers.Timer wake_word_timer;
     private System.Timers.Timer debounce_timer;
     private System.Timers.Timer typing_appear_timer;
+    private System.Timers.Timer searching_appear_timer;
     private System.Timers.Timer reset_typing_stream_timer;
 
     private const int debounce_timeout = 1000; // Delay in milliseconds
     private const int wake_word_timeout = 5000; // 10 seconds timeout for no wake word detection
     private const int typing_appear = 2000;
+    private const int searching_appear = 2000;
     private const int reset_typing_timeout = 7000;
 
     // pag store han current result and previous
@@ -446,7 +448,7 @@ class LiveTranscription
         {
             DisposePreviousResources();
 
-            if (!typing_mode && !showed_detected)
+            if (!typing_mode && !showed_detected && !search_mode)
             {
                 if (!app_start)
                 {
@@ -480,7 +482,7 @@ class LiveTranscription
                     asr_window.HideWithFadeOut();
                 });
             }
-            else if (typing_mode && !showed_detected)
+            else if (typing_mode && !showed_detected && !search_mode)
             {
                 Console.WriteLine("Switching to typingmode");
 
@@ -513,9 +515,42 @@ class LiveTranscription
 
                 wave_in_event.StartRecording();
             }
-            else if (showed_detected && !typing_mode)
+            else if (showed_detected && !typing_mode && !search_mode)
             {
                 Console.WriteLine("listening for numbers...");
+
+                wave_in_event = new WaveInEvent
+                {
+                    WaveFormat = new WaveFormat(16000, 1) // 16kHz mono 
+                };
+
+                wave_in_event.DataAvailable += (s, e) =>
+                {
+                    int availableFrames = e.BytesRecorded / FrameSize;
+
+                    for (int i = 0; i < availableFrames; i++)
+                    {
+                        byte[] frame = new byte[FrameSize];
+                        Array.Copy(e.Buffer, i * FrameSize, frame, 0, FrameSize);
+                        typingBuffer.AddRange(frame); // Continuously add frame to the buffer
+                    }
+
+                    // If there's enough data, enqueue for transcription and clear the buffer
+                    if (typingBuffer.Count >= RequiredDurationMs * wave_in_event.WaveFormat.AverageBytesPerSecond / 1000)
+                    {
+                        byte[] audioToProcess = typingBuffer.ToArray();
+                        typingBuffer.Clear(); // Reset the buffer for the next round
+
+                        audioQueue.Enqueue(audioToProcess); // Enqueue buffer for processing
+                        ProcessAudioQueue(); // Start processing the queue if not already
+                    }
+                };
+
+                wave_in_event.StartRecording();
+            }
+            else if (search_mode && !showed_detected && !typing_mode)
+            {
+                Console.WriteLine("What are you searching...");
 
                 wave_in_event = new WaveInEvent
                 {
@@ -552,6 +587,8 @@ class LiveTranscription
             UpdateUI(() => asr_window.AppendText($"Error: {ex.Message}"));
         }
     }
+
+    private bool search_mode = false;
 
     private void DisposePreviousResources()
     {
@@ -646,7 +683,7 @@ class LiveTranscription
 
     private async Task ProcessResultsAsync(IAsyncEnumerable<SegmentData> results)
     {
-        if (!showed_detected)
+        if (!showed_detected && !search_mode)
         {
             UpdateUI(() => asr_window.OutputTextBox.Text = "Result: "); // Clear previous results
 
@@ -670,6 +707,52 @@ class LiveTranscription
             {
                 UpdateUI(() => asr_window.OutputTextBox.Text += $"{result.Text}\n");
                 TypeText(result.Text);
+            }
+        }
+        else if (search_mode && !showed_detected)
+        {
+            string queryText = "";
+            var resultList = new List<SegmentData>();
+            var enumerator = results.GetAsyncEnumerator();
+
+            try
+            {
+                while (await enumerator.MoveNextAsync())
+                {
+                    resultList.Add(enumerator.Current);
+                }
+            }
+            finally
+            {
+                await enumerator.DisposeAsync();
+            }
+
+            foreach (var result in resultList)
+            {
+                string cleanedText = result.Text
+                    .Replace(".", " ")
+                    .Replace(",", " ")
+                    .Replace("!", " ")
+                    .Replace("?", " ")
+                    .ToLower(); // Clean up and standardize to lowercase
+
+                // Remove content inside brackets and parentheses
+                cleanedText = Regex.Replace(cleanedText, @"[\[\(].*?[\]\)]", string.Empty);
+
+                UpdateUI(() => asr_window.AppendText(cleanedText));
+
+                if (cleanedText.Contains("search now"))
+                {
+                    UpdateUI(() => queryText = asr_window.OutputTextBox.Text.Replace("search now", "").Trim());
+                    UpdateUI(() => OpenBrowserWithSearch(queryText));
+                    search_mode = false;
+                    StartTranscription();
+                }
+                else if (cleanedText.Contains("stop searching"))
+                {
+                    search_mode = false;
+                    StartTranscription();
+                }
             }
         }
         else
@@ -898,6 +981,10 @@ class LiveTranscription
         typing_appear_timer = new System.Timers.Timer(typing_appear);
         typing_appear_timer.Elapsed += TypingMode;
         typing_appear_timer.AutoReset = false; // Timer will only trigger once
+
+        searching_appear_timer = new System.Timers.Timer(searching_appear);
+        searching_appear_timer.Elapsed += SearchingMode;
+        searching_appear_timer.AutoReset = false; // Timer will only trigger once
 
         reset_typing_stream_timer = new System.Timers.Timer(reset_typing_timeout);
         reset_typing_stream_timer.Elapsed += OnResetTypingTimerElapsed;
@@ -1256,7 +1343,7 @@ class LiveTranscription
 
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        if (itemDetected && confidence > -25 && mouse_steady)
+        if (itemDetected && confidence > -50 && mouse_steady)
         {
             for (int number_index = 0; number_index < numberStrings.Count; number_index++)
             {
@@ -1493,6 +1580,21 @@ class LiveTranscription
             }
         }
 
+        if (transcription.IndexOf("search", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            if (!search_mode)
+            {
+                UpdateUI(() => FinalizeStream());
+                wave_in_event.StopRecording();
+                searching_appear_timer.Start();
+                audioBuffer.SetLength(0);
+            }
+            else
+            {
+                Console.WriteLine("already in typing mode");
+            }
+        }
+
         if (transcription.IndexOf("show itwms", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             DetectScreen();
@@ -1559,6 +1661,23 @@ class LiveTranscription
         UpdateUI(() => show_items.NotificationLabel.Content = "Now Typing...");
 
         if (typing_mode)
+        {
+            wake_word_timer.Stop();
+            intent_window_timer.Stop();
+        }
+    }
+
+    private void SearchingMode(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        search_mode = true;
+
+        UpdateUI(() => asr_window.ShowWithFadeIn(true));
+
+        StartTranscription();
+
+        UpdateUI(() => show_items.NotificationLabel.Content = "Now Searching...");
+
+        if (search_mode)
         {
             wake_word_timer.Stop();
             intent_window_timer.Stop();
@@ -1661,14 +1780,18 @@ class LiveTranscription
 
     public void OpenBrowserWithSearch(string query)
     {
+        // Open Chrome using the show_items instance
         show_items.OpenChrome();
-        Console.WriteLine("Opening a new tab in Chrome...");
+        Console.WriteLine("Opening Google search in Chrome...");
 
-        // Encode the query to ensure special characters are handled correctly in the URL
+        // Encode the query to ensure special characters are handled correctly
         string encodedQuery = Uri.EscapeDataString(query);
 
-        // Use Google search with the encoded query
-        show_items.driver.Navigate().GoToUrl("https://www.youtube.com/");
+        // Construct the Google search URL with the encoded query
+        string googleSearchUrl = $"https://www.google.com/search?q={encodedQuery}";
+
+        // Navigate to the constructed URL
+        show_items.driver.Navigate().GoToUrl(googleSearchUrl);
     }
 
     public void OpenChrome()
