@@ -73,6 +73,7 @@ namespace ATEDNIULI
         // Add an event using the delegate
         public event ItemDetectedEventHandler ItemDetected;
 
+        public bool mouse_active = false;
         public string detected_item = "";
         private void ProcessDetectionMessage(string message)
         {
@@ -104,8 +105,10 @@ namespace ATEDNIULI
 
                 // Display numbered actions based on the detected label
                 var actions = GetActionsForLabel(label);
+
                 detected_item = label;
-                if (actions != null && actions.Length > 0)
+
+                if (actions != null && actions.Length > 0 && mouse_active)
                 {
                     ActionList.ItemsSource = actions;
                     ActionList.Visibility = Visibility.Visible;

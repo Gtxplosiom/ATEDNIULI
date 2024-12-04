@@ -14,6 +14,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using System.Windows.Controls;
 using System.Drawing;
+using System.Linq;
 
 namespace ATEDNIULI
 {
@@ -268,6 +269,8 @@ namespace ATEDNIULI
         private Point previousNosePosition = new Point(0, 0);
         private bool isFirstFrame = true; // To handle the very first frame where there's no previous data
 
+        private DlibDotNet.Rectangle? previousFaceRect = null;  // Track the previous face's bounding box
+
         private void CameraLoop()
         {
             try
@@ -337,25 +340,72 @@ namespace ATEDNIULI
                                 {
                                     var faces = detector.Operator(dlibImage);
 
-                                    foreach (var face in faces)
+                                    if (faces.Any())
                                     {
-                                        try
+                                        var face = faces[0]; // Only process the first face
+
+                                        // Check if the current face is similar to the previous one
+                                        if (previousFaceRect.HasValue)
                                         {
-                                            var landmarks = predictor.Detect(dlibImage, face);
+                                            var distance = Math.Sqrt(Math.Pow(face.Left - previousFaceRect.Value.Left, 2) +
+                                                                     Math.Pow(face.Top - previousFaceRect.Value.Top, 2));
 
-                                            var landmarksList = new List<Point>();
-
-                                            for (int i = 0; i < (int)landmarks.Parts; i++)
+                                            // Define a threshold for how much movement is allowed before switching faces
+                                            if (distance < 30)  // You can adjust this threshold value
                                             {
-                                                landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
-                                            }
+                                                // It's the same face or very close
+                                                try
+                                                {
+                                                    var landmarks = predictor.Detect(dlibImage, face);
 
-                                            ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                                                    var landmarksList = new List<Point>();
+
+                                                    for (int i = 0; i < (int)landmarks.Parts; i++)
+                                                    {
+                                                        landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
+                                                    }
+
+                                                    ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                                                }
+                                                catch (Exception landmarkEx)
+                                                {
+                                                    Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
+                                                }
+                                            }
+                                            else
+                                            {
+                                                Console.WriteLine("Face moved too far. Ignoring this frame.");
+                                            }
                                         }
-                                        catch (Exception landmarkEx)
+                                        else
                                         {
-                                            Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
+                                            // If no previous face, process the current one
+                                            try
+                                            {
+                                                var landmarks = predictor.Detect(dlibImage, face);
+
+                                                var landmarksList = new List<Point>();
+
+                                                for (int i = 0; i < (int)landmarks.Parts; i++)
+                                                {
+                                                    landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
+                                                }
+
+                                                ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                                            }
+                                            catch (Exception landmarkEx)
+                                            {
+                                                Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
+                                            }
                                         }
+
+                                        // Update the previous face's rectangle position
+                                        previousFaceRect = face;
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("No face detected.");
+                                        previousFaceRect = null;  // Reset previous face if no face is detected
                                     }
                                 }
 
@@ -526,6 +576,8 @@ namespace ATEDNIULI
 
         public double lastSpeed = 0;
 
+        public bool mouse_steady = true;
+
         public void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
             var screenWidth = (int)SystemParameters.PrimaryScreenWidth;
@@ -569,6 +621,8 @@ namespace ATEDNIULI
             // Step 4: Handle actions based on the distance from the center
             if (distanceFromCenter <= innerCircleRadius)
             {
+                mouse_steady = true;
+
                 if (IsUserSmiling(landmarksList, frame))
                 {
                     if (smileStartTime == null)
@@ -687,6 +741,8 @@ namespace ATEDNIULI
 
             // Move cursor
             Task.Run(() => SmoothMoveTo(currentMousePosition.X, currentMousePosition.Y));
+
+            mouse_steady = false;
 
             // Visualization
             Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2);

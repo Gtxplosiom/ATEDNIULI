@@ -156,6 +156,7 @@ class LiveTranscription
     string model_path = @"assets\models\delta12.pbmm";
     string commands_scorer = @"assets\models\official_commands_scorer.scorer";
     string wake_word_scorer = @"assets\models\wake_word.scorer";
+    string one_ten_scorer = @"assets\models\1-10.scorer";
     string intent_model_path = @"assets\models\intent_model_bigrams.bin";
 
     int deepspeech_confidence = -100;
@@ -283,6 +284,8 @@ class LiveTranscription
             {
                 action = camera_mouse.action;
 
+                mouse_steady = camera_mouse.mouse_steady;
+
                 show_items.lastDirectionX = camera_mouse.lastDirectionX;
                 show_items.lastDirectionY = camera_mouse.lastDirectionY;
 
@@ -315,13 +318,27 @@ class LiveTranscription
     {
         if (isDetected)
         {
+            if (!itemDetected && mouse_steady)
+            {
+                SwitchScorer(one_ten_scorer);
+                deep_speech_model.FreeStream(deep_speech_stream);
+                deep_speech_stream.Dispose();
+                deep_speech_stream = deep_speech_model.CreateStream();
+                itemDetected = true;
+            }
+
             Console.WriteLine("An item has been detected.");
-            itemDetected = true;
         }
         else
         {
-            //Console.WriteLine("No item detected.");
-            itemDetected = false;
+            if(itemDetected)
+            {
+                SwitchScorer(wake_word_scorer);
+                deep_speech_model.FreeStream(deep_speech_stream);
+                deep_speech_stream.Dispose();
+                deep_speech_stream = deep_speech_model.CreateStream();
+                itemDetected = false;
+            }
         }
     }
 
@@ -343,25 +360,33 @@ class LiveTranscription
     public bool number_clicked = true;
     public void DetectScreen()
     {
-        show_items.RemoveTagsNoTimer();
-        UpdateUI(() => asr_window.HideWithFadeOut());
-        wake_word_detected = false;
-
-        showed_detected = false;
-
-        if (showed_detected == false)
+        if (!mouse_activated)
         {
-            show_items.ListClickableItemsInCurrentWindow();
-            var clickable_items = show_items.GetClickableItems();
-        }
+            show_items.RemoveTagsNoTimer();
+            UpdateUI(() => asr_window.HideWithFadeOut());
+            wake_word_detected = false;
 
-        if (number_clicked)
-        {
-            showed_detected = true;
-            StartTranscription();
-            UpdateUI(() => main_window.HighlightODIcon(showed_detected));
-            number_clicked = false;
+            showed_detected = false;
+
+            if (showed_detected == false)
+            {
+                show_items.ListClickableItemsInCurrentWindow();
+                var clickable_items = show_items.GetClickableItems();
+            }
+
+            if (number_clicked)
+            {
+                showed_detected = true;
+                StartTranscription();
+                UpdateUI(() => main_window.HighlightODIcon(showed_detected));
+                number_clicked = false;
+            }
         }
+        else
+        {
+            UpdateUI(() => show_items.NotificationLabel.Content = "Turn off mouse first");
+        }
+        
     }
 
     public void load_model(string model_path, string scorer_path, string intent_model_path)
@@ -1091,10 +1116,12 @@ class LiveTranscription
             else if (intent == "__label__mouse_control_on")
             {
                 OpenMouse();
+                mouse_activated = true;
             }
             else if (intent == "__label__mouse_control_off")
             {
                 CloseMouse();
+                mouse_activated = false;
             }
             else if (intent == "__label__show_items")
             {
@@ -1223,11 +1250,13 @@ class LiveTranscription
         }
     }
 
+    private bool mouse_steady = false;
     private bool switched = false;
     private string detected_item = "";
+
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        if (itemDetected && confidence > deepspeech_confidence)
+        if (itemDetected && confidence > -25 && mouse_steady)
         {
             for (int number_index = 0; number_index < numberStrings.Count; number_index++)
             {
@@ -1239,6 +1268,9 @@ class LiveTranscription
                 HandleCommand(number, partial_result, ref execute_number_command_count, () =>
                 {
                     show_items.ExecuteAction(detected_item, number_index + 1); // Use number_index + 1 if you want to represent 1-based index
+                    deep_speech_model.FreeStream(deep_speech_stream);
+                    deep_speech_stream.Dispose();
+                    deep_speech_stream = deep_speech_model.CreateStream();
                 });
             }
         }
@@ -1255,19 +1287,7 @@ class LiveTranscription
             click_command_count = new_click_count;
         }
 
-        if (partial_result.Contains("open"))
-        {
-            if (mouse_activated)
-            {
-                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-                FinalizeStream();
-            }
-        }
-
-        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -30)
+        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -25)
         {
             wake_word_detected = true;
         }
@@ -1473,6 +1493,12 @@ class LiveTranscription
             }
         }
 
+        if (transcription.IndexOf("show itwms", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            DetectScreen();
+            UpdateUI(() => FinalizeStream());
+        }
+
         if (transcription.IndexOf("search", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             string search_query = transcription.Substring("search".Length).Trim();
@@ -1484,26 +1510,7 @@ class LiveTranscription
             }
         }
 
-        // type something
-        //if (transcription.IndexOf("type", StringComparison.OrdinalIgnoreCase) >= 0)
-        //{
-        //    SwitchScorer(typing_scorer);
-        //    UpdateUI(() => FinalizeStream());
-        //    UpdateUI(() => asr_window.Show());
-        //}
-
-        //if (transcription.StartsWith("search", StringComparison.OrdinalIgnoreCase))
-        //{
-        //    string search_query = transcription.Substring("search".Length).Trim();
-        //    if (!string.IsNullOrEmpty(search_query))
-        //    {
-        //        OpenBrowserWithSearch(search_query);
-        //        return; // Exit after processing this command
-        //    }
-        //}
-
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
-        HandleCommand("show items", transcription, ref show_items_command_count, () => DetectScreen());
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => RemoveTags());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.ControlKey)); // Customize as needed
@@ -1514,12 +1521,6 @@ class LiveTranscription
         HandleCommand("open powerpoint", transcription, ref powerpoint_command_count, () => StartProcess("powerpnt"));
         HandleCommand("open file manager", transcription, ref file_manager_command_count, () => StartProcess("explorer"));
         HandleCommand("switch", transcription, ref switch_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.Tab));
-
-        //HandleCommand("left", transcription, ref left_command_count, () => SimulateKeyPress(Keys.Left));
-        //HandleCommand("right", transcription, ref right_command_count, () => SimulateKeyPress(Keys.Right));
-        //HandleCommand("up", transcription, ref up_command_count, () => SimulateKeyPress(Keys.Up));
-        //HandleCommand("down", transcription, ref down_command_count, () => SimulateKeyPress(Keys.Down));
-
         HandleCommand("enter", transcription, ref enter_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.Enter));
         HandleCommand("close application", transcription, ref close_calculator_command_count, () => CloseApp());
         HandleCommand("scroll up", transcription, ref scroll_up_command_count, () => ScrollUp(200));
