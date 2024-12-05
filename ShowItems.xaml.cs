@@ -20,6 +20,7 @@ using System.IO;
 using Microsoft.Office.Interop.Word;
 using Microsoft.Office.Interop.Excel;
 using Microsoft.Office.Interop.PowerPoint;
+using System.Security.Policy;
 
 namespace ATEDNIULI
 {
@@ -190,6 +191,148 @@ namespace ATEDNIULI
                     {
                         "1. New Presentation"
                     };
+                case "facebook":
+                    return new string[]
+                    {
+                        "1. Facebook Home page",
+                        "2. Facebook Watch page",
+                        "3. Facebook Marketplace",
+                        "4. Facebook Groups page"
+                    };
+                case "canva":
+                    return new string[]
+                    {
+                        "1. Canva Home page"
+                    };
+                case "chatgpt":
+                    return new string[]
+                    {
+                        "1. ChatGPT Home page"
+                    };
+                case "discord":
+                    return new string[]
+                    {
+                        "1. Discord Home page"
+                    };
+                case "gmail":
+                    return new string[]
+                    {
+                        "1. Gmail Inbox page",
+                        "2. Gmail Starred page",
+                        "3. Gmail Sent page",
+                        "4. Gmail Drafts page"
+                    };
+                case "gmeet":
+                    return new string[]
+                    {
+                        "1. Gmeet Home page"
+                    };
+                case "instagram":
+                    return new string[]
+                    {
+                        "1. Instagram Home page",
+                        "2. Instagram Explore page",
+                        "3. Instagram Reels page",
+                        "4. Instagram Inbox page"
+                    };
+                case "lazada":
+                    return new string[]
+                    {
+                        "1. Lazada Home page"
+                    };
+                case "netflix":
+                    return new string[]
+                    {
+                        "1. Netflix Home page"
+                    };
+                case "onedrive":
+                    return new string[]
+                    {
+                        "1. Onedrive Home page"
+                    };
+                case "pinterest":
+                    return new string[]
+                    {
+                        "1. Pinterest Home page",
+                        "2. Pinterest Videos page",
+                        "3. Pinterest Explore page"
+                    };
+                case "shopee":
+                    return new string[]
+                    {
+                        "1. Shopee Home page"
+                    };
+                case "telegram":
+                    return new string[]
+                    {
+                        "1. Telegram Home page"
+                    };
+                case "tiktok":
+                    return new string[]
+                    {
+                        "1. Tiktok Home page",
+                        "2. Tiktok Explore page",
+                        "3. Tiktok Following page",
+                        "4. Tiktok Live page"
+                    };
+                case "github":
+                    return new string[]
+                    {
+                        "1. Github Home page",
+                        "2. Github Issues page",
+                        "3. Github Pull page",
+                        "4. Github Projects page",
+                        "5. Github Discussions page",
+                        "6. Github Codespaces page",
+                        "7. Github Explore page",
+                        "8. Github Marketplace page"
+                    };
+                case "linkedin":
+                    return new string[]
+                    {
+                        "1. LinkedIn Home page"
+                    };
+                case "reddit":
+                    return new string[]
+                    {
+                        "1. Reddit Home page",
+                        "2. Reddit Popular page",
+                        "3. Reddit Communities page",
+                        "4. Reddit Topics page"
+                    };
+                case "spotify":
+                    return new string[]
+                    {
+                        "1. Spotify Home page"
+                    };
+                case "twitch":
+                    return new string[]
+                    {
+                        "1. Twitch Home page",
+                        "2. Twitch Browse page",
+                        "3. Twitch Following page"
+                    };
+                case "wikipedia":
+                    return new string[]
+                    {
+                        "1. Wikipedia Home page",
+                        "2. Wikipedia Talk page",
+                        "3. Wikipedia Contents page",
+                        "4. Wikipedia Current Events page"
+                    };
+                case "x":
+                    return new string[]
+                    {
+                        "1. X Home page"
+                    };
+                case "zoom":
+                    return new string[]
+                    {
+                        "1. Zoom Home page",
+                        "2. Zoom Profile page",
+                        "3. Zoom Meetings page"
+                    };
+
                 default:
                     return null; // No actions for unrecognized labels
             }
@@ -201,7 +344,7 @@ namespace ATEDNIULI
             {
                 // Parse the selected action number
                 int actionNumber = int.Parse(ActionList.SelectedItem.ToString().Split('.')[0]);
-                ExecuteAction(detected_item, actionNumber);
+                System.Threading.Tasks.Task.Run(() => ExecuteAction(detected_item, actionNumber));
             }
         }
 
@@ -239,9 +382,512 @@ namespace ATEDNIULI
                     ExecuteExcelAction(actionNumber);
                     break;
 
+                case "facebook":
+                    ExecuteFacebookAction(actionNumber);
+                    break;
+
+                case "messenger":
+                    ExecuteMessengerAction(actionNumber);
+                    break;
+
+                case "canva":
+                    ExecuteCanvaAction(actionNumber);
+                    break;
+
+                case "chatgpt":
+                    ExecuteChatGPTAction(actionNumber);
+                    break;
+
+                case "discord":
+                    ExecuteDiscordAction(actionNumber);
+                    break;
+
+                case "gmail":
+                    ExecuteGmailAction(actionNumber);
+                    break;
+
+                case "gmeet":
+                    ExecuteGmeetAction(actionNumber);
+                    break;
+
+                case "instagram":
+                    ExecuteInstagramAction(actionNumber);
+                    break;
+
+                case "lazada":
+                    ExecuteLazadaAction(actionNumber);
+                    break;
+
+                case "netflix":
+                    ExecuteNetflixAction(actionNumber);
+                    break;
+
+                case "onedrive":
+                    ExecuteOnedriveAction(actionNumber);
+                    break;
+
+                case "pinterest":
+                    ExecutePinterestAction(actionNumber);
+                    break;
+
+                case "shopee":
+                    ExecuteShopeeAction(actionNumber);
+                    break;
+
+                case "telegram":
+                    ExecuteTelegramAction(actionNumber);
+                    break;
+
+                case "tiktok":
+                    ExecuteTiktokAction(actionNumber);
+                    break;
+
+                case "github":
+                    ExecuteGithubAction(actionNumber);
+                    break;
+
+                case "linkedin":
+                    ExecuteLinkedinAction(actionNumber);
+                    break;
+
+                case "reddit":
+                    ExecuteRedditAction(actionNumber);
+                    break;
+
+                case "spotify":
+                    ExecuteSpotifyAction(actionNumber);
+                    break;
+
+                case "twitch":
+                    ExecuteTwitchAction(actionNumber);
+                    break;
+
+                case "wikipedia":
+                    ExecuteWikipediaAction(actionNumber);
+                    break;
+
+                case "x":
+                    ExecuteXAction(actionNumber);
+                    break;
+
+                case "zoom":
+                    ExecuteZoomAction(actionNumber);
+                    break;
+
                 default:
                     Console.WriteLine($"No actions available for label: {label}");
                     break;
+            }
+        }
+
+        private void ExecuteFacebookAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.facebook.com/" },
+                { 2, "https://www.facebook.com/watch/?ref=tab" },
+                { 3, "https://www.facebook.com/marketplace/?ref=app_tab" },
+                { 4, "https://www.facebook.com/groups/feed/" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void OpenUrl(string url)
+        {
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                OpenChrome();
+                driver.Navigate().GoToUrl(url);
+            });
+        }
+
+        private void ExecuteMessengerAction(int actionNumber)
+        {
+            if (actionNumber == 1)
+            {
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    OpenChrome();
+                    driver.Navigate().GoToUrl("https://www.messenger.com/");
+                });
+            }
+        }
+
+        private void ExecuteCanvaAction(int actionNumber)
+        { 
+            if (actionNumber == 1)
+            {
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    OpenChrome();
+                    driver.Navigate().GoToUrl("https://www.canva.com/en_ph/");
+                });
+            }
+        }
+
+        private void ExecuteChatGPTAction(int actionNumber)
+        {
+            if (actionNumber == 1)
+            {
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    OpenChrome();
+                    driver.Navigate().GoToUrl("https://chatgpt.com/");
+                });
+            }
+        }
+
+        private void ExecuteDiscordAction(int actionNumber)
+        {
+            if (actionNumber == 1)
+            {
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    OpenChrome();
+                    driver.Navigate().GoToUrl("https://discord.com/download");
+                });
+            }
+        }
+
+        private void ExecuteGmailAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://mail.google.com/mail/u/0/#inbox" },
+                { 2, "https://mail.google.com/mail/u/0/#starred" },
+                { 3, "https://mail.google.com/mail/u/0/#sent" },
+                { 4, "https://mail.google.com/mail/u/0/#drafts" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteGmeetAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://meet.google.com/landing" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteInstagramAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.instagram.com/" },
+                { 2, "https://www.instagram.com/explore/" },
+                { 3, "https://www.instagram.com/reels/" },
+                { 4, "https://www.instagram.com/direct/inbox/" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteLazadaAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.lazada.com.ph/" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteNetflixAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.netflix.com/ph-en/" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteOnedriveAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.microsoft.com/en-us/microsoft-365/onedrive/online-cloud-storage" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecutePinterestAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.pinterest.com/" },
+                { 2, "https://www.pinterest.com/videos/"},
+                { 3, "https://www.pinterest.com/ideas/"}
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteShopeeAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://shopee.ph/" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteTelegramAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://web.telegram.org/" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteTiktokAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.tiktok.com/en/" },
+                { 2, "https://www.tiktok.com/explore" },
+                { 3, "https://www.tiktok.com/following" },
+                { 4, "https://www.tiktok.com/live" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteGithubAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://github.com/" },
+                { 2, "https://github.com/issues" },
+                { 3, "https://github.com/pulls" },
+                { 4, "https://github.com/projects" },
+                { 5, "https://github.com/discussions" },
+                { 6, "https://github.com/codespaces" },
+                { 7, "https://github.com/explore" },
+                { 8, "https://github.com/marketplace" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteLinkedinAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.linkedin.com/" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteRedditAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.reddit.com/?feed=home" },
+                { 2, "https://www.reddit.com/r/popular/" },
+                { 3, "https://www.reddit.com/best/communities/1/" },
+                { 3, "https://www.reddit.com/topics/a-1/" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteSpotifyAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://open.spotify.com/" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteTwitchAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://www.twitch.tv/" },
+                { 2, "https://www.twitch.tv/directory" },
+                { 3, "https://www.twitch.tv/directory/following" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteWikipediaAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://en.wikipedia.org/wiki/Main_Page" },
+                { 2, "https://en.wikipedia.org/wiki/Talk:Main_Page" },
+                { 3, "https://en.wikipedia.org/wiki/Wikipedia:Contents" },
+                { 4, "https://en.wikipedia.org/wiki/Portal:Current_events" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteXAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://x.com/i/flow/single_sign_on" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
+            }
+        }
+
+        private void ExecuteZoomAction(int actionNumber)
+        {
+            var actionUrls = new Dictionary<int, string>
+            {
+                { 1, "https://us05web.zoom.us/myhome" },
+                { 2, "https://us05web.zoom.us/profile" },
+                { 3, "https://us05web.zoom.us/meeting" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
             }
         }
 
