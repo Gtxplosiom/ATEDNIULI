@@ -39,6 +39,7 @@ class LiveTranscription
     private readonly MainWindow main_window;
     private readonly ShowItems show_items;
     private readonly CameraMouse camera_mouse;
+    private readonly HelpWindow help_window;
 
     private WaveInEvent wave_in_event;
     private DeepSpeechStream deep_speech_stream;
@@ -212,13 +213,14 @@ class LiveTranscription
         }
     }
 
-    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, CameraMouse camera_mouse) // 
+    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, CameraMouse camera_mouse, HelpWindow help_window) // 
     {
         this.asr_window = asr_window ?? throw new ArgumentNullException(nameof(asr_window));
         this.intent_window = intent_window ?? throw new ArgumentNullException(nameof(intent_window));
         this.main_window = main_window ?? throw new ArgumentNullException(nameof(main_window));
         this.show_items = show_items ?? throw new ArgumentNullException(nameof(show_items));
         this.camera_mouse = camera_mouse ?? throw new ArgumentNullException(nameof(camera_mouse));
+        this.help_window = help_window ?? throw new ArgumentNullException(nameof(help_window));
 
         vad = new WebRtcVad
         {
@@ -274,6 +276,7 @@ class LiveTranscription
         show_items.ItemDetected += CheckDetected;
 
         UpdateMouseActionLabel();
+        this.help_window = help_window;
     }
 
     public string action = "none";
@@ -1583,7 +1586,7 @@ class LiveTranscription
             }
         }
 
-        if (transcription.IndexOf("show itwms", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (transcription.IndexOf("show items", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             DetectScreen();
             UpdateUI(() => FinalizeStream());
@@ -1598,6 +1601,18 @@ class LiveTranscription
                 commandExecuted = true;
                 UpdateUI(() => FinalizeStream());
             }
+        }
+
+        if (transcription.IndexOf("open help", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            UpdateUI(() => help_window.Show());
+            UpdateUI(() => FinalizeStream());
+        }
+
+        if (transcription.IndexOf("close help", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            UpdateUI(() => help_window.Hide());
+            UpdateUI(() => FinalizeStream());
         }
 
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
