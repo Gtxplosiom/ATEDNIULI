@@ -40,6 +40,8 @@ class LiveTranscription
     private readonly ShowItems show_items;
     private readonly CameraMouse camera_mouse;
     private readonly HelpWindow help_window;
+    private readonly SettingsWindow settings_window;
+    private readonly UserGuide user_guide;
 
     private WaveInEvent wave_in_event;
     private DeepSpeechStream deep_speech_stream;
@@ -213,7 +215,7 @@ class LiveTranscription
         }
     }
 
-    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, CameraMouse camera_mouse, HelpWindow help_window) // 
+    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, CameraMouse camera_mouse, HelpWindow help_window, SettingsWindow settings_window, UserGuide user_guide) // 
     {
         this.asr_window = asr_window ?? throw new ArgumentNullException(nameof(asr_window));
         this.intent_window = intent_window ?? throw new ArgumentNullException(nameof(intent_window));
@@ -221,6 +223,8 @@ class LiveTranscription
         this.show_items = show_items ?? throw new ArgumentNullException(nameof(show_items));
         this.camera_mouse = camera_mouse ?? throw new ArgumentNullException(nameof(camera_mouse));
         this.help_window = help_window ?? throw new ArgumentNullException(nameof(help_window));
+        this.settings_window = settings_window ?? throw new ArgumentNullException(nameof(settings_window));
+        this.user_guide = user_guide ?? throw new ArgumentNullException(nameof(user_guide));
 
         vad = new WebRtcVad
         {
@@ -277,6 +281,7 @@ class LiveTranscription
 
         UpdateMouseActionLabel();
         this.help_window = help_window;
+        this.settings_window = settings_window;
     }
 
     public string action = "none";
@@ -1089,6 +1094,7 @@ class LiveTranscription
             {
                 commandExecuted = false;
                 wake_word_detected = false;
+                switched_state = false;
                 ResetCommandCounts();
             }
 
@@ -1533,6 +1539,7 @@ class LiveTranscription
     private bool mouse_activated = false;
     // TODO - himua an tanan na commands na gamiton an HandleCommand function
     private bool commandExecuted = false;
+    private bool switched_state = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
     {
         if (string.IsNullOrEmpty(transcription)) return;
@@ -1612,6 +1619,32 @@ class LiveTranscription
         if (transcription.IndexOf("close help", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             UpdateUI(() => help_window.Hide());
+            UpdateUI(() => FinalizeStream());
+        }
+
+        if (transcription.IndexOf("open open", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            UpdateUI(() => user_guide.Show());
+            UpdateUI(() => FinalizeStream());
+        }
+
+        if (transcription.IndexOf("close close", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            UpdateUI(() => user_guide.Hide());
+            UpdateUI(() => FinalizeStream());
+        }
+
+        if (transcription.IndexOf("next", StringComparison.OrdinalIgnoreCase) >= 0 && !switched_state)
+        {
+            switched_state = true;
+            UpdateUI(() => user_guide.SwitchState("next"));
+            UpdateUI(() => FinalizeStream());
+        }
+
+        if (transcription.IndexOf("previous", StringComparison.OrdinalIgnoreCase) >= 0 && !switched_state)
+        {
+            switched_state = true;
+            UpdateUI(() => user_guide.SwitchState("previous"));
             UpdateUI(() => FinalizeStream());
         }
 

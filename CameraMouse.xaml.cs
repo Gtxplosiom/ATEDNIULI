@@ -142,7 +142,7 @@ namespace ATEDNIULI
             public static void DoubleClick()
             {
                 LeftClick();
-                System.Threading.Thread.Sleep(100);  // Short delay between clicks
+                Thread.Sleep(100); // Short delay between clicks
                 LeftClick();
             }
 
@@ -153,7 +153,17 @@ namespace ATEDNIULI
 
             public static void ReleaseLeftClick()
             {
-                MouseEvent(MouseEventFlags.LeftUp); // Press down the left mouse button
+                MouseEvent(MouseEventFlags.LeftUp); // Release the left mouse button
+            }
+
+            public static void ScrollLock()
+            {
+                MouseEvent(MouseEventFlags.MiddleDown);
+            }
+
+            public static void ReleaseScrollLock()
+            {
+                MouseEvent(MouseEventFlags.MiddleUp);
             }
 
             private static void MouseEvent(MouseEventFlags value)
@@ -161,7 +171,7 @@ namespace ATEDNIULI
                 mouse_event((int)value, 0, 0, 0, 0);
             }
 
-            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            [DllImport("user32.dll")]
             private static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
 
             [Flags]
@@ -171,8 +181,10 @@ namespace ATEDNIULI
                 LeftUp = 0x04,
                 RightDown = 0x08,
                 RightUp = 0x10,
-                MiddleDown = 0x20,
-                MiddleUp = 0x40
+                MiddleDown = 0x20,  // Simulates pressing the scroll wheel
+                MiddleUp = 0x40,    // Simulates releasing the scroll wheel
+                Wheel = 0x0800,     // Vertical scrolling
+                HWheel = 0x01000    // Horizontal scrolling
             }
         }
 
@@ -697,6 +709,10 @@ namespace ATEDNIULI
                     else if (action == "Hold")
                     {
                         MouseSimulator.HoldLeftClick();
+                    }
+                    else if (action == "Scroll Lock")
+                    {
+                        //MouseSimulator.ScrollLock();
                     }
 
                     Cv2.PutText(frame, "No Smile", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Red, 2);

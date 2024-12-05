@@ -1,0 +1,50 @@
+﻿<Window x:Class="ATEDNIULI.UserGuide"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ATEDNIULI"
+        mc:Ignorable="d"
+        Title="UserGuide"
+        Height="800" Width="1500"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None">
+    <Window.Resources>
+        <DataTemplate x:Key="State0">
+            <StackPanel>
+                <TextBlock Text="Welcome to the User Guide!" FontSize="20" Margin="10" />
+            </StackPanel>
+        </DataTemplate>
+        
+        <!-- State 1 Template -->
+        <DataTemplate x:Key="State1">
+            <StackPanel>
+                <TextBlock Text="State 1 Content" FontSize="20" Margin="10" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- State 2 Template -->
+        <DataTemplate x:Key="State2">
+            <StackPanel>
+                <TextBlock Text="State 2 Content" FontSize="20" Margin="10" />
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <!-- Background Image -->
+        <Grid.Background>
+            <ImageBrush ImageSource="assets/ATEDNIULI_bg.jpg" Stretch="UniformToFill" />
+        </Grid.Background>
+
+        <!-- Transparent White Panel -->
+        <Border Width="1350" Height="720" 
+                HorizontalAlignment="Center" 
+                VerticalAlignment="Center" 
+                Background="#9FFFFFFF" 
+                CornerRadius="5">
+            <!-- Content Control to Switch States -->
+            <ContentControl x:Name="StateControl" />
+        </Border>
+    </Grid>
+</Window>

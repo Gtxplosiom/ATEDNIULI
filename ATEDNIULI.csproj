@@ -248,8 +248,14 @@
     <Compile Include="HelpWindow.xaml.cs">
       <DependentUpon>HelpWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="SettingsWindow.xaml.cs">
+      <DependentUpon>SettingsWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="ShowItems.xaml.cs">
       <DependentUpon>ShowItems.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UserGuide.xaml.cs">
+      <DependentUpon>UserGuide.xaml</DependentUpon>
     </Compile>
     <Page Include="ASRWindow.xaml">
       <SubType>Designer</SubType>
@@ -292,7 +298,15 @@
       <SubType>Code</SubType>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Compile>
+    <Page Include="SettingsWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="ShowItems.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="UserGuide.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

@@ -18,6 +18,8 @@ namespace ATEDNIULI
         private ShowItems show_items;
         private CameraMouse camera_mouse;
         private HelpWindow help_window;
+        private SettingsWindow settings_window;
+        private UserGuide user_guide;
 
         public ASRWindow(MainWindow mainWindow)
         {
@@ -27,8 +29,10 @@ namespace ATEDNIULI
             show_items = new ShowItems();
             intent_window = new IntentWindow(mainWindow);
             help_window = new HelpWindow();
+            settings_window = new SettingsWindow();
+            user_guide = new UserGuide();
 
-            live_transcription = new LiveTranscription(this, intent_window, mainWindow, show_items, camera_mouse, help_window);
+            live_transcription = new LiveTranscription(this, intent_window, mainWindow, show_items, camera_mouse, help_window, settings_window, user_guide);
             background_worker = new BackgroundWorker();
             background_worker.DoWork += BackgroundWorker_DoWork;
             background_worker.RunWorkerCompleted += BackgroundWorker_RunWorkerCompleted;
