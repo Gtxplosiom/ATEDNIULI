@@ -23,6 +23,7 @@ namespace ATEDNIULI
             {
                 state_now++;
                 UpdateState();
+                ReturnState();
             }
             else if (direction == "previous")
             {
@@ -39,7 +40,13 @@ namespace ATEDNIULI
 
                 state_now = state_now - 1;
                 UpdateState();
+                ReturnState();
             }
+        }
+
+        public string ReturnState()
+        {
+            return $"state{state_now}";
         }
 
         // Update the state dynamically based on the current state

@@ -1373,7 +1373,20 @@ class LiveTranscription
 
         if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -25)
         {
-            wake_word_detected = true;
+            var tutorial_state = user_guide.ReturnState();
+            
+            if (in_tutorial && tutorial_state == "state0")
+            {
+                switched_state = true;
+                UpdateUI(() => user_guide.SwitchState("next"));
+                deep_speech_stream.Dispose();
+                deep_speech_stream = deep_speech_model.CreateStream();
+                return;
+            }
+            else
+            {
+                wake_word_detected = true;
+            }
         }
 
         if (wake_word_detected)
@@ -1540,6 +1553,7 @@ class LiveTranscription
     // TODO - himua an tanan na commands na gamiton an HandleCommand function
     private bool commandExecuted = false;
     private bool switched_state = false;
+    private bool in_tutorial = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
     {
         if (string.IsNullOrEmpty(transcription)) return;
@@ -1625,12 +1639,14 @@ class LiveTranscription
         if (transcription.IndexOf("open open", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             UpdateUI(() => user_guide.Show());
+            in_tutorial = true;
             UpdateUI(() => FinalizeStream());
         }
 
         if (transcription.IndexOf("close close", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             UpdateUI(() => user_guide.Hide());
+            in_tutorial = false;
             UpdateUI(() => FinalizeStream());
         }
 

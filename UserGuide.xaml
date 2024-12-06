@@ -10,20 +10,70 @@
         WindowStartupLocation="CenterScreen"
         WindowStyle="None">
     <Window.Resources>
+        <!-- State 0 -->
         <DataTemplate x:Key="State0">
-            <StackPanel>
-                <TextBlock Text="Welcome to the User Guide!" FontSize="20" Margin="10" />
-            </StackPanel>
-        </DataTemplate>
-        
-        <!-- State 1 Template -->
-        <DataTemplate x:Key="State1">
-            <StackPanel>
-                <TextBlock Text="State 1 Content" FontSize="20" Margin="10" />
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="Hello User, It seems it is your first time using the application. Welcome to the User Guide!" 
+                           FontSize="24" 
+                           TextAlignment="Center" 
+                           TextWrapping="Wrap" 
+                           Margin="20" />
+                <TextBlock Text="Say 'Thermal' to proceed" 
+                           FontSize="18" 
+                           FontStyle="Italic" 
+                           TextAlignment="Center" 
+                           Margin="10" />
             </StackPanel>
         </DataTemplate>
 
-        <!-- State 2 Template -->
+        <!-- State 1 -->
+        <DataTemplate x:Key="State1">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State1a" Text="TRML AND COMMANDS" 
+                       FontSize="28" 
+                       FontWeight="Bold" 
+                       Foreground="Black" 
+                       Margin="0,0,0,10" />
+
+                    <TextBlock Name="State1b" Text="TRML is an application that allows you to navigate desktops with only using voice and facial gestures" 
+                       FontSize="18" 
+                       TextWrapping="Wrap" 
+                       Margin="0,0,0,10" />
+
+                    <TextBlock Name="State1c" Text="To start giving commands, you need to call trml first" 
+                       FontSize="16" 
+                       Margin="0,0,0,5" />
+
+                    <TextBlock Name="State1d" Text="Try saying 'TRML' prounounced as thermal. this will make a window pop up just like in the image." 
+                       FontSize="16" 
+                       FontStyle="Italic" 
+                       Foreground="Gray" 
+                       Margin="0,0,0,20" />
+
+                    <TextBlock Name="State1e" Text="Great! Remember that you need to call thermal first then wait for the window to pop up and then you can now say the command you want" 
+                       FontSize="16" 
+                       Margin="0,0,0,5" />
+
+                    <TextBlock Name="State1f" Text="To proceed, say 'TRML next'" 
+                       FontSize="16" 
+                       FontStyle="Italic" 
+                       Foreground="Gray" 
+                       Margin="0,20,0,0" />
+                </StackPanel>
+
+                <!-- Right Section -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <!-- Simulated Device Section -->
+                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
+                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- State 2 -->
         <DataTemplate x:Key="State2">
             <StackPanel>
                 <TextBlock Text="State 2 Content" FontSize="20" Margin="10" />
