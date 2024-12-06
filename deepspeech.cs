@@ -331,7 +331,6 @@ class LiveTranscription
             if (!itemDetected && mouse_steady)
             {
                 SwitchScorer(one_ten_scorer);
-                deep_speech_model.FreeStream(deep_speech_stream);
                 deep_speech_stream.Dispose();
                 deep_speech_stream = deep_speech_model.CreateStream();
                 itemDetected = true;
@@ -344,7 +343,6 @@ class LiveTranscription
             if(itemDetected)
             {
                 SwitchScorer(wake_word_scorer);
-                deep_speech_model.FreeStream(deep_speech_stream);
                 deep_speech_stream.Dispose();
                 deep_speech_stream = deep_speech_model.CreateStream();
                 itemDetected = false;
@@ -1364,7 +1362,6 @@ class LiveTranscription
                 HandleCommand(number, partial_result, ref execute_number_command_count, () =>
                 {
                     show_items.ExecuteAction(detected_item, number_index + 1); // Use number_index + 1 if you want to represent 1-based index
-                    deep_speech_model.FreeStream(deep_speech_stream);
                     deep_speech_stream.Dispose();
                     deep_speech_stream = deep_speech_model.CreateStream();
                 });
@@ -1399,7 +1396,6 @@ class LiveTranscription
             if (!switched)
             {
                 SwitchScorer(commands_scorer);
-                deep_speech_model.FreeStream(deep_speech_stream);
                 deep_speech_stream.Dispose();
                 deep_speech_stream = deep_speech_model.CreateStream();
                 switched = true;
