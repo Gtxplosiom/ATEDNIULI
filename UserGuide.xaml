@@ -49,17 +49,17 @@
                     <TextBlock Name="State1d" Text="Try saying 'TRML' prounounced as thermal. this will make a window pop up just like in the image." 
                        FontSize="16" 
                        FontStyle="Italic" 
-                       Foreground="Gray" 
                        Margin="0,0,0,20" />
 
                     <TextBlock Name="State1e" Text="Great! Remember that you need to call thermal first then wait for the window to pop up and then you can now say the command you want" 
                        FontSize="16" 
+                       Visibility="Collapsed"
                        Margin="0,0,0,5" />
 
                     <TextBlock Name="State1f" Text="To proceed, say 'TRML next'" 
                        FontSize="16" 
-                       FontStyle="Italic" 
-                       Foreground="Gray" 
+                       FontStyle="Italic"
+                       Visibility="Collapsed"
                        Margin="0,20,0,0" />
                 </StackPanel>
 
@@ -75,9 +75,193 @@
 
         <!-- State 2 -->
         <DataTemplate x:Key="State2">
-            <StackPanel>
-                <TextBlock Text="State 2 Content" FontSize="20" Margin="10" />
-            </StackPanel>
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State2a" Text="TRML AND COMMANDS" 
+                       FontSize="28" 
+                       FontWeight="Bold" 
+                       Foreground="Black" 
+                       Margin="0,0,0,10" />
+
+                    <TextBlock Name="State2b" Text="You can open application, close them, search, type, and much more with ATENIULI" 
+                       FontSize="18" 
+                       TextWrapping="Wrap" 
+                       Margin="0,0,0,10" />
+
+                    <TextBlock Name="State2c" Text="For now let us try to open microsoft word" 
+                       FontSize="16" 
+                       Margin="0,0,0,5" />
+
+                    <TextBlock Name="State2d" Text="Call 'TRML' first. then say 'open word'" 
+                       FontSize="16" 
+                       FontStyle="Italic" 
+                       Margin="0,0,0,20" />
+
+                    <TextBlock Name="State2e" Text="Great! Now try closing the word application by calling 'TRML' and saying 'close application'" 
+                       FontSize="16" 
+                       Visibility="Collapsed"
+                       Margin="0,0,0,5" />
+
+                    <TextBlock Name="State2f" Text="Now from now on remember to always call 'TRML' first before giving commands" 
+                       FontSize="16" 
+                       FontStyle="Italic"
+                       Visibility="Collapsed"
+                       Margin="0,20,0,0" />
+
+                    <TextBlock Name="State2g" Text="To proceed, say 'TRML next'" 
+                       FontSize="16" 
+                       FontStyle="Italic"
+                       Visibility="Collapsed"
+                       Margin="0,20,0,0" />
+                </StackPanel>
+
+                <!-- Right Section -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <!-- Simulated Device Section -->
+                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
+                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- State 3 -->
+        <DataTemplate x:Key="State3">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State3a" Text="TRML AND COMMANDS" 
+               FontSize="28" 
+               FontWeight="Bold" 
+               Foreground="Black" 
+               Margin="0,0,0,10" />
+
+                    <TextBlock Name="State3b" Text="ATEDNIULI is not very strict on the word of commands. You can say words that are similar to the command you are going to do." 
+               FontSize="18" 
+               TextWrapping="Wrap" 
+               Margin="0,0,0,10" />
+
+                    <TextBlock Name="State3c" Text="Like for example when opening an app instead of saying open, you can either say; activate, show, or nay similar  word to the command" 
+               FontSize="16" 
+               Margin="0,0,0,5" />
+
+                    <TextBlock Name="State3d" Text="Open microsoft word. instead of saying 'open word' try substituting with 'activate word' or 'show word'" 
+               FontSize="16" 
+               FontStyle="Italic" 
+               Margin="0,0,0,20" />
+
+                    <TextBlock Name="State3e" Text="Great! Now try closing the application by subtituting 'close app' with 'terminate app' or 'exit app'" 
+               FontSize="16" 
+               Visibility="Collapsed"
+               Margin="0,0,0,5" />
+
+                    <TextBlock Name="State3f" Text="Great! To proceed, say 'TRML next'" 
+               FontSize="16" 
+               FontStyle="Italic"
+               Visibility="Collapsed"
+               Margin="0,20,0,0" />
+                </StackPanel>
+
+                <!-- Right Section -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <!-- Simulated Device Section -->
+                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
+                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- State 4 -->
+        <DataTemplate x:Key="State4">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State3a" Text="SHOW ITEMS COMMAND" 
+           FontSize="28" 
+           FontWeight="Bold" 
+           Foreground="Black" 
+           Margin="0,0,0,10" />
+                    <TextBlock Name="State3b" Text="'show items' is a special type of command of ATEDNIULI that show all clickable items on your screen"
+           FontSize="18" 
+           TextWrapping="Wrap" 
+           Margin="0,0,0,10" />
+                    <TextBlock Name="State3c" Text="This command will enable you to click the clickable items just by saying the tag it associates with" 
+           FontSize="16" 
+           Margin="0,0,0,5" />
+                    <TextBlock Name="State3d" Text="Try commanding ATEDNIULI with 'show items'. Don't forget to call 'TRML' first" 
+           FontSize="16" 
+           FontStyle="Italic" 
+           Margin="0,0,0,20" />
+                    <TextBlock Name="State3e" Text="Great! Now try saying the number that is on the clickable item you want to click" 
+           FontSize="16" 
+           Visibility="Collapsed"
+           Margin="0,0,0,5" />
+
+                    <TextBlock Name="State3f" Text="Great! To proceed, click the next button by using the show items command to proceed" 
+           FontSize="16" 
+           FontStyle="Italic"
+           Visibility="Collapsed"
+           Margin="0,20,0,0" />
+                </StackPanel>
+
+                <!-- Right Section -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <!-- TextBox to Display Clicked Button Info -->
+                    <TextBlock Name="ClickedButtonText" 
+                       Text="No Button Clicked Yet" 
+                       FontSize="20"
+                       FontWeight="Bold"
+                       Foreground="Black"
+                       TextAlignment="Center"
+                       Margin="0,0,0,20" />
+
+                    <!-- Buttons with Different Shapes -->
+                    <UniformGrid Rows="3" Columns="2" Margin="10">
+                        <!-- Star Button -->
+                        <Button Content="⭐" FontSize="36"
+                        Click="Button_Click" Tag="Star"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5"/>
+
+                        <!-- Oblong Button -->
+                        <Button Content="⬅️" FontSize="36"
+                        Click="Button_Click" Tag="Oblong"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5"/>
+
+                        <!-- Rectangle Button -->
+                        <Button Content="⬛" FontSize="36"
+                        Click="Button_Click" Tag="Rectangle"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5"/>
+
+                        <!-- Triangle Button -->
+                        <Button Content="△" FontSize="36"
+                        Click="Button_Click" Tag="Triangle"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="5"/>
+
+                        <!-- Shape Placeholder -->
+                        <Button Content="🔹"
+                         HorizontalAlignment="Stretch"
+                         VerticalAlignment="Stretch"
+                         FontSize="50"
+                         Margin="4"
+                         Click="ShapeClickHandler"
+                         Tag="Placeholder" />
+
+                        </UniformGrid>
+
+                        <!-- Next button -->
+                    <Button Content="NEXT" 
+                    Width="100" 
+                    Height="40" 
+                    Background="#FFC107" 
+                    Foreground="Black" 
+                    FontWeight="Bold" 
+                    Margin="0,20,0,0" 
+                    HorizontalAlignment="Center"
+                    Command="{Binding NextCommand}" />
+                </StackPanel>
+            </Grid>
         </DataTemplate>
     </Window.Resources>
 

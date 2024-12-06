@@ -292,6 +292,11 @@ class LiveTranscription
         {
             while (true)
             {
+                //if (in_tutorial)
+                //{
+                //    Console.WriteLine(user_guide.ReturnState());
+                //}
+
                 action = camera_mouse.action;
 
                 mouse_steady = camera_mouse.mouse_steady;
@@ -331,6 +336,7 @@ class LiveTranscription
             if (!itemDetected && mouse_steady)
             {
                 SwitchScorer(one_ten_scorer);
+                deep_speech_model.FreeStream(deep_speech_stream);
                 deep_speech_stream.Dispose();
                 deep_speech_stream = deep_speech_model.CreateStream();
                 itemDetected = true;
@@ -343,6 +349,7 @@ class LiveTranscription
             if(itemDetected)
             {
                 SwitchScorer(wake_word_scorer);
+                deep_speech_model.FreeStream(deep_speech_stream);
                 deep_speech_stream.Dispose();
                 deep_speech_stream = deep_speech_model.CreateStream();
                 itemDetected = false;
@@ -1347,6 +1354,7 @@ class LiveTranscription
     private bool mouse_steady = false;
     private bool switched = false;
     private string detected_item = "";
+    private bool state1_done = false;
 
     private void HandleWakeWord(string partial_result, double confidence)
     {
@@ -1362,6 +1370,7 @@ class LiveTranscription
                 HandleCommand(number, partial_result, ref execute_number_command_count, () =>
                 {
                     show_items.ExecuteAction(detected_item, number_index + 1); // Use number_index + 1 if you want to represent 1-based index
+                    deep_speech_model.FreeStream(deep_speech_stream);
                     deep_speech_stream.Dispose();
                     deep_speech_stream = deep_speech_model.CreateStream();
                 });
@@ -1380,6 +1389,13 @@ class LiveTranscription
                 deep_speech_stream = deep_speech_model.CreateStream();
                 return;
             }
+            else if (in_tutorial && tutorial_state == "state1" && !state1_done)
+            {
+                UpdateUI(() => TutorialStuff(tutorial_state, "e"));
+                UpdateUI(() => TutorialStuff(tutorial_state, "f"));
+                state1_done = true;
+                wake_word_detected = true;
+            }
             else
             {
                 wake_word_detected = true;
@@ -1396,6 +1412,7 @@ class LiveTranscription
             if (!switched)
             {
                 SwitchScorer(commands_scorer);
+                deep_speech_model.FreeStream(deep_speech_stream);
                 deep_speech_stream.Dispose();
                 deep_speech_stream = deep_speech_model.CreateStream();
                 switched = true;
@@ -1420,6 +1437,25 @@ class LiveTranscription
             }
         }
 
+    }
+
+    private void TutorialStuff(string tutorial_state, string letter)
+    {
+        switch (tutorial_state)
+        {
+            case "state1":
+                user_guide.UpdateTextBlocks(letter);
+                break;
+            case "state2":
+                user_guide.UpdateTextBlocks(letter);
+                break;
+            case "state3":
+                user_guide.UpdateTextBlocks(letter);
+                break;
+            case "state4":
+                user_guide.UpdateTextBlocks(letter);
+                break;
+        }
     }
 
     // WHISPER STUFF
@@ -1550,6 +1586,7 @@ class LiveTranscription
     private bool commandExecuted = false;
     private bool switched_state = false;
     private bool in_tutorial = false;
+    private bool opened_word = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
     {
         if (string.IsNullOrEmpty(transcription)) return;
@@ -1891,8 +1928,31 @@ class LiveTranscription
 
     private void StartProcess(string processName) // pag open hin app
     {
+        var tutorial_state = user_guide.ReturnState();
+
         try
         {
+            if (in_tutorial && tutorial_state == "state2")
+            {
+                Console.WriteLine(tutorial_state);
+                if (!opened_word)
+                {
+                    Console.WriteLine("trying to open word in tutorial.....");
+                    UpdateUI(() => TutorialStuff(tutorial_state, "e"));
+                    opened_word = true;
+                } 
+            }
+            if (in_tutorial && tutorial_state == "state3")
+            {
+                Console.WriteLine(tutorial_state);
+                if (!opened_word)
+                {
+                    Console.WriteLine("trying to open word in tutorial.....");
+                    UpdateUI(() => TutorialStuff(tutorial_state, "e"));
+                    opened_word = true;
+                }
+            }
+
             Process.Start(processName);
         }
         catch (Exception ex)
@@ -1903,6 +1963,30 @@ class LiveTranscription
 
     private void CloseApp() // close the currently used app/window
     {
+        var tutorial_state = user_guide.ReturnState();
+
+        if (in_tutorial && tutorial_state == "state2")
+        {
+            Console.WriteLine(tutorial_state);
+            if (opened_word)
+            {
+                Console.WriteLine("trying to open word in tutorial.....");
+                UpdateUI(() => TutorialStuff(tutorial_state, "f"));
+                UpdateUI(() => TutorialStuff(tutorial_state, "g"));
+                opened_word = false;
+            }     
+        }
+        if (in_tutorial && tutorial_state == "state3")
+        {
+            Console.WriteLine(tutorial_state);
+            if (opened_word)
+            {
+                Console.WriteLine("trying to open word in tutorial.....");
+                UpdateUI(() => TutorialStuff(tutorial_state, "f"));
+                opened_word = false;
+            }
+        }
+
         IntPtr handle = GetForegroundWindow();
         if (handle != IntPtr.Zero)
         {
