@@ -32,7 +32,7 @@ namespace ATEDNIULI
             settings_window = new SettingsWindow();
             user_guide = new UserGuide();
 
-            live_transcription = new LiveTranscription(this, intent_window, mainWindow, show_items, camera_mouse, help_window, settings_window, user_guide);
+            live_transcription = new LiveTranscription(this, intent_window, mainWindow, user_guide, show_items, camera_mouse, help_window, settings_window);
             background_worker = new BackgroundWorker();
             background_worker.DoWork += BackgroundWorker_DoWork;
             background_worker.RunWorkerCompleted += BackgroundWorker_RunWorkerCompleted;

@@ -26,6 +26,7 @@ namespace ATEDNIULI
 {
     public partial class ShowItems : System.Windows.Window
     {
+        private readonly UserGuide user_guide;
         private DispatcherTimer _tagRemovalTimer; // Timer for removing tags
         private List<System.Windows.Controls.Label> _tags; // List to store tags
         private double ScalingFactor; // Declare the scaling factor
@@ -1150,6 +1151,7 @@ namespace ATEDNIULI
             Show();
             StartZMQListener();
             TrackMouse();
+            user_guide = new UserGuide();
         }
 
         private static (int X, int Y) GetMousePosition()
@@ -1340,6 +1342,7 @@ namespace ATEDNIULI
 
                 IntPtr windowHandle = GetForegroundWindow();
                 IntPtr taskbarHandle = FindWindow("Shell_TrayWnd", null);
+                //IntPtr userguideHandle = user_guide.GetWindowHandle();
 
                 if (windowHandle == IntPtr.Zero)
                 {
@@ -1412,6 +1415,8 @@ namespace ATEDNIULI
                         Dispatcher.Invoke(() => ProcessClickableElements(taskbarItems, null));
                     }
                 }
+
+                InteractWithUserGuideWindow("UserGuide");
             }
             catch (TaskCanceledException)
             {
@@ -1420,6 +1425,117 @@ namespace ATEDNIULI
             catch (Exception ex)
             {
                 Dispatcher.Invoke(() => MessageBox.Show($"Error: {ex.Message}"));
+            }
+        }
+
+        private void TagClickableElements(Rect[] boundingRects, string[] elementNames)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                for (int i = 0; i < boundingRects.Length; i++)
+                {
+                    try
+                    {
+                        var rect = boundingRects[i];
+
+                        var tag = new System.Windows.Controls.Label
+                        {
+                            Content = globalCounter.ToString(),  // Display the globalCounter number
+                            Background = Brushes.Yellow,
+                            Foreground = Brushes.Black,
+                            Padding = new Thickness(5),
+                            Opacity = 0.7
+                        };
+
+                        Canvas.SetLeft(tag, rect.Left / ScalingFactor);
+                        Canvas.SetTop(tag, rect.Top / ScalingFactor - 20);
+
+                        OverlayCanvas.Children.Add(tag);
+
+                        _tags.Add(tag);
+
+                        // Create and store the clickable item with its adjusted bounding rectangle
+                        _clickableItems.Add(new ClickableItem
+                        {
+                            Name = $"Item {globalCounter}",
+                            BoundingRectangle = rect
+                        });
+
+                        globalCounter++;  // Increment the global counter after tagging each element
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to place a tag: {ex.Message}");
+                    }
+                }
+            });
+        }
+
+        private Rect[] GetBoundingRectangles(AutomationElementCollection clickableElements, out string[] elementNames)
+        {
+            var boundingRects = new List<Rect>();
+            var namesList = new List<string>();
+
+            foreach (AutomationElement element in clickableElements)
+            {
+                try
+                {
+                    var boundingRect = element.Current.BoundingRectangle;
+
+                    if (!boundingRect.IsEmpty)
+                    {
+                        boundingRects.Add(new Rect(
+                            boundingRect.Left / ScalingFactor,
+                            boundingRect.Top / ScalingFactor,
+                            boundingRect.Width / ScalingFactor,
+                            boundingRect.Height / ScalingFactor));
+
+                        string controlName = element.Current.Name ?? "Unknown";
+                        namesList.Add(controlName);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to get bounding rectangle: {ex.Message}");
+                }
+            }
+
+            elementNames = namesList.ToArray();
+            return boundingRects.ToArray();
+        }
+
+        public void InteractWithUserGuideWindow(string windowTitle)
+        {
+            try
+            {
+                var desktop = AutomationElement.RootElement;
+                var windowCondition = new PropertyCondition(AutomationElement.NameProperty, windowTitle);
+
+                var userGuideWindow = desktop.FindFirst(TreeScope.Children, windowCondition);
+
+                if (userGuideWindow != null)
+                {
+                    Console.WriteLine("UserGuide window found!");
+
+                    var clickableCondition = new OrCondition(
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink)
+                    );
+
+                    var clickableItems = userGuideWindow.FindAll(TreeScope.Descendants, clickableCondition);
+
+                    var boundingRects = GetBoundingRectangles(clickableItems, out string[] clickableNames);
+
+                    TagClickableElements(boundingRects, clickableNames);
+                }
+                else
+                {
+                    Console.WriteLine("UserGuide window not found.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Interaction Error: {ex.Message}");
             }
         }
 
@@ -1538,10 +1654,12 @@ namespace ATEDNIULI
         }
 
         public bool detected = false;
-        private void ProcessClickableElements(AutomationElementCollection clickableElements = null, AutomationElementCollection webClickables = null, bool isBrowser = false, AutomationElementCollection desktopIcons = null)
+        private void ProcessClickableElements(
+    AutomationElementCollection clickableElements = null,
+    AutomationElementCollection webClickables = null,
+    bool isBrowser = false,
+    AutomationElementCollection desktopIcons = null)
         {
-            // Removed local counters, as we're now using globalCounter
-
             if (clickableElements != null)
             {
                 foreach (AutomationElement element in clickableElements)
@@ -1552,7 +1670,6 @@ namespace ATEDNIULI
 
                     if (!boundingRect.IsEmpty)
                     {
-                        // Adjust the bounding rectangle coordinates for scaling
                         Rect adjustedBoundingRect = new Rect(
                             boundingRect.Left / ScalingFactor,
                             boundingRect.Top / ScalingFactor,
@@ -1563,42 +1680,53 @@ namespace ATEDNIULI
                         string controlName = element.Current.Name;
                         Console.WriteLine($"Clickable Item {globalCounter}: {controlName}");
 
-                        // UI updates must be done on the UI thread
-                        System.Windows.Controls.Label tag = new System.Windows.Controls.Label
+                        // Wrap UI updates in Dispatcher.Invoke to ensure main thread updates
+                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
                         {
-                            Content = globalCounter,
-                            Background = Brushes.Yellow,
-                            Foreground = Brushes.Black,
-                            Padding = new Thickness(5),
-                            Opacity = 0.7
-                        };
+                            try
+                            {
+                                // Create a new label (tag) representing the clickable element
+                                System.Windows.Controls.Label tag = new System.Windows.Controls.Label
+                                {
+                                    Content = globalCounter,
+                                    Background = Brushes.Yellow,
+                                    Foreground = Brushes.Black,
+                                    Padding = new Thickness(5),
+                                    Opacity = 0.7
+                                };
 
-                        // Set the adjusted position based on the adjusted bounding rectangle
-                        Canvas.SetLeft(tag, adjustedBoundingRect.Left);
-                        Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
-                        OverlayCanvas.Children.Add(tag);
+                                // Set the adjusted position based on the bounding rectangle
+                                Canvas.SetLeft(tag, adjustedBoundingRect.Left);
+                                Canvas.SetTop(tag, adjustedBoundingRect.Top - 20);
 
-                        // Add the tag to the list
-                        _tags.Add(tag);
+                                OverlayCanvas.Children.Add(tag);
 
-                        // Create and store the clickable item with the adjusted bounding rectangle
-                        _clickableItems.Add(new ClickableItem
-                        {
-                            Name = controlName,
-                            BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
+                                // Add the tag to the list of UI elements
+                                _tags.Add(tag);
+
+                                // Create and store the clickable item with adjusted bounding rectangle
+                                _clickableItems.Add(new ClickableItem
+                                {
+                                    Name = controlName,
+                                    BoundingRectangle = boundingRect
+                                });
+
+                                globalCounter++;  // Increment the global counter after each element
+                            }
+                            catch (Exception uiEx)
+                            {
+                                Console.WriteLine($"UI update error (clickableElements): {uiEx.Message}");
+                            }
                         });
 
-                        globalCounter++;  // Increment the global counter after processing each element
+                        detected = true;
                     }
                 }
-
-                detected = true;
             }
             else if (isBrowser)
             {
                 try
                 {
-                    // Find all link elements without navigating again
                     IReadOnlyCollection<IWebElement> linkElements = driver.FindElements(By.CssSelector("a"));
                     int linkCount = 1;
                     int viewportWidth = Convert.ToInt32(((IJavaScriptExecutor)driver).ExecuteScript("return window.innerWidth;"));
@@ -1614,58 +1742,61 @@ namespace ATEDNIULI
 
                             if (IsInViewport(location.X, location.Y, size.Width, size.Height, viewportWidth, viewportHeight))
                             {
-                                // Log the link data (optional)
                                 Console.WriteLine($"Link {linkCount}:");
                                 Console.WriteLine($"Bounding Box (Browser Coordinates) - X: {location.X}, Y: {location.Y}, Width: {size.Width}, Height: {size.Height}");
                                 int adjustedX = location.X + browserPosition.X;
                                 int adjustedY = location.Y + browserPosition.Y;
+
                                 Console.WriteLine($"Adjusted Bounding Box (Screen Coordinates) - X: {adjustedX}, Y: {adjustedY}");
                                 Console.WriteLine($"Link URL: {link.GetAttribute("href")}");
-                                Console.WriteLine();
 
-                                // Create a new ClickableItem with the bounding rectangle and name
                                 var clickableItem = new ClickableItem
                                 {
                                     Name = $"Link {linkCount}",
                                     BoundingRectangle = new Rect(adjustedX, adjustedY, size.Width, size.Height)
                                 };
 
-                                // Add the clickable item to the list
-                                _clickableItems.Add(clickableItem);
-
-                                // Create and store the clickable item (tag) to display in UI
-                                System.Windows.Controls.Label tag = new System.Windows.Controls.Label
+                                System.Windows.Application.Current.Dispatcher.Invoke(() =>
                                 {
-                                    Content = $"Link - {globalCounter}",
-                                    Background = Brushes.Yellow,
-                                    Foreground = Brushes.Black,
-                                    Padding = new Thickness(5),
-                                    Opacity = 0.7
-                                };
+                                    try
+                                    {
+                                        System.Windows.Controls.Label tag = new System.Windows.Controls.Label
+                                        {
+                                            Content = $"Link {globalCounter}",
+                                            Background = Brushes.Yellow,
+                                            Foreground = Brushes.Black,
+                                            Padding = new Thickness(5),
+                                            Opacity = 0.7
+                                        };
 
-                                // Set the position of the tag (above the link element)
-                                Canvas.SetLeft(tag, adjustedX);
-                                Canvas.SetTop(tag, adjustedY - 20); // Position tag above the link
-                                OverlayCanvas.Children.Add(tag);  // Assuming OverlayCanvas is accessible here
+                                        Canvas.SetLeft(tag, adjustedX);
+                                        Canvas.SetTop(tag, adjustedY - 20);
+                                        OverlayCanvas.Children.Add(tag);
 
-                                // Add the tag to the list
-                                _tags.Add(tag);  // Assuming _tags is globally accessible
+                                        _tags.Add(tag);
+                                        _clickableItems.Add(clickableItem);
+
+                                        globalCounter++;
+                                    }
+                                    catch (Exception linkUiEx)
+                                    {
+                                        Console.WriteLine($"UI update error for browser links: {linkUiEx.Message}");
+                                    }
+                                });
+
+                                linkCount++;
                             }
-
-                            linkCount++;
-                            globalCounter++;
                         }
-                        catch (Exception ex)
+                        catch (Exception linkElementEx)
                         {
-                            Console.WriteLine($"Error processing link: {ex.Message}");
+                            Console.WriteLine($"Error processing link: {linkElementEx.Message}");
                         }
                     }
                 }
-                catch (Exception ex)
+                catch (Exception browserEx)
                 {
-                    Console.WriteLine($"An error occurred during scanning: {ex.Message}");
+                    Console.WriteLine($"An error occurred during scanning links: {browserEx.Message}");
                 }
-
                 detected = true;
             }
             else if (desktopIcons != null)
@@ -1678,50 +1809,48 @@ namespace ATEDNIULI
 
                     if (!boundingRect.IsEmpty)
                     {
-                        // Adjust the bounding rectangle coordinates for scaling
-                        Rect adjustedBoundingRect = new Rect(
-                            boundingRect.Left / ScalingFactor,
-                            boundingRect.Top / ScalingFactor,
-                            boundingRect.Width / ScalingFactor,
-                            boundingRect.Height / ScalingFactor
-                        );
-
                         string controlName = element.Current.Name;
-                        Console.WriteLine($"Clickable Item {globalCounter}: {controlName}");
 
-                        // UI updates must be done on the UI thread
-                        System.Windows.Controls.Label tag = new System.Windows.Controls.Label
+                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
                         {
-                            Content = globalCounter,
-                            Background = Brushes.Yellow,
-                            Foreground = Brushes.Black,
-                            Padding = new Thickness(5),
-                            Opacity = 0.7
-                        };
+                            try
+                            {
+                                System.Windows.Controls.Label tag = new System.Windows.Controls.Label
+                                {
+                                    Content = globalCounter,
+                                    Background = Brushes.Yellow,
+                                    Foreground = Brushes.Black,
+                                    Padding = new Thickness(5),
+                                    Opacity = 0.7
+                                };
 
-                        // Set the adjusted position based on the adjusted bounding rectangle
-                        Canvas.SetLeft(tag, adjustedBoundingRect.Left);
-                        Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
-                        OverlayCanvas.Children.Add(tag);
+                                Canvas.SetLeft(tag, boundingRect.Left);
+                                Canvas.SetTop(tag, boundingRect.Top - 20);
 
-                        // Add the tag to the list
-                        _tags.Add(tag);
+                                OverlayCanvas.Children.Add(tag);
+                                _tags.Add(tag);
 
-                        // Create and store the clickable item with the adjusted bounding rectangle
-                        _clickableItems.Add(new ClickableItem
-                        {
-                            Name = controlName,
-                            BoundingRectangle = boundingRect // Store the adjusted bounding rectangle
+                                _clickableItems.Add(new ClickableItem
+                                {
+                                    Name = controlName,
+                                    BoundingRectangle = boundingRect
+                                });
+
+                                globalCounter++;
+                            }
+                            catch (Exception desktopUiEx)
+                            {
+                                Console.WriteLine($"UI update error for desktop icons: {desktopUiEx.Message}");
+                            }
                         });
 
-                        globalCounter++;  // Increment the global counter after processing each element
+                        detected = true;
                     }
                 }
-                detected = true;;
             }
             else
             {
-                Console.WriteLine("No icons detected");
+                Console.WriteLine("No icons detected.");
             }
         }
 
@@ -1790,7 +1919,7 @@ namespace ATEDNIULI
                                     // Create a label (tag) for the taskbar item
                                     System.Windows.Controls.Label tag = new System.Windows.Controls.Label
                                     {
-                                        Content = "T-" + globalCounter, // Prefix with 'T' for taskbar items
+                                        Content = globalCounter, // Prefix with 'T' for taskbar items
                                         Background = Brushes.Green,
                                         Foreground = Brushes.White,
                                         Padding = new Thickness(5),

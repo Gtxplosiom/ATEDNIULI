@@ -215,7 +215,7 @@ class LiveTranscription
         }
     }
 
-    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, ShowItems show_items, CameraMouse camera_mouse, HelpWindow help_window, SettingsWindow settings_window, UserGuide user_guide) // 
+    public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, UserGuide user_guide, ShowItems show_items, CameraMouse camera_mouse, HelpWindow help_window, SettingsWindow settings_window) // 
     {
         this.asr_window = asr_window ?? throw new ArgumentNullException(nameof(asr_window));
         this.intent_window = intent_window ?? throw new ArgumentNullException(nameof(intent_window));
@@ -280,6 +280,7 @@ class LiveTranscription
         show_items.ItemDetected += CheckDetected;
 
         UpdateMouseActionLabel();
+
         this.help_window = help_window;
         this.settings_window = settings_window;
     }

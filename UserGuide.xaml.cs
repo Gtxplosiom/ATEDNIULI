@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 
 namespace ATEDNIULI
 {
@@ -13,9 +14,31 @@ namespace ATEDNIULI
             // Set initial state to State1
             var stateTemplate = FindResource($"State{state_now}") as DataTemplate;
             StateControl.Content = stateTemplate.LoadContent();
+
+            this.Loaded += UserGuide_Loaded;
+        }
+        private void UserGuide_Loaded(object sender, RoutedEventArgs e)
+        {
+            // Display the window handle after the window is fully loaded
+            IntPtr handle = GetWindowHandle();
+            Console.WriteLine($"Window Handle: {handle}");
         }
 
-        public int state_now = 0;
+        // Method to retrieve the current window's handle
+        public IntPtr GetWindowHandle()
+        {
+            IntPtr handle = IntPtr.Zero;
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                handle = new WindowInteropHelper(this).Handle;
+                Console.WriteLine($"Obtained window handle: {handle}");
+            });
+
+            return handle;
+        }
+
+        public int state_now = 4;
 
         // Switch between states based on direction
         public void SwitchState(string direction)
