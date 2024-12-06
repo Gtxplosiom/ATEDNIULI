@@ -374,10 +374,24 @@ class LiveTranscription
 
     public bool showed_detected = false;
     public bool number_clicked = true;
+    private bool showed_state4 = false;
     public void DetectScreen()
     {
+        var tutorial_state = user_guide.ReturnState();
+
         if (!mouse_activated)
         {
+            if (in_tutorial && tutorial_state == "state4")
+            {
+                Console.WriteLine(tutorial_state);
+                if (!showed_state4)
+                {
+                    Console.WriteLine("trying to show items in tutorial.....");
+                    UpdateUI(() => TutorialStuff(tutorial_state, "e"));
+                    showed_state4 = true;
+                }
+            }
+
             show_items.RemoveTagsNoTimer();
             UpdateUI(() => asr_window.HideWithFadeOut());
             wake_word_detected = false;
@@ -1456,6 +1470,18 @@ class LiveTranscription
             case "state4":
                 user_guide.UpdateTextBlocks(letter);
                 break;
+            case "state5":
+                user_guide.UpdateTextBlocks(letter);
+                break;
+            case "state6":
+                user_guide.UpdateTextBlocks(letter);
+                break;
+            case "state7":
+                user_guide.UpdateTextBlocks(letter);
+                break;
+            case "state8":
+                user_guide.UpdateTextBlocks(letter);
+                break;
         }
     }
 
@@ -1817,8 +1843,22 @@ class LiveTranscription
         return new OpenCvSharp.Rect((int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
     }
 
+    private bool clicked_state4 = false;
+
     private void ClickItem(Rect boundingRect)
     {
+        var tutorial_state = user_guide.ReturnState();
+
+        if (in_tutorial && tutorial_state == "state4")
+        {
+            Console.WriteLine(tutorial_state);
+            if (!clicked_state4)
+            {
+                Console.WriteLine("trying to click item in tutorial.....");
+                UpdateUI(() => TutorialStuff(tutorial_state, "f"));
+                clicked_state4 = true;
+            }
+        }
         // Simulate a mouse click at the center of the bounding rectangle
         double x = boundingRect.Left + boundingRect.Width / 2;
         double y = boundingRect.Top + boundingRect.Height / 2;

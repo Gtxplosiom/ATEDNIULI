@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;  // For Brush and Brushes
 
 namespace ATEDNIULI
 {
@@ -109,15 +111,59 @@ namespace ATEDNIULI
             }
         }
 
+        private void NextButton_Click(object sender, RoutedEventArgs e)
+        {
+            SwitchState("next");
+        }
+
         // Button click handler
         private void Button_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button clickedButton && clickedButton.Tag != null)
             {
                 string buttonTag = clickedButton.Tag.ToString();
+
+                // Update the clicked button text
                 UpdateClickedButtonText(buttonTag);
+
+                // Change the border's background color based on the button tag
+                ChangeBorderColor(clickedButton, buttonTag);
             }
         }
+
+        // Change the border's background color
+        private void ChangeBorderColor(Button clickedButton, string buttonTag)
+        {
+            // Map tag names to colors
+            var colorMap = new Dictionary<string, Brush>
+            {
+                { "Chick", Brushes.DarkBlue },
+                { "Dog", Brushes.LightBlue },
+                { "Fox", Brushes.Orange },
+                { "Panda", Brushes.Yellow },
+                { "Bunny", Brushes.Purple },
+                { "Cat", Brushes.Pink },
+                { "Koala", Brushes.Orange },
+                { "Wolf", Brushes.Green }
+            };
+
+            // Traverse the visual tree to find the ButtonContainerBorder
+            DependencyObject parent = clickedButton;
+            while (parent != null)
+            {
+                parent = VisualTreeHelper.GetParent(parent);
+
+                if (parent is Border containerBorder && containerBorder.Name == "ButtonContainerBorder")
+                {
+                    if (colorMap.TryGetValue(buttonTag, out Brush newColor))
+                    {
+                        containerBorder.Background = newColor;
+                    }
+                    break;
+                }
+            }
+        }
+
 
         // Placeholder button handler
         private void ShapeClickHandler(object sender, RoutedEventArgs e)
@@ -125,10 +171,11 @@ namespace ATEDNIULI
             if (sender is Button clickedButton)
             {
                 string tag = clickedButton.Tag?.ToString();
+
                 UpdateClickedButtonText(tag);
+                ChangeBorderColor(clickedButton, tag);
             }
         }
-
 
         public void UpdateTextBlocks(string letter)
         {
@@ -221,30 +268,183 @@ namespace ATEDNIULI
                             var state3eText = content.FindName($"State3{letter}") as TextBlock;
                             if (state3eText != null)
                             {
-                                Console.WriteLine("State1e found successfully!");
+                                Console.WriteLine("State3e found successfully!");
                                 state3eText.Visibility = Visibility.Visible;
                             }
                             else
                             {
-                                Console.WriteLine("State1e not found!");
+                                Console.WriteLine("State3e not found!");
                             }
                             break;
                         case "f":
                             var state3fText = content.FindName($"State3{letter}") as TextBlock;
                             if (state3fText != null)
                             {
-                                Console.WriteLine("State1f found successfully!");
+                                Console.WriteLine("State3f found successfully!");
                                 state3fText.Visibility = Visibility.Visible;
                             }
                             else
                             {
-                                Console.WriteLine("State1f not found!");
+                                Console.WriteLine("State3f not found!");
                             }
                             break;
                     }
                 }
-
-                // Add similar cases for other states as needed
+                if (state_now == 4)
+                {
+                    Console.WriteLine($"In state 4 changing texts.... current state {state_now}");
+                    switch (letter)
+                    {
+                        case "e":
+                            var state3eText = content.FindName($"State4{letter}") as TextBlock;
+                            if (state3eText != null)
+                            {
+                                Console.WriteLine("State4e found successfully!");
+                                state3eText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State4e not found!");
+                            }
+                            break;
+                        case "f":
+                            var state3fText = content.FindName($"State4{letter}") as TextBlock;
+                            if (state3fText != null)
+                            {
+                                Console.WriteLine("State4f found successfully!");
+                                state3fText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State4f not found!");
+                            }
+                            break;
+                    }
+                }
+                if (state_now == 5)
+                {
+                    Console.WriteLine($"In state 5 changing texts.... current state {state_now}");
+                    switch (letter)
+                    {
+                        case "e":
+                            var state3eText = content.FindName($"State5{letter}") as TextBlock;
+                            if (state3eText != null)
+                            {
+                                Console.WriteLine("State5e found successfully!");
+                                state3eText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State5e not found!");
+                            }
+                            break;
+                        case "f":
+                            var state3fText = content.FindName($"State5{letter}") as TextBlock;
+                            if (state3fText != null)
+                            {
+                                Console.WriteLine("State5f found successfully!");
+                                state3fText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State5f not found!");
+                            }
+                            break;
+                    }
+                }
+                if (state_now == 6)
+                {
+                    Console.WriteLine($"In state 6 changing texts.... current state {state_now}");
+                    switch (letter)
+                    {
+                        case "e":
+                            var state3eText = content.FindName($"State6{letter}") as TextBlock;
+                            if (state3eText != null)
+                            {
+                                Console.WriteLine("State6e found successfully!");
+                                state3eText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State6e not found!");
+                            }
+                            break;
+                        case "f":
+                            var state3fText = content.FindName($"State6{letter}") as TextBlock;
+                            if (state3fText != null)
+                            {
+                                Console.WriteLine("State6f found successfully!");
+                                state3fText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State6f not found!");
+                            }
+                            break;
+                    }
+                }
+                if (state_now == 7)
+                {
+                    Console.WriteLine($"In state 7 changing texts.... current state {state_now}");
+                    switch (letter)
+                    {
+                        case "e":
+                            var state3eText = content.FindName($"State7{letter}") as TextBlock;
+                            if (state3eText != null)
+                            {
+                                Console.WriteLine("State7e found successfully!");
+                                state3eText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State7e not found!");
+                            }
+                            break;
+                        case "f":
+                            var state3fText = content.FindName($"State7{letter}") as TextBlock;
+                            if (state3fText != null)
+                            {
+                                Console.WriteLine("State7f found successfully!");
+                                state3fText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State7f not found!");
+                            }
+                            break;
+                    }
+                }
+                if (state_now == 8)
+                {
+                    Console.WriteLine($"In state 8 changing texts.... current state {state_now}");
+                    switch (letter)
+                    {
+                        case "e":
+                            var state3eText = content.FindName($"State8{letter}") as TextBlock;
+                            if (state3eText != null)
+                            {
+                                Console.WriteLine("State8e found successfully!");
+                                state3eText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State8e not found!");
+                            }
+                            break;
+                        case "f":
+                            var state3fText = content.FindName($"State8{letter}") as TextBlock;
+                            if (state3fText != null)
+                            {
+                                Console.WriteLine("State8f found successfully!");
+                                state3fText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State8f not found!");
+                            }
+                            break;
+                    }
+                }
             }
             else
             {
