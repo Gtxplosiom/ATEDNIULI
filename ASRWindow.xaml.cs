@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 
@@ -46,6 +47,19 @@ namespace ATEDNIULI
             {
                 Console.WriteLine("Dispatcher unhandled exception: " + e.Exception);
             };
+        }
+
+        // Override OnActivated to prevent window from getting focus
+        protected override void OnActivated(EventArgs e)
+        {
+            base.OnActivated(e);
+
+            // Force window to lose focus if activated
+            var focusedElement = FocusManager.GetFocusedElement(this);
+            if (focusedElement != null)
+            {
+                Keyboard.ClearFocus();  // Clears focus from any element inside ASRWindow
+            }
         }
 
         // Fade in the window
