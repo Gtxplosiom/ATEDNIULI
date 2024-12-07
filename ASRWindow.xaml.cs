@@ -39,6 +39,7 @@ namespace ATEDNIULI
             background_worker.WorkerSupportsCancellation = true;
             Loaded += ASRWindow_Loaded;
             Topmost = true;
+            Focusable = false;
             main_window = mainWindow;
 
             Dispatcher.UnhandledException += (sender, e) =>
@@ -82,6 +83,8 @@ namespace ATEDNIULI
                 isAnimating = false;
                 StartBeatingAnimation();
                 AnimateWindowGrowth(300); // Start growth animation after fade-in
+                Focusable = false;
+                ShowActivated = false;
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeInAnimation);
@@ -222,6 +225,9 @@ namespace ATEDNIULI
                 Left = Math.Round(main_window_right_x - Width - 25); // Adjust 35 as needed
                 Top = Math.Round(main_window_bottom_y - Height);
             }
+
+            Focusable = false;
+            ShowActivated = false;
         }
 
         // Optionally, separate AdjustWindow to only adjust Top if necessary

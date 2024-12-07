@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;  // For Brush and Brushes
 
@@ -9,6 +10,8 @@ namespace ATEDNIULI
 {
     public partial class UserGuide : Window
     {
+        private bool isRoundedButton = false;
+
         public UserGuide()
         {
             InitializeComponent();
@@ -40,7 +43,7 @@ namespace ATEDNIULI
             return handle;
         }
 
-        public int state_now = 4;
+        public int state_now = 6;
 
         // Switch between states based on direction
         public void SwitchState(string direction)
@@ -116,6 +119,115 @@ namespace ATEDNIULI
             SwitchState("next");
         }
 
+        private List<Brush> Colors = new List<Brush>
+            {
+                Brushes.Black,
+                Brushes.Red,
+                Brushes.Green,
+                Brushes.Blue,
+                Brushes.Orange,
+                Brushes.Purple
+            };
+
+        private int currentColorIndex = 0;
+
+        private void ActionButton_Click(object sender, RoutedEventArgs e)
+        {
+            var content = StateControl.Content as FrameworkElement;
+
+            if (content != null)
+            {
+                var textBlock = content.FindName("TextContent") as TextBlock;
+
+                if (textBlock != null)
+                {
+                    // Cycle to the next color
+                    currentColorIndex = (currentColorIndex + 1) % Colors.Count;
+                    textBlock.Foreground = Colors[currentColorIndex];
+                }
+            }
+        }
+
+
+        // Double-click: Append a long Lorem Ipsum text
+        private void ActionButton_DoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            var content = StateControl.Content as FrameworkElement;
+
+            if (content != null)
+            {
+                var textBlock = content.FindName("TextContent") as TextBlock;
+
+                if (textBlock != null)
+                {
+                    textBlock.Text += " Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin vel nisi eget justo malesuada pulvinar. Sed quis ligula sit amet odio pretium cursus. " +
+                                       "Aenean convallis, nisi at tristique pharetra, lacus odio ultricies eros, vel pharetra nisl justo a libero. " +
+                                       "Donec efficitur tortor eget nisl scelerisque, vel laoreet dui congue. Fusce eleifend, nisl vel porttitor venenatis, " +
+                                       "arcu ligula ultrices quam, eget sodales lorem odio a odio. Integer pharetra metus id libero vehicula, non tempus justo pharetra. " +
+                                       "Maecenas et libero at justo maximus malesuada at eget tortor. Ut convallis massa non ligula pharetra, id pharetra nisl venenatis. " +
+                                       "Quisque scelerisque, justo non faucibus pharetra, ligula tortor venenatis justo, eget dapibus libero odio vel ligula.";
+                }
+            }
+        }
+
+        private enum TextStyleState
+        {
+            Normal,
+            Bold,
+            Italic,
+            Underline
+        }
+
+        private TextStyleState currentTextStyle = TextStyleState.Normal;
+
+        private void ActionButton_RightClick(object sender, MouseButtonEventArgs e)
+        {
+            var content = StateControl.Content as FrameworkElement;
+
+            if (content != null)
+            {
+                var textBlock = content.FindName("TextContent") as TextBlock;
+
+                if (textBlock != null)
+                {
+                    // Cycle through text styles
+                    currentTextStyle = (TextStyleState)(((int)currentTextStyle + 1) % Enum.GetValues(typeof(TextStyleState)).Length);
+
+                    ApplyTextStyle(textBlock, currentTextStyle);
+                }
+            }
+
+            e.Handled = true;  // Prevent right-click event propagation
+        }
+
+        private void ApplyTextStyle(TextBlock textBlock, TextStyleState style)
+        {
+            switch (style)
+            {
+                case TextStyleState.Normal:
+                    textBlock.FontWeight = FontWeights.Normal;
+                    textBlock.FontStyle = FontStyles.Normal;
+                    textBlock.TextDecorations = null;
+                    break;
+                case TextStyleState.Bold:
+                    textBlock.FontWeight = FontWeights.Bold;
+                    textBlock.FontStyle = FontStyles.Normal;
+                    textBlock.TextDecorations = null;
+                    break;
+                case TextStyleState.Italic:
+                    textBlock.FontWeight = FontWeights.Normal;
+                    textBlock.FontStyle = FontStyles.Italic;
+                    textBlock.TextDecorations = null;
+                    break;
+                case TextStyleState.Underline:
+                    textBlock.FontWeight = FontWeights.Normal;
+                    textBlock.FontStyle = FontStyles.Normal;
+                    textBlock.TextDecorations = TextDecorations.Underline;
+                    break;
+            }
+        }
+
+
         // Button click handler
         private void Button_Click(object sender, RoutedEventArgs e)
         {
@@ -164,7 +276,6 @@ namespace ATEDNIULI
             }
         }
 
-
         // Placeholder button handler
         private void ShapeClickHandler(object sender, RoutedEventArgs e)
         {
@@ -174,6 +285,14 @@ namespace ATEDNIULI
 
                 UpdateClickedButtonText(tag);
                 ChangeBorderColor(clickedButton, tag);
+            }
+        }
+
+        private void InputTextBox_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if (sender is TextBox inputTextBox && inputTextBox.IsVisible)
+            {
+                inputTextBox.Focus();  // Automatically set focus whenever it's visible
             }
         }
 
@@ -327,11 +446,11 @@ namespace ATEDNIULI
                     switch (letter)
                     {
                         case "e":
-                            var state3eText = content.FindName($"State5{letter}") as TextBlock;
-                            if (state3eText != null)
+                            var state5eText = content.FindName($"State5{letter}") as TextBlock;
+                            if (state5eText != null)
                             {
                                 Console.WriteLine("State5e found successfully!");
-                                state3eText.Visibility = Visibility.Visible;
+                                state5eText.Visibility = Visibility.Visible;
                             }
                             else
                             {
@@ -339,15 +458,27 @@ namespace ATEDNIULI
                             }
                             break;
                         case "f":
-                            var state3fText = content.FindName($"State5{letter}") as TextBlock;
-                            if (state3fText != null)
+                            var state5fText = content.FindName($"State5{letter}") as TextBlock;
+                            if (state5fText != null)
                             {
                                 Console.WriteLine("State5f found successfully!");
-                                state3fText.Visibility = Visibility.Visible;
+                                state5fText.Visibility = Visibility.Visible;
                             }
                             else
                             {
                                 Console.WriteLine("State5f not found!");
+                            }
+                            break;
+                        case "g":
+                            var state5gText = content.FindName($"State5{letter}") as TextBlock;
+                            if (state5gText != null)
+                            {
+                                Console.WriteLine("State5g found successfully!");
+                                state5gText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State5g not found!");
                             }
                             break;
                     }
@@ -358,27 +489,27 @@ namespace ATEDNIULI
                     switch (letter)
                     {
                         case "e":
-                            var state3eText = content.FindName($"State6{letter}") as TextBlock;
-                            if (state3eText != null)
+                            var state6dText = content.FindName($"State6{letter}") as TextBlock;
+                            if (state6dText != null)
+                            {
+                                Console.WriteLine("State6d found successfully!");
+                                state6dText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State6d not found!");
+                            }
+                            break;
+                        case "f":
+                            var state6eText = content.FindName($"State6{letter}") as TextBlock;
+                            if (state6eText != null)
                             {
                                 Console.WriteLine("State6e found successfully!");
-                                state3eText.Visibility = Visibility.Visible;
+                                state6eText.Visibility = Visibility.Visible;
                             }
                             else
                             {
                                 Console.WriteLine("State6e not found!");
-                            }
-                            break;
-                        case "f":
-                            var state3fText = content.FindName($"State6{letter}") as TextBlock;
-                            if (state3fText != null)
-                            {
-                                Console.WriteLine("State6f found successfully!");
-                                state3fText.Visibility = Visibility.Visible;
-                            }
-                            else
-                            {
-                                Console.WriteLine("State6f not found!");
                             }
                             break;
                     }
@@ -388,12 +519,24 @@ namespace ATEDNIULI
                     Console.WriteLine($"In state 7 changing texts.... current state {state_now}");
                     switch (letter)
                     {
+                        case "d":
+                            var state7dText = content.FindName($"State7{letter}") as TextBlock;
+                            if (state7dText != null)
+                            {
+                                Console.WriteLine("State7d found successfully!");
+                                state7dText.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("State7d not found!");
+                            }
+                            break;
                         case "e":
-                            var state3eText = content.FindName($"State7{letter}") as TextBlock;
-                            if (state3eText != null)
+                            var state7eText = content.FindName($"State7{letter}") as TextBlock;
+                            if (state7eText != null)
                             {
                                 Console.WriteLine("State7e found successfully!");
-                                state3eText.Visibility = Visibility.Visible;
+                                state7eText.Visibility = Visibility.Visible;
                             }
                             else
                             {
@@ -401,11 +544,11 @@ namespace ATEDNIULI
                             }
                             break;
                         case "f":
-                            var state3fText = content.FindName($"State7{letter}") as TextBlock;
-                            if (state3fText != null)
+                            var state7fText = content.FindName($"State7{letter}") as TextBlock;
+                            if (state7fText != null)
                             {
                                 Console.WriteLine("State7f found successfully!");
-                                state3fText.Visibility = Visibility.Visible;
+                                state7fText.Visibility = Visibility.Visible;
                             }
                             else
                             {

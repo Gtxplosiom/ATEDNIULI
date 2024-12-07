@@ -1370,10 +1370,11 @@ class LiveTranscription
     private bool switched = false;
     private string detected_item = "";
     private bool state1_done = false;
+    private bool state6_done = false;
 
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        if (itemDetected && confidence > -100 && mouse_steady)
+        if (itemDetected && confidence > -100 && mouse_activated)
         {
             for (int number_index = 0; number_index < numberStrings.Count; number_index++)
             {
@@ -1384,6 +1385,20 @@ class LiveTranscription
                 // Here we handle the command for each number string
                 HandleCommand(number, partial_result, ref execute_number_command_count, () =>
                 {
+                    var tutorial_state = user_guide.ReturnState();
+
+                    if (in_tutorial && tutorial_state == "state6")
+                    {
+                        Console.WriteLine(tutorial_state);
+                        if (!state6_done)
+                        {
+                            Console.WriteLine("trying to show items in tutorial.....");
+                            UpdateUI(() => TutorialStuff(tutorial_state, "d"));
+                            UpdateUI(() => TutorialStuff(tutorial_state, "e"));
+                            state6_done = true;
+                        }
+                    }
+
                     show_items.ExecuteAction(detected_item, number_index + 1); // Use number_index + 1 if you want to represent 1-based index
                     deep_speech_model.FreeStream(deep_speech_stream);
                     deep_speech_stream.Dispose();
@@ -1614,6 +1629,7 @@ class LiveTranscription
     private bool switched_state = false;
     private bool in_tutorial = false;
     private bool opened_word = false;
+    private bool typing_tutorial = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
     {
         if (string.IsNullOrEmpty(transcription)) return;
@@ -1763,6 +1779,21 @@ class LiveTranscription
 
     private void TypingMode(object sender, System.Timers.ElapsedEventArgs e)
     {
+        var tutorial_state = user_guide.ReturnState();
+
+        if (in_tutorial && tutorial_state == "state7")
+        {
+            Console.WriteLine(tutorial_state);
+            if (!typing_tutorial)
+            {
+                Console.WriteLine("trying to show items in tutorial.....");
+                UpdateUI(() => TutorialStuff(tutorial_state, "d"));
+                UpdateUI(() => TutorialStuff(tutorial_state, "e"));
+                UpdateUI(() => TutorialStuff(tutorial_state, "f"));
+                typing_tutorial = true;
+            }
+        }
+
         typing_mode = true;
 
         UpdateUI(() => main_window.HighlightTypingIcon(typing_mode));
@@ -2106,8 +2137,24 @@ class LiveTranscription
     }
 
     private bool camera_mouse_opened = false;
+    private bool mouse_state5 = false;
     private void OpenMouse()
     {
+        var tutorial_state = user_guide.ReturnState();
+
+        if (in_tutorial && tutorial_state == "state5")
+        {
+            Console.WriteLine(tutorial_state);
+            if (!mouse_state5)
+            {
+                Console.WriteLine("trying to show items in tutorial.....");
+                UpdateUI(() => TutorialStuff(tutorial_state, "e"));
+                UpdateUI(() => TutorialStuff(tutorial_state, "f"));
+                UpdateUI(() => TutorialStuff(tutorial_state, "g"));
+                mouse_state5 = true;
+            }
+        }
+
         if (!camera_mouse_opened)
         {
             camera_mouse_opened = true;

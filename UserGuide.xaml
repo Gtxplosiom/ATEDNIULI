@@ -451,24 +451,93 @@
                        FontSize="16" 
                        FontStyle="Italic" 
                        Margin="0,0,0,20" />
-                    <TextBlock Name="State5e" Text="Great! Now try closing the application by subtituting 'close app' with 'terminate app' or 'exit app'" 
+                    <TextBlock Name="State5e" Text="Great! Now try moving the mouse all around and get a feel for it" 
                        FontSize="16" 
                        Visibility="Collapsed"
                        Margin="0,0,0,5" />
-                    <TextBlock Name="State5f" Text="Great! To proceed, say 'TRML next'" 
-                       FontSize="16" 
-                       FontStyle="Italic"
-                       Visibility="Collapsed"
-                       Margin="0,20,0,0" />
+                    <TextBlock Name="State5f" FontSize="16" TextWrapping="Wrap" Margin="0,20,0,0" Visibility="Collapsed">
+                                Once you you get the hang of it try smiling for a certain amount of time to try the mouse functions on the shape on the right;
+                                <LineBreak />
+                                Smile for 1 second - Click,
+                                <LineBreak />
+                                Smile for 2 seconds - Double-Click,
+                                <LineBreak />
+                                Smile for 3 seconds - Right-Click,
+                                <LineBreak />
+                                Smile for 4 seconds - Hold-Click,
+                                <LineBreak />
+                                Smile for 5 seconds - Scroll Lock
+                    </TextBlock>
+                    <TextBlock Name="State5g" Text="Once you're done, proceed by clicking the Next Button" 
+                           FontSize="16" 
+                           Visibility="Collapsed"
+                           Margin="0,0,0,5" />
                 </StackPanel>
 
-                <!-- Right Section -->
                 <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
                     <!-- Simulated Device Section -->
                     <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
-                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
+                        <StackPanel>
+                            <!-- Scrollable Element -->
+                            <Border x:Name="ScrollableBorder" 
+                                    Width="200" 
+                                    Height="200" 
+                                    CornerRadius="0" 
+                                    Background="LightGray" 
+                                    Margin="0,0,0,20">
+                                <ScrollViewer>
+                                    <TextBlock x:Name="TextContent" 
+                                               TextWrapping="Wrap" 
+                                               Padding="10">
+                                        Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                                    </TextBlock>
+                                </ScrollViewer>
+                            </Border>
+
+                            <!-- Hint Text -->
+                            <TextBlock x:Name="HintText"
+                                       Text="Click to cycle font color, double-click to add more text, right-click to cycle font style."
+                                       FontSize="12"
+                                       Foreground="Gray"
+                                       Margin="0,10,0,10"
+                                       TextWrapping="Wrap" />
+                            <!-- Hint Text -->
+                            <TextBlock x:Name="HintText2"
+                                        Text="Once the text is long enough try scrolling by hold-clicking the scroll bar"
+                                        FontSize="12"
+                                        Foreground="Gray"
+                                        Margin="0,10,0,10"
+                                        TextWrapping="Wrap" />
+
+                            <!-- Single Button -->
+                            <Button x:Name="ActionButton" 
+                                    Content="Click me!" 
+                                    Width="150" 
+                                    Height="40" 
+                                    Background="#4CAF50" 
+                                    Foreground="White" 
+                                    FontWeight="Bold" 
+                                    HorizontalAlignment="Center"
+                                    Click="ActionButton_Click"
+                                    MouseRightButtonDown="ActionButton_RightClick"
+                                    MouseDoubleClick="ActionButton_DoubleClick" />
+                        </StackPanel>
                     </Border>
+
+
+                    <!-- Next Button -->
+                    <Button Content="NEXT" 
+                            Width="100" 
+                            Height="40" 
+                            Background="#FFC107" 
+                            Foreground="Black" 
+                            FontWeight="Bold" 
+                            Margin="0,20,0,0" 
+                            HorizontalAlignment="Center"
+                            Click="NextButton_Click" />
                 </StackPanel>
+
+
             </Grid>
         </DataTemplate>
 
@@ -477,40 +546,54 @@
             <Grid>
                 <!-- Left Section -->
                 <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
-                    <TextBlock Name="State5a" Text="QUICK NAVIGATE OPTIONS" 
+                    <TextBlock Name="State6a" Text="QUICK NAVIGATE OPTIONS" 
                FontSize="28" 
                FontWeight="Bold" 
                Foreground="Black" 
                Margin="0,0,0,10" />
-                    <TextBlock Name="State5b" Text="ATEDNIULI is not very strict on the word of commands. You can say words that are similar to the command you are going to do." 
+                    <TextBlock Name="State6b" Text="Is another feature of ATEDNIULI where if the mouse cursor is hovering above an icon of certain apps or websites, certain options will popup showing all possible executable options of that app/website." 
                FontSize="18" 
                TextWrapping="Wrap" 
                Margin="0,0,0,10" />
-                    <TextBlock Name="State5c" Text="Like for example when opening an app instead of saying open, you can either say; activate, show, or nay similar  word to the command" 
+                    <TextBlock Name="State6c" Text="try hovering on one of these application and website icons and say the number of the task you want to execute" 
                FontSize="16" 
                Margin="0,0,0,5" />
-                    <TextBlock Name="State5d" Text="Open microsoft word. instead of saying 'open word' try substituting with 'activate word' or 'show word'" 
+                    <TextBlock Name="State6d" Text="Great! Now close it and try another one" 
                FontSize="16" 
+               Visibility="Collapsed"
                FontStyle="Italic" 
                Margin="0,0,0,20" />
-                    <TextBlock Name="State5e" Text="Great! Now try closing the application by subtituting 'close app' with 'terminate app' or 'exit app'" 
+                    <TextBlock Name="State6e" Text="Once you're click next button to proceed." 
                FontSize="16" 
                Visibility="Collapsed"
                Margin="0,0,0,5" />
-                    <TextBlock Name="State5f" Text="Great! To proceed, say 'TRML next'" 
-               FontSize="16" 
-               FontStyle="Italic"
-               Visibility="Collapsed"
-               Margin="0,20,0,0" />
                 </StackPanel>
 
                 <!-- Right Section -->
                 <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
                     <!-- Simulated Device Section -->
                     <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
-                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
+                        <UniformGrid Rows="2" Columns="2">
+                            <!-- Website/App Icons -->
+                            <Image Source="assets/icons/chrome_icon.png" Width="40" Height="40" Margin="5" Cursor="Hand" />
+                            <Image Source="assets/icons/file_explorer_icon.png" Width="40" Height="40" Margin="5" Cursor="Hand" />
+                            <Image Source="assets/icons/youtube_icon.png" Width="40" Height="40" Margin="5" Cursor="Hand" />
+                            <Image Source="assets/icons/word_icon.png" Width="40" Height="40" Margin="5" Cursor="Hand" />
+                        </UniformGrid>
                     </Border>
+
+                    <!-- Next Button -->
+                    <Button Content="NEXT" 
+                            Width="100" 
+                            Height="40" 
+                            Background="#FFC107" 
+                            Foreground="Black" 
+                            FontWeight="Bold" 
+                            Margin="0,20,0,0" 
+                            HorizontalAlignment="Center"
+                            Click="NextButton_Click" />
                 </StackPanel>
+
             </Grid>
         </DataTemplate>
 
@@ -519,27 +602,28 @@
             <Grid>
                 <!-- Left Section -->
                 <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
-                    <TextBlock Name="State5a" Text="TYPING MODE" 
+                    <TextBlock Name="State7a" Text="TYPING MODE" 
                                FontSize="28" 
                                FontWeight="Bold" 
                                Foreground="Black" 
-                               Margin="0,0,0,10" /> 
-                    <TextBlock Name="State5b" Text="ATEDNIULI is not very strict on the word of commands. You can say words that are similar to the command you are going to do." 
+                               Margin="0,0,0,10" />
+                    <TextBlock Name="State7b" Text="Typing mode is another feature of ATEDNIULI that when activated allows the user to type freely with their voice." 
                                FontSize="18" 
                                TextWrapping="Wrap" 
                                Margin="0,0,0,10" />
-                    <TextBlock Name="State5c" Text="Like for example when opening an app instead of saying open, you can either say; activate, show, or nay similar  word to the command" 
+                    <TextBlock Name="State7c" Text="To activate this mode, command the application by saying 'start typing'" 
                                FontSize="16" 
                                Margin="0,0,0,5" />
-                    <TextBlock Name="State5d" Text="Open microsoft word. instead of saying 'open word' try substituting with 'activate word' or 'show word'" 
+                    <TextBlock Name="State7d" Text="Great! Now try typing by saying for example 'the quick brown fox jumps over the lazy dog' or whatever you want" 
                                FontSize="16" 
+                               Visibility="Collapsed"
                                FontStyle="Italic" 
                                Margin="0,0,0,20" />
-                    <TextBlock Name="State5e" Text="Great! Now try closing the application by subtituting 'close app' with 'terminate app' or 'exit app'" 
+                    <TextBlock Name="State7e" Text="Try invoking saying the words that are listed at the top-left of the screen to type the corresponding symbols" 
                                FontSize="16" 
                                Visibility="Collapsed"
                                Margin="0,0,0,5" />
-                    <TextBlock Name="State5f" Text="Great! To proceed, say 'TRML next'" 
+                    <TextBlock Name="State7f" Text="Once you're done say 'stop typing' and say 'TRML next' to proceed" 
                                FontSize="16" 
                                FontStyle="Italic"
                                Visibility="Collapsed"
@@ -550,9 +634,22 @@
                 <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
                     <!-- Simulated Device Section -->
                     <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
-                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
+                        <!-- Text Input Section -->
+                        <TextBox x:Name="InputTextBox"
+                 Background="Transparent"
+                 VerticalAlignment="Stretch"
+                 HorizontalAlignment="Stretch"
+                 TextWrapping="Wrap"
+                 AcceptsReturn="True"
+                 BorderThickness="0"
+                 FontSize="16"
+                 Padding="10"
+                 IsVisibleChanged="InputTextBox_IsVisibleChanged" />
                     </Border>
                 </StackPanel>
+
+
+
             </Grid>
         </DataTemplate>
 

@@ -177,7 +177,8 @@ namespace ATEDNIULI
                 AllowsTransparency = true, // Allow transparency
                 ShowInTaskbar = false,     // Do not show in taskbar
                 Topmost = true,            // Stay on top of other windows
-                Visibility = Visibility.Hidden // Start hidden
+                Visibility = Visibility.Hidden, // Start hidden
+                ShowActivated = false
             };
 
             // Create the layout similar to the Xamarin design

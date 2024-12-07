@@ -159,10 +159,6 @@ namespace ATEDNIULI
             public static void ScrollLock()
             {
                 MouseEvent(MouseEventFlags.MiddleDown);
-            }
-
-            public static void ReleaseScrollLock()
-            {
                 MouseEvent(MouseEventFlags.MiddleUp);
             }
 
@@ -712,7 +708,7 @@ namespace ATEDNIULI
                     }
                     else if (action == "Scroll Lock")
                     {
-                        //MouseSimulator.ScrollLock();
+                        MouseSimulator.ScrollLock();
                     }
 
                     Cv2.PutText(frame, "No Smile", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Red, 2);
