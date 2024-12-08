@@ -160,7 +160,7 @@ class LiveTranscription
     // english
     string model_path = @"assets\models\delta12.pbmm";
     string commands_scorer = @"assets\models\official_commands_scorer.scorer";
-    string wake_word_scorer = @"assets\models\wake_word.scorer";
+    string wake_word_scorer = @"assets\models\ww_numbers.scorer";
     string one_ten_scorer = @"assets\models\1-10.scorer";
     string intent_model_path = @"assets\models\intent_model_bigrams.bin";
 
@@ -283,6 +283,10 @@ class LiveTranscription
 
         this.help_window = help_window;
         this.settings_window = settings_window;
+
+        //UpdateUI(() => user_guide.Show());
+        //in_tutorial = true;
+        //UpdateUI(() => FinalizeStream());
     }
 
     public string action = "none";
@@ -334,27 +338,13 @@ class LiveTranscription
     {
         if (isDetected)
         {
-            if (!itemDetected && mouse_steady)
-            {
-                SwitchScorer(one_ten_scorer);
-                deep_speech_model.FreeStream(deep_speech_stream);
-                deep_speech_stream.Dispose();
-                deep_speech_stream = deep_speech_model.CreateStream();
-                itemDetected = true;
-            }
-
             Console.WriteLine("An item has been detected.");
+            itemDetected = true;
         }
         else
         {
-            if(itemDetected)
-            {
-                SwitchScorer(wake_word_scorer);
-                deep_speech_model.FreeStream(deep_speech_stream);
-                deep_speech_stream.Dispose();
-                deep_speech_stream = deep_speech_model.CreateStream();
-                itemDetected = false;
-            }
+            //Console.WriteLine("No item detected.");
+            itemDetected = false;
         }
     }
 
@@ -1407,7 +1397,7 @@ class LiveTranscription
             }
         }
 
-        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -25)
+        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -75)
         {
             var tutorial_state = user_guide.ReturnState();
             
@@ -1630,6 +1620,7 @@ class LiveTranscription
     private bool in_tutorial = false;
     private bool opened_word = false;
     private bool typing_tutorial = false;
+    private bool search_state8 = false;
     private void ProcessCommand(string transcription) // tanan hin commands naagi didi
     {
         if (string.IsNullOrEmpty(transcription)) return;
@@ -1668,10 +1659,37 @@ class LiveTranscription
             }
         }
 
+        if (transcription.IndexOf("close", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            var tutorial_state = user_guide.ReturnState();
+
+            if (in_tutorial && tutorial_state == "state8")
+            {
+                UpdateUI(() => show_items.NotificationLabel.Content = "Closing tutorial...");
+                UpdateUI(() => user_guide.Hide());
+                in_tutorial = false;
+                UpdateUI(() => FinalizeStream());
+            }
+        }
+
         if (transcription.IndexOf("search", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             if (!search_mode)
             {
+                var tutorial_state = user_guide.ReturnState();
+
+                if (in_tutorial && tutorial_state == "state8")
+                {
+                    Console.WriteLine(tutorial_state);
+                    if (!search_state8)
+                    {
+                        Console.WriteLine("trying to access search mode in tutorial.....");
+                        UpdateUI(() => TutorialStuff(tutorial_state, "e"));
+                        UpdateUI(() => TutorialStuff(tutorial_state, "f"));
+                        search_state8 = true;
+                    }
+                }
+
                 UpdateUI(() => FinalizeStream());
                 wave_in_event.StopRecording();
                 searching_appear_timer.Start();
@@ -1716,13 +1734,6 @@ class LiveTranscription
         {
             UpdateUI(() => user_guide.Show());
             in_tutorial = true;
-            UpdateUI(() => FinalizeStream());
-        }
-
-        if (transcription.IndexOf("close close", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            UpdateUI(() => user_guide.Hide());
-            in_tutorial = false;
             UpdateUI(() => FinalizeStream());
         }
 
@@ -1847,10 +1858,11 @@ class LiveTranscription
                                                                   // Convert System.Windows.Rect to OpenCvSharp.Rect
                 var convertedRect = ConvertToOpenCvRect(selectedItem.BoundingRectangle);
 
+                show_items.RemoveTagsNoTimer();
+
                 UpdateUI(() => show_items.NotificationLabel.Content = $"Clicking {tagNumber}");
                 ClickItem(convertedRect); // Perform click on item
 
-                show_items.RemoveTagsNoTimer();
                 showed_detected = false;
                 number_clicked = true;
                 StartTranscription();
@@ -1938,7 +1950,7 @@ class LiveTranscription
     public void OpenBrowserWithSearch(string query)
     {
         // Open Chrome using the show_items instance
-        show_items.OpenChrome();
+        Task.Run(() => show_items.OpenChrome());
         Console.WriteLine("Opening Google search in Chrome...");
 
         // Encode the query to ensure special characters are handled correctly
@@ -1948,7 +1960,7 @@ class LiveTranscription
         string googleSearchUrl = $"https://www.google.com/search?q={encodedQuery}";
 
         // Navigate to the constructed URL
-        show_items.driver.Navigate().GoToUrl(googleSearchUrl);
+        Task.Run(() => show_items.driver.Navigate().GoToUrl(googleSearchUrl));
     }
 
     public void OpenChrome()

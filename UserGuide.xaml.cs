@@ -43,7 +43,7 @@ namespace ATEDNIULI
             return handle;
         }
 
-        public int state_now = 6;
+        public int state_now = 0;
 
         // Switch between states based on direction
         public void SwitchState(string direction)
@@ -563,11 +563,11 @@ namespace ATEDNIULI
                     switch (letter)
                     {
                         case "e":
-                            var state3eText = content.FindName($"State8{letter}") as TextBlock;
-                            if (state3eText != null)
+                            var state8eText = content.FindName($"State8{letter}") as TextBlock;
+                            if (state8eText != null)
                             {
                                 Console.WriteLine("State8e found successfully!");
-                                state3eText.Visibility = Visibility.Visible;
+                                state8eText.Visibility = Visibility.Visible;
                             }
                             else
                             {
@@ -575,11 +575,11 @@ namespace ATEDNIULI
                             }
                             break;
                         case "f":
-                            var state3fText = content.FindName($"State8{letter}") as TextBlock;
-                            if (state3fText != null)
+                            var state8fText = content.FindName($"State8{letter}") as TextBlock;
+                            if (state8fText != null)
                             {
                                 Console.WriteLine("State8f found successfully!");
-                                state3fText.Visibility = Visibility.Visible;
+                                state8fText.Visibility = Visibility.Visible;
                             }
                             else
                             {

@@ -53,13 +53,13 @@
 
                     <TextBlock Name="State1e" Text="Great! Remember that you need to call thermal first then wait for the window to pop up and then you can now say the command you want" 
                        FontSize="16" 
-                       Visibility="Collapsed"
+                       Visibility="Hidden"
                        Margin="0,0,0,5" />
 
                     <TextBlock Name="State1f" Text="To proceed, say 'TRML next'" 
                        FontSize="16" 
                        FontStyle="Italic"
-                       Visibility="Collapsed"
+                       Visibility="Hidden"
                        Margin="0,20,0,0" />
                 </StackPanel>
 
@@ -100,19 +100,19 @@
 
                     <TextBlock Name="State2e" Text="Great! Now try closing the word application by calling 'TRML' and saying 'close application'" 
                        FontSize="16" 
-                       Visibility="Collapsed"
+                       Visibility="Hidden"
                        Margin="0,0,0,5" />
 
                     <TextBlock Name="State2f" Text="Now from now on remember to always call 'TRML' first before giving commands" 
                        FontSize="16" 
                        FontStyle="Italic"
-                       Visibility="Collapsed"
+                       Visibility="Hidden"
                        Margin="0,20,0,0" />
 
                     <TextBlock Name="State2g" Text="To proceed, say 'TRML next'" 
                        FontSize="16" 
                        FontStyle="Italic"
-                       Visibility="Collapsed"
+                       Visibility="Hidden"
                        Margin="0,20,0,0" />
                 </StackPanel>
 
@@ -149,12 +149,12 @@
                                Margin="0,0,0,20" />
                     <TextBlock Name="State3e" Text="Great! Now try closing the application by subtituting 'close app' with 'terminate app' or 'exit app'" 
                                FontSize="16" 
-                               Visibility="Collapsed"
+                               Visibility="Hidden"
                                Margin="0,0,0,5" />
                     <TextBlock Name="State3f" Text="Great! To proceed, say 'TRML next'" 
                                FontSize="16" 
                                FontStyle="Italic"
-                               Visibility="Collapsed"
+                               Visibility="Hidden"
                                Margin="0,20,0,0" />
                 </StackPanel>
 
@@ -191,12 +191,12 @@
                                Margin="0,0,0,20" />
                     <TextBlock Name="State4e" Text="Great! Now try saying the number that is on the clickable item you want to click" 
                                FontSize="16" 
-                               Visibility="Collapsed"
+                               Visibility="Hidden"
                                Margin="0,0,0,5" />
                     <TextBlock Name="State4f" Text="Great! To proceed, click the next button by using the show items command to proceed" 
                                FontSize="16" 
                                FontStyle="Italic"
-                               Visibility="Collapsed"
+                               Visibility="Hidden"
                                Margin="0,20,0,0" />
                 </StackPanel>
 
@@ -453,9 +453,9 @@
                        Margin="0,0,0,20" />
                     <TextBlock Name="State5e" Text="Great! Now try moving the mouse all around and get a feel for it" 
                        FontSize="16" 
-                       Visibility="Collapsed"
+                       Visibility="Hidden"
                        Margin="0,0,0,5" />
-                    <TextBlock Name="State5f" FontSize="16" TextWrapping="Wrap" Margin="0,20,0,0" Visibility="Collapsed">
+                    <TextBlock Name="State5f" FontSize="16" TextWrapping="Wrap" Margin="0,20,0,0" Visibility="Hidden">
                                 Once you you get the hang of it try smiling for a certain amount of time to try the mouse functions on the shape on the right;
                                 <LineBreak />
                                 Smile for 1 second - Click,
@@ -470,7 +470,7 @@
                     </TextBlock>
                     <TextBlock Name="State5g" Text="Once you're done, proceed by clicking the Next Button" 
                            FontSize="16" 
-                           Visibility="Collapsed"
+                           Visibility="Hidden"
                            Margin="0,0,0,5" />
                 </StackPanel>
 
@@ -560,12 +560,12 @@
                Margin="0,0,0,5" />
                     <TextBlock Name="State6d" Text="Great! Now close it and try another one" 
                FontSize="16" 
-               Visibility="Collapsed"
+               Visibility="Hidden"
                FontStyle="Italic" 
                Margin="0,0,0,20" />
                     <TextBlock Name="State6e" Text="Once you're click next button to proceed." 
                FontSize="16" 
-               Visibility="Collapsed"
+               Visibility="Hidden"
                Margin="0,0,0,5" />
                 </StackPanel>
 
@@ -616,17 +616,17 @@
                                Margin="0,0,0,5" />
                     <TextBlock Name="State7d" Text="Great! Now try typing by saying for example 'the quick brown fox jumps over the lazy dog' or whatever you want" 
                                FontSize="16" 
-                               Visibility="Collapsed"
+                               Visibility="Hidden"
                                FontStyle="Italic" 
                                Margin="0,0,0,20" />
                     <TextBlock Name="State7e" Text="Try invoking saying the words that are listed at the top-left of the screen to type the corresponding symbols" 
                                FontSize="16" 
-                               Visibility="Collapsed"
+                               Visibility="Hidden"
                                Margin="0,0,0,5" />
                     <TextBlock Name="State7f" Text="Once you're done say 'stop typing' and say 'TRML next' to proceed" 
                                FontSize="16" 
                                FontStyle="Italic"
-                               Visibility="Collapsed"
+                               Visibility="Hidden"
                                Margin="0,20,0,0" />
                 </StackPanel>
 
@@ -647,9 +647,6 @@
                  IsVisibleChanged="InputTextBox_IsVisibleChanged" />
                     </Border>
                 </StackPanel>
-
-
-
             </Grid>
         </DataTemplate>
 
@@ -658,30 +655,30 @@
             <Grid>
                 <!-- Left Section -->
                 <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
-                    <TextBlock Name="State5a" Text="QUICK WEB SEARCHING" 
+                    <TextBlock Name="State8a" Text="QUICK WEB SEARCHING" 
                        FontSize="28" 
                        FontWeight="Bold" 
                        Foreground="Black" 
                        Margin="0,0,0,10" />
-                    <TextBlock Name="State5b" Text="ATEDNIULI is not very strict on the word of commands. You can say words that are similar to the command you are going to do." 
+                    <TextBlock Name="State8b" Text="ATEDNIUIL also supports quick web searching." 
                        FontSize="18" 
                        TextWrapping="Wrap" 
                        Margin="0,0,0,10" />
-                    <TextBlock Name="State5c" Text="Like for example when opening an app instead of saying open, you can either say; activate, show, or nay similar  word to the command" 
+                    <TextBlock Name="State8c" Text="Just command the application with 'search' and say what you want to search. If you're ready to search say 'search now'" 
                        FontSize="16" 
                        Margin="0,0,0,5" />
-                    <TextBlock Name="State5d" Text="Open microsoft word. instead of saying 'open word' try substituting with 'activate word' or 'show word'" 
+                    <TextBlock Name="State8d" Text="Try it now say 'TRML' first and say 'search' to activate search mode and searching whatever you want" 
                        FontSize="16" 
                        FontStyle="Italic" 
                        Margin="0,0,0,20" />
-                    <TextBlock Name="State5e" Text="Great! Now try closing the application by subtituting 'close app' with 'terminate app' or 'exit app'" 
+                    <TextBlock Name="State8e" Text="Great! Now you're ready to use the application, if you want to recap something just command 'help'" 
                        FontSize="16" 
-                       Visibility="Collapsed"
+                       Visibility="Hidden"
                        Margin="0,0,0,5" />
-                    <TextBlock Name="State5f" Text="Great! To proceed, say 'TRML next'" 
+                    <TextBlock Name="State8f" Text="Close the guide by saying 'TRML close'" 
                        FontSize="16" 
                        FontStyle="Italic"
-                       Visibility="Collapsed"
+                       Visibility="Hidden"
                        Margin="0,20,0,0" />
                 </StackPanel>
 

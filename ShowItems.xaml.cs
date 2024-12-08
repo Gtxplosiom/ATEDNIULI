@@ -22,6 +22,7 @@ using Microsoft.Office.Interop.Excel;
 using Microsoft.Office.Interop.PowerPoint;
 using System.Security.Policy;
 
+
 namespace ATEDNIULI
 {
     public partial class ShowItems : System.Windows.Window
@@ -1077,7 +1078,7 @@ namespace ATEDNIULI
 
             options.AddExcludedArgument("enable-automation");
 
-            driver = new ChromeDriver(options);
+            System.Threading.Tasks.Task.Run(() => driver = new ChromeDriver(options));
         }
 
         private void OpenNewTab()
@@ -1372,7 +1373,7 @@ namespace ATEDNIULI
                     Dispatcher.Invoke(() => ProcessClickableElements(null, null, false, desktopIcons));
                 }
 
-                if (currentWindow != null)
+                if (currentWindow != null && currentWindow.Current.Name != "UserGuide")
                 {
                     string windowTitle = currentWindow.Current.Name;
                     bool isBrowser = IsBrowserWindow(windowTitle);
@@ -1384,7 +1385,6 @@ namespace ATEDNIULI
                             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
                             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
                             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TreeItem),  // Include TreeItem for sidebar elements
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Pane),
                             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem)// Include Pane for potential container elements
                             );
 
@@ -1396,23 +1396,6 @@ namespace ATEDNIULI
                     {
                         Console.WriteLine("Staring browser scan");
                         StartScanning(driver);
-                    }
-                }
-
-                if (taskbarHandle != IntPtr.Zero)
-                {
-                    var taskbarElement = AutomationElement.FromHandle(taskbarHandle);
-
-                    if (taskbarElement != null)
-                    {
-                        var clickableCondition = new OrCondition(
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
-                            new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink)
-                        );
-
-                        var taskbarItems = taskbarElement.FindAll(TreeScope.Subtree, clickableCondition);
-
-                        Dispatcher.Invoke(() => ProcessClickableElements(taskbarItems, null));
                     }
                 }
 
@@ -1449,6 +1432,35 @@ namespace ATEDNIULI
 
                         Canvas.SetLeft(tag, rect.Left / ScalingFactor);
                         Canvas.SetTop(tag, rect.Top / ScalingFactor - 20);
+
+                        System.Windows.Shapes.Line connectionLine = new System.Windows.Shapes.Line
+                        {
+                            Stroke = Brushes.Black,
+                            StrokeThickness = 2,
+                            Opacity = 0.7
+                        };
+
+                        OverlayCanvas.Children.Add(connectionLine);
+                        _lines.Add(connectionLine); // Add the line to the list
+
+
+                        // Wait for the tag to be rendered and calculate its dimensions
+                        tag.SizeChanged += (s, e) =>
+                        {
+                            // Calculate the center-bottom of the tag
+                            double tagCenterX = Canvas.GetLeft(tag) + tag.ActualWidth / 2;
+                            double tagBottomY = Canvas.GetTop(tag) + tag.ActualHeight;
+
+                            // Calculate the center of the element's bounding rectangle
+                            double elementCenterX = rect.Left + rect.Width / 2;
+                            double elementCenterY = rect.Top + rect.Height / 2;
+
+                            // Set line coordinates
+                            connectionLine.X1 = tagCenterX; // Center X of the tag
+                            connectionLine.Y1 = tagBottomY; // Bottom Y of the tag
+                            connectionLine.X2 = elementCenterX; // Center X of the element
+                            connectionLine.Y2 = elementCenterY; // Center Y of the element
+                        };
 
                         OverlayCanvas.Children.Add(tag);
 
@@ -1508,15 +1520,59 @@ namespace ATEDNIULI
         {
             try
             {
+                Console.WriteLine($"[DEBUG] Starting interaction with window: {windowTitle}");
+
                 var desktop = AutomationElement.RootElement;
+                if (desktop == null)
+                {
+                    Console.WriteLine("[DEBUG] Desktop root element not found.");
+                    return;
+                }
+
                 var windowCondition = new PropertyCondition(AutomationElement.NameProperty, windowTitle);
 
-                var userGuideWindow = desktop.FindFirst(TreeScope.Children, windowCondition);
+                AutomationElement userGuideWindow = null;
+                int maxRetries = 5;
+                int delayBetweenRetries = 500; // Delay in milliseconds
 
-                if (userGuideWindow != null)
+                // Create and configure a CacheRequest
+                var cacheRequest = new CacheRequest();
+                cacheRequest.AutomationElementMode = AutomationElementMode.Full;
+                cacheRequest.TreeScope = TreeScope.Element | TreeScope.Children;
+                cacheRequest.Add(AutomationElement.NameProperty);
+                cacheRequest.Add(AutomationElement.BoundingRectangleProperty);
+
+                try
                 {
-                    Console.WriteLine("UserGuide window found!");
+                    cacheRequest.Push(); // Activate the CacheRequest
+                    Console.WriteLine("[DEBUG] CacheRequest activated.");
 
+                    // Retry to find the window
+                    for (int attempt = 1; attempt <= maxRetries; attempt++)
+                    {
+                        Console.WriteLine($"[DEBUG] Attempt {attempt} to find window: {windowTitle}");
+                        userGuideWindow = desktop.FindFirst(TreeScope.Children, windowCondition);
+
+                        if (userGuideWindow != null)
+                        {
+                            Console.WriteLine($"[DEBUG] UserGuide window found on attempt {attempt}.");
+                            break;
+                        }
+
+                        Console.WriteLine($"[DEBUG] UserGuide window not found. Retrying in {delayBetweenRetries} ms...");
+                        Thread.Sleep(delayBetweenRetries);
+                    }
+
+                    // If still not found, exit gracefully
+                    if (userGuideWindow == null)
+                    {
+                        Console.WriteLine("[ERROR] UserGuide window not found after maximum retries.");
+                        return;
+                    }
+
+                    Console.WriteLine("[DEBUG] Attempting to find clickable elements in UserGuide window.");
+
+                    // Define condition for clickable elements
                     var clickableCondition = new OrCondition(
                         new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
                         new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink)
@@ -1524,18 +1580,45 @@ namespace ATEDNIULI
 
                     var clickableItems = userGuideWindow.FindAll(TreeScope.Descendants, clickableCondition);
 
+                    if (clickableItems == null || clickableItems.Count == 0)
+                    {
+                        Console.WriteLine("[DEBUG] No clickable items found in the UserGuide window.");
+                        return;
+                    }
+
+                    Console.WriteLine($"[DEBUG] Found {clickableItems.Count} clickable item(s).");
+
+                    // Process bounding rectangles and tag elements
+                    Console.WriteLine("[DEBUG] Processing bounding rectangles for clickable items.");
                     var boundingRects = GetBoundingRectangles(clickableItems, out string[] clickableNames);
 
+                    Console.WriteLine($"[DEBUG] {boundingRects.Length} bounding rectangle(s) processed.");
+
                     TagClickableElements(boundingRects, clickableNames);
+                    Console.WriteLine("[DEBUG] Elements tagged successfully.");
                 }
-                else
+                catch (Exception ex)
                 {
-                    Console.WriteLine("UserGuide window not found.");
+                    Console.WriteLine($"[ERROR] Exception occurred during interaction: {ex.Message}");
+                    Console.WriteLine($"[STACKTRACE] {ex.StackTrace}");
+                }
+                finally
+                {
+                    try
+                    {
+                        cacheRequest.Pop(); // Deactivate the CacheRequest
+                        Console.WriteLine("[DEBUG] CacheRequest deactivated.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Failed to deactivate CacheRequest: {ex.Message}");
+                    }
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Interaction Error: {ex.Message}");
+                Console.WriteLine($"[ERROR] General exception occurred: {ex.Message}");
+                Console.WriteLine($"[STACKTRACE] {ex.StackTrace}");
             }
         }
 
@@ -1655,10 +1738,10 @@ namespace ATEDNIULI
 
         public bool detected = false;
         private void ProcessClickableElements(
-    AutomationElementCollection clickableElements = null,
-    AutomationElementCollection webClickables = null,
-    bool isBrowser = false,
-    AutomationElementCollection desktopIcons = null)
+            AutomationElementCollection clickableElements = null,
+            AutomationElementCollection webClickables = null,
+            bool isBrowser = false,
+            AutomationElementCollection desktopIcons = null)
         {
             if (clickableElements != null)
             {
@@ -1680,7 +1763,6 @@ namespace ATEDNIULI
                         string controlName = element.Current.Name;
                         Console.WriteLine($"Clickable Item {globalCounter}: {controlName}");
 
-                        // Wrap UI updates in Dispatcher.Invoke to ensure main thread updates
                         System.Windows.Application.Current.Dispatcher.Invoke(() =>
                         {
                             try
@@ -1699,6 +1781,36 @@ namespace ATEDNIULI
                                 Canvas.SetLeft(tag, adjustedBoundingRect.Left);
                                 Canvas.SetTop(tag, adjustedBoundingRect.Top - 20);
 
+                                System.Windows.Shapes.Line connectionLine = new System.Windows.Shapes.Line
+                                {
+                                    Stroke = Brushes.Black,
+                                    StrokeThickness = 2,
+                                    Opacity = 0.7
+                                };
+
+                                OverlayCanvas.Children.Add(connectionLine);
+                                _lines.Add(connectionLine); // Add the line to the list
+
+
+                                // Wait for the tag to be rendered and calculate its dimensions
+                                tag.SizeChanged += (s, e) =>
+                                {
+                                    // Calculate the center-bottom of the tag
+                                    double tagCenterX = Canvas.GetLeft(tag) + tag.ActualWidth / 2;
+                                    double tagBottomY = Canvas.GetTop(tag) + tag.ActualHeight;
+
+                                    // Calculate the center of the element's bounding rectangle
+                                    double elementCenterX = adjustedBoundingRect.Left + adjustedBoundingRect.Width / 2;
+                                    double elementCenterY = adjustedBoundingRect.Top + adjustedBoundingRect.Height / 2;
+
+                                    // Set line coordinates
+                                    connectionLine.X1 = tagCenterX; // Center X of the tag
+                                    connectionLine.Y1 = tagBottomY; // Bottom Y of the tag
+                                    connectionLine.X2 = elementCenterX; // Center X of the element
+                                    connectionLine.Y2 = elementCenterY; // Center Y of the element
+                                };
+
+                                // Add the tag to the canvas
                                 OverlayCanvas.Children.Add(tag);
 
                                 // Add the tag to the list of UI elements
@@ -1711,7 +1823,7 @@ namespace ATEDNIULI
                                     BoundingRectangle = boundingRect
                                 });
 
-                                globalCounter++;  // Increment the global counter after each element
+                                globalCounter++; // Increment the global counter after each element
                             }
                             catch (Exception uiEx)
                             {
@@ -1771,6 +1883,36 @@ namespace ATEDNIULI
 
                                         Canvas.SetLeft(tag, adjustedX);
                                         Canvas.SetTop(tag, adjustedY - 20);
+
+                                        System.Windows.Shapes.Line connectionLine = new System.Windows.Shapes.Line
+                                        {
+                                            Stroke = Brushes.Black,
+                                            StrokeThickness = 2,
+                                            Opacity = 0.7
+                                        };
+
+                                        OverlayCanvas.Children.Add(connectionLine);
+                                        _lines.Add(connectionLine); // Add the line to the list
+
+
+                                        // Wait for the tag to be rendered and calculate its dimensions
+                                        tag.SizeChanged += (s, e) =>
+                                        {
+                                            // Calculate the center-bottom of the tag
+                                            double tagCenterX = Canvas.GetLeft(tag) + tag.ActualWidth / 2;
+                                            double tagBottomY = Canvas.GetTop(tag) + tag.ActualHeight;
+
+                                            // Calculate the center of the element's bounding rectangle
+                                            double elementCenterX = adjustedX + adjustedX / 2;
+                                            double elementCenterY = adjustedY + adjustedY / 2;
+
+                                            // Set line coordinates
+                                            connectionLine.X1 = tagCenterX; // Center X of the tag
+                                            connectionLine.Y1 = tagBottomY; // Bottom Y of the tag
+                                            connectionLine.X2 = elementCenterX; // Center X of the element
+                                            connectionLine.Y2 = elementCenterY; // Center Y of the element
+                                        };
+
                                         OverlayCanvas.Children.Add(tag);
 
                                         _tags.Add(tag);
@@ -1826,6 +1968,35 @@ namespace ATEDNIULI
 
                                 Canvas.SetLeft(tag, boundingRect.Left);
                                 Canvas.SetTop(tag, boundingRect.Top - 20);
+
+                                System.Windows.Shapes.Line connectionLine = new System.Windows.Shapes.Line
+                                {
+                                    Stroke = Brushes.Black,
+                                    StrokeThickness = 2,
+                                    Opacity = 0.7
+                                };
+
+                                OverlayCanvas.Children.Add(connectionLine);
+                                _lines.Add(connectionLine); // Add the line to the list
+
+
+                                // Wait for the tag to be rendered and calculate its dimensions
+                                tag.SizeChanged += (s, e) =>
+                                {
+                                    // Calculate the center-bottom of the tag
+                                    double tagCenterX = Canvas.GetLeft(tag) + tag.ActualWidth / 2;
+                                    double tagBottomY = Canvas.GetTop(tag) + tag.ActualHeight;
+
+                                    // Calculate the center of the element's bounding rectangle
+                                    double elementCenterX = boundingRect.Left + boundingRect.Width / 2;
+                                    double elementCenterY = boundingRect.Top + boundingRect.Height / 2;
+
+                                    // Set line coordinates
+                                    connectionLine.X1 = tagCenterX; // Center X of the tag
+                                    connectionLine.Y1 = tagBottomY; // Bottom Y of the tag
+                                    connectionLine.X2 = elementCenterX; // Center X of the element
+                                    connectionLine.Y2 = elementCenterY; // Center Y of the element
+                                };
 
                                 OverlayCanvas.Children.Add(tag);
                                 _tags.Add(tag);
@@ -1929,6 +2100,36 @@ namespace ATEDNIULI
                                     // Set the adjusted position based on the bounding rectangle
                                     Canvas.SetLeft(tag, adjustedBoundingRect.Left);
                                     Canvas.SetTop(tag, adjustedBoundingRect.Top - 20); // Position above the bounding box
+
+                                    System.Windows.Shapes.Line connectionLine = new System.Windows.Shapes.Line
+                                    {
+                                        Stroke = Brushes.Black,
+                                        StrokeThickness = 2,
+                                        Opacity = 0.7
+                                    };
+
+                                    OverlayCanvas.Children.Add(connectionLine);
+                                    _lines.Add(connectionLine); // Add the line to the list
+
+
+                                    // Wait for the tag to be rendered and calculate its dimensions
+                                    tag.SizeChanged += (s, e) =>
+                                    {
+                                        // Calculate the center-bottom of the tag
+                                        double tagCenterX = Canvas.GetLeft(tag) + tag.ActualWidth / 2;
+                                        double tagBottomY = Canvas.GetTop(tag) + tag.ActualHeight;
+
+                                        // Calculate the center of the element's bounding rectangle
+                                        double elementCenterX = adjustedBoundingRect.Left + adjustedBoundingRect.Width / 2;
+                                        double elementCenterY = adjustedBoundingRect.Top + adjustedBoundingRect.Height / 2;
+
+                                        // Set line coordinates
+                                        connectionLine.X1 = tagCenterX; // Center X of the tag
+                                        connectionLine.Y1 = tagBottomY; // Bottom Y of the tag
+                                        connectionLine.X2 = elementCenterX; // Center X of the element
+                                        connectionLine.Y2 = elementCenterY; // Center Y of the element
+                                    };
+
                                     OverlayCanvas.Children.Add(tag);
 
                                     // Add the tag to the list
@@ -1994,6 +2195,7 @@ namespace ATEDNIULI
             globalCounter = 1;
         }
 
+        private List<System.Windows.Shapes.Line> _lines = new List<System.Windows.Shapes.Line>();
         public void RemoveTagsNoTimer()
         {
             Dispatcher.Invoke(() =>
@@ -2003,10 +2205,16 @@ namespace ATEDNIULI
                 {
                     OverlayCanvas.Children.Remove(tag);
                 }
-
                 _tags.Clear(); // Clear the list of tags
 
-                globalCounter = 1;
+                // Remove lines from the overlay canvas
+                foreach (var line in _lines)
+                {
+                    OverlayCanvas.Children.Remove(line);
+                }
+                _lines.Clear(); // Clear the list of lines
+
+                globalCounter = 1; // Reset the global counter
             });
         }
 
