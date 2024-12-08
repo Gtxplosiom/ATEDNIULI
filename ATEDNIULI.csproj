@@ -329,6 +329,9 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+    <None Include="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Include="assets\models\1-10.scorer">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

@@ -66,13 +66,17 @@
                         <Run Text="QUICK ACTIONS:" FontWeight="Bold" /><LineBreak/>
                         <Run Text="12.)" FontWeight="Bold"/> If the mouse is active, hover the cursor over an app icon or website logo, and if detected, quick actions will appear on the top left corner of the screen.<LineBreak/>
                         <Run Text="13.)" FontWeight="Bold"/> Just say the number of the action you want to execute without saying the wake word <Run Text="&quot;TRML&quot;" FontWeight="Bold"/>.<LineBreak/><LineBreak/>
+                        
+                        <Run Text="QUICK WEB SEARCH:" FontWeight="Bold" /><LineBreak/>
+                        <Run Text="14.)" FontWeight="Bold"/> You can do a quick web search without opening your browser manually and manually seaching via voice typing<LineBreak/>
+                        <Run Text="15.)" FontWeight="Bold"/> Just say 'TRML' first and then the window will reappear again, when this happes you can say whatever you want to search and say 'search now' to search <Run Text="&quot;TRML&quot;" FontWeight="Bold"/>.<LineBreak/><LineBreak/>
 
                         <Run Text="OTHER:" FontWeight="Bold" /><LineBreak/>
-                        <Run Text="14.)" FontWeight="Bold"/> To access this again, say <Run Text="&quot;open help&quot;" FontWeight="Bold"/>. Example: Say <Run Text="&quot;TRML&quot;" FontWeight="Bold"/> -> <Run Text="&quot;open help&quot;" FontWeight="Bold"/>.<LineBreak/>
-                        <Run Text="15.)" FontWeight="Bold"/> To close this help window, say <Run Text="&quot;close help&quot;" FontWeight="Bold"/>. Example: Say <Run Text="&quot;TRML&quot;" FontWeight="Bold"/> -> <Run Text="&quot;close help&quot;" FontWeight="Bold"/>.<LineBreak/>
-                        <Run Text="16.)" FontWeight="Bold"/> To configure settings, say <Run Text="&quot;open settings&quot;" FontWeight="Bold"/>. Example: Say <Run Text="&quot;TRML&quot;" FontWeight="Bold"/> -> <Run Text="&quot;open settings&quot;" FontWeight="Bold"/>.<LineBreak/>
-                        <Run Text="17.)" FontWeight="Bold"/> In settings, you can adjust sliders via mouse control or by saying what you want to configure. Once highlighted, say the numbers you want to set it to. Example: Say <Run Text="&quot;TRML&quot;" FontWeight="Bold"/> -> <Run Text="&quot;mouse speed&quot;" FontWeight="Bold"/> -> <Run Text="&quot;50&quot;" FontWeight="Bold"/>.<LineBreak/>
-                        <Run Text="18.)" FontWeight="Bold"/> To close settings, say <Run Text="&quot;close settings&quot;" FontWeight="Bold"/>.<LineBreak/>
+                        <Run Text="16.)" FontWeight="Bold"/> To access this again, say <Run Text="&quot;open help&quot;" FontWeight="Bold"/>. Example: Say <Run Text="&quot;TRML&quot;" FontWeight="Bold"/> -> <Run Text="&quot;open help&quot;" FontWeight="Bold"/>.<LineBreak/>
+                        <Run Text="17.)" FontWeight="Bold"/> To close this help window, say <Run Text="&quot;close help&quot;" FontWeight="Bold"/>. Example: Say <Run Text="&quot;TRML&quot;" FontWeight="Bold"/> -> <Run Text="&quot;close help&quot;" FontWeight="Bold"/>.<LineBreak/>
+                        <Run Text="18.)" FontWeight="Bold"/> To configure settings, say <Run Text="&quot;open settings&quot;" FontWeight="Bold"/>. Example: Say <Run Text="&quot;TRML&quot;" FontWeight="Bold"/> -> <Run Text="&quot;open settings&quot;" FontWeight="Bold"/>.<LineBreak/>
+                        <Run Text="19.)" FontWeight="Bold"/> In settings, you can adjust sliders via mouse control or by saying what you want to configure. Once highlighted, say the numbers you want to set it to. Example: Say <Run Text="&quot;TRML&quot;" FontWeight="Bold"/> -> <Run Text="&quot;mouse speed&quot;" FontWeight="Bold"/> -> <Run Text="&quot;50&quot;" FontWeight="Bold"/>.<LineBreak/>
+                        <Run Text="20.)" FontWeight="Bold"/> To close settings, say <Run Text="&quot;close settings&quot;" FontWeight="Bold"/>.<LineBreak/>
                     </TextBlock>
                 </StackPanel>
             </ScrollViewer>

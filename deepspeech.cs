@@ -18,7 +18,6 @@ using System.Text;
 using NetMQ;
 using NetMQ.Sockets;
 using System.Collections.Generic;
-using Newtonsoft.Json;
 using System.Threading;
 using OpenCvSharp;
 using static ATEDNIULI.ShowItems;
@@ -31,6 +30,8 @@ using Whisper.net.Logger;
 using static System.Net.Mime.MediaTypeNames;
 using FastText.NetWrapper;
 using System.Text.RegularExpressions;
+using Newtonsoft.Json;
+using OpenCvSharp.Internal.Vectors;
 
 class LiveTranscription
 {
@@ -215,6 +216,59 @@ class LiveTranscription
         }
     }
 
+    public class AppConfig
+    {
+        public AppSettings AppSettings { get; set; }
+
+        public static AppConfig Load(string filePath)
+        {
+            try
+            {
+                string fullPath = Path.GetFullPath(filePath);
+                Console.WriteLine($"Attempting to load configuration from: {fullPath}");
+
+                if (!File.Exists(fullPath))
+                    throw new FileNotFoundException($"Configuration file not found at: {fullPath}");
+
+                var json = File.ReadAllText(fullPath);
+                Console.WriteLine("Configuration file successfully read.");
+                return JsonConvert.DeserializeObject<AppConfig>(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load configuration from {filePath}. Error: {ex.Message}");
+                return null;
+            }
+        }
+    }
+
+    public class AppSettings
+    {
+        public bool IsFirstTime { get; set; }
+    }
+
+    public void UpdateConfiguration(AppConfig config, string filePath)
+    {
+        try
+        {
+            var json = JsonConvert.SerializeObject(config, Formatting.Indented);
+            Console.WriteLine($"Serialized JSON: {json}");
+
+            File.WriteAllText(filePath, json);
+            Console.WriteLine("Configuration updated successfully.");
+
+            // Read back to verify
+            var writtenContent = File.ReadAllText(filePath);
+            Console.WriteLine($"File Content After Update:\n{writtenContent}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to update configuration: {ex.Message}");
+        }
+    }
+
+    private AppConfig config;
+
     public LiveTranscription(ASRWindow asr_window, IntentWindow intent_window, MainWindow main_window, UserGuide user_guide, ShowItems show_items, CameraMouse camera_mouse, HelpWindow help_window, SettingsWindow settings_window) // 
     {
         this.asr_window = asr_window ?? throw new ArgumentNullException(nameof(asr_window));
@@ -225,6 +279,9 @@ class LiveTranscription
         this.help_window = help_window ?? throw new ArgumentNullException(nameof(help_window));
         this.settings_window = settings_window ?? throw new ArgumentNullException(nameof(settings_window));
         this.user_guide = user_guide ?? throw new ArgumentNullException(nameof(user_guide));
+
+        config = AppConfig.Load("appsettings.json");
+        bool isFirstTime = config.AppSettings.IsFirstTime;
 
         vad = new WebRtcVad
         {
@@ -284,9 +341,21 @@ class LiveTranscription
         this.help_window = help_window;
         this.settings_window = settings_window;
 
-        //UpdateUI(() => user_guide.Show());
-        //in_tutorial = true;
-        //UpdateUI(() => FinalizeStream());
+        if (isFirstTime)
+        {
+            OpenTutorial();
+        }
+    }
+
+    private void OpenTutorial()
+    {
+        config.AppSettings.IsFirstTime = false; // Update
+        Console.WriteLine($"IsFirstTime: {config.AppSettings.IsFirstTime}");
+        UpdateConfiguration(config, "appsettings.json");
+
+        UpdateUI(() => user_guide.Show());
+        in_tutorial = true;
+        UpdateUI(() => FinalizeStream());
     }
 
     public string action = "none";
@@ -1732,9 +1801,7 @@ class LiveTranscription
 
         if (transcription.IndexOf("open open", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            UpdateUI(() => user_guide.Show());
-            in_tutorial = true;
-            UpdateUI(() => FinalizeStream());
+            OpenTutorial();
         }
 
         if (transcription.IndexOf("next", StringComparison.OrdinalIgnoreCase) >= 0 && !switched_state)
@@ -1950,7 +2017,7 @@ class LiveTranscription
     public void OpenBrowserWithSearch(string query)
     {
         // Open Chrome using the show_items instance
-        Task.Run(() => show_items.OpenChrome());
+        show_items.OpenChrome();
         Console.WriteLine("Opening Google search in Chrome...");
 
         // Encode the query to ensure special characters are handled correctly
@@ -1960,7 +2027,7 @@ class LiveTranscription
         string googleSearchUrl = $"https://www.google.com/search?q={encodedQuery}";
 
         // Navigate to the constructed URL
-        Task.Run(() => show_items.driver.Navigate().GoToUrl(googleSearchUrl));
+        show_items.driver.Navigate().GoToUrl(googleSearchUrl);
     }
 
     public void OpenChrome()

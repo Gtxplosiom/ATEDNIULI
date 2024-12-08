@@ -147,10 +147,7 @@ namespace ATEDNIULI
                     return new string[]
                     {
                         "1. Open new tab",
-                        "2. Open last visited website",
-                        "3. Bookmark this page",
-                        "4. Close tab",
-                        "5. Open incognito window"
+                        "2. Open incognito window"
                     };
                 case "folder":
                     return new string[]
@@ -977,8 +974,6 @@ namespace ATEDNIULI
             {
                 case 1: OpenNewTab(); break;
                 case 2: OpenLastVisitedWebsite(); break;
-                case 3: BookmarkPage(); break;
-                case 4: CloseTab(); break;
                 case 5: OpenIncognitoWindow(); break;
                 default: Console.WriteLine("Action not recognized for Chrome."); break;
             }
@@ -1078,7 +1073,9 @@ namespace ATEDNIULI
 
             options.AddExcludedArgument("enable-automation");
 
-            System.Threading.Tasks.Task.Run(() => driver = new ChromeDriver(options));
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.google.com/search?q=apple");
         }
 
         private void OpenNewTab()
@@ -1098,33 +1095,6 @@ namespace ATEDNIULI
             else
             {
                 driver.Navigate().Back(); // This simulates going back to the last page
-            }
-        }
-
-        private void BookmarkPage()
-        {
-            if (driver == null)
-            {
-                Console.WriteLine("No chrome window yet");
-            }
-            else
-            {
-                Console.WriteLine("Bookmarking the current page...");
-                // You can execute JavaScript to trigger the bookmark dialog in Chrome
-                ((IJavaScriptExecutor)driver).ExecuteScript("document.execCommand('AddBookmark');");
-            }
-        }
-
-        private void CloseTab()
-        {
-            if (driver == null)
-            {
-                Console.WriteLine("No chrome window yet");
-            }
-            else
-            {
-                Console.WriteLine("Closing the current tab...");
-                driver.Close(); // Closes the current tab
             }
         }
 
