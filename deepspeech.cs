@@ -872,6 +872,7 @@ class LiveTranscription
                 { "six", "6" },
                 { "seven", "7" },
                 { "eight", "8" },
+                { "ate", "8" },
                 { "nine", "9" },
                 { "ten", "10" },
                 { "ben", "10" },
@@ -934,18 +935,22 @@ class LiveTranscription
         {
             text = text.ToLower();
 
-            if (Regex.IsMatch(text, @"[\[\(].*?[\]\)]"))
-            {
-                text = Regex.Replace(text, @"\[[^\]]*\]|\([^\)]*\)", string.Empty);
-            }
-            else if (text.Contains("stop typing") || text.Contains("Stop typing") || text.Contains("disable typing") || text.Contains("deactivate typing"))
-            {
-                typing_mode = false;
-                wave_in_event.StopRecording();
-                StartTranscription();
-                UpdateUI(() => show_items.NotificationLabel.Content = "Stopped typing...");
-                UpdateUI(() => main_window.HighlightTypingIcon(typing_mode));
-                return;
+        if (Regex.IsMatch(text, @"[\[\(].*?[\]\)]"))
+        {
+            text = Regex.Replace(text, @"\[[^\]]*\]|\([^\)]*\)", string.Empty);
+        }
+        else if (text.Contains("stop typing") || text.Contains("Stop typing") || text.Contains("disable typing") || text.Contains("deactivate typing"))
+        {
+            typing_mode = false;
+            wave_in_event.StopRecording();
+            StartTranscription();
+            UpdateUI(() => show_items.NotificationLabel.Content = "Stopped typing...");
+            UpdateUI(() => main_window.HighlightTypingIcon(typing_mode));
+            UpdateUI(() => {
+                show_items.TypingActions.Visibility = System.Windows.Visibility.Collapsed;
+            });
+            actions = null;
+            return;
             }
             else
             {
@@ -971,10 +976,31 @@ class LiveTranscription
                 string normalized_result = string.Join(" ", processedWords);
                 normalized_result = new string(normalized_result.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
 
+                var quotation = '"';
                 // Apply replacements for punctuation words
-                normalized_result = normalized_result.Replace("exclamation", "!")
-                                                     .Replace("period", ".")
-                                                     .Replace("comma", ",");
+                normalized_result = normalized_result.Replace("thermal 1", ".")
+                                                     .Replace("thermal 2", ",")
+                                                     .Replace("thermal 3", "?")
+                                                     .Replace("thermal 4", "!")
+                                                     .Replace("thermal 5", "@")
+                                                     .Replace("thermal 6", "(")
+                                                     .Replace("thermal 7", ")")
+                                                     .Replace("thermal 8", ";")
+                                                     .Replace("thermal 9", ":")
+                                                     .Replace("thermal 10", "'")
+                                                     .Replace("thermal 11", $"{quotation}")
+                                                     .Replace("thermal 12", "-")
+                                                     .Replace("thermal 13", "_")
+                                                     .Replace("thermal 14", "/")
+                                                     .Replace("thermal 15", "#")
+                                                     .Replace("thermal 16", "$")
+                                                     .Replace("thermal 17", "+")
+                                                     .Replace("thermal 18", "-")
+                                                     .Replace("thermal 19", "*")
+                                                     .Replace("thermal 20", "%")
+                                                     .Replace("thermal 21", "=")
+                                                     .Replace("new paragraph", "\n\n")
+                                                     .Replace("indent", "\t");
 
                 // Send each character for typing
                 foreach (char c in normalized_result)
@@ -1466,7 +1492,7 @@ class LiveTranscription
             }
         }
 
-        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -75)
+        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -100)
         {
             var tutorial_state = user_guide.ReturnState();
             
@@ -1855,6 +1881,7 @@ class LiveTranscription
         return false;
     }
 
+    private string[] actions = null;
     private void TypingMode(object sender, System.Timers.ElapsedEventArgs e)
     {
         var tutorial_state = user_guide.ReturnState();
@@ -1876,6 +1903,11 @@ class LiveTranscription
 
         UpdateUI(() => main_window.HighlightTypingIcon(typing_mode));
         UpdateUI(() => asr_window.ShowWithFadeIn(true));
+
+        UpdateUI(() =>
+        {
+            show_items.TypingActions.Visibility = System.Windows.Visibility.Visible;
+        });
 
         StartTranscription();
 

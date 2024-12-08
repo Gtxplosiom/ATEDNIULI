@@ -62,5 +62,13 @@
                  Width="200"
                  Visibility="Collapsed"
                  SelectionChanged="ActionList_SelectionChanged"/>
+
+        <ListBox x:Name="TypingActions"
+         Foreground="#031926" 
+         Background="#f4e9cd"
+         FontSize="14"
+         Canvas.Top="90" 
+         Width="200"
+         Visibility="Collapsed"/>
     </Canvas>
 </Window>

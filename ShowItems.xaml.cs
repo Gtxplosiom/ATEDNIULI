@@ -21,6 +21,7 @@ using Microsoft.Office.Interop.Word;
 using Microsoft.Office.Interop.Excel;
 using Microsoft.Office.Interop.PowerPoint;
 using System.Security.Policy;
+using static System.Net.WebRequestMethods;
 
 
 namespace ATEDNIULI
@@ -139,8 +140,10 @@ namespace ATEDNIULI
         }
 
         // Returns a numbered list of actions based on the detected item label
-        private string[] GetActionsForLabel(string label)
+        public string[] GetActionsForLabel(string label)
         {
+            var quotation = '"';
+
             switch (label.ToLower())
             {
                 case "chrome":
@@ -148,14 +151,6 @@ namespace ATEDNIULI
                     {
                         "1. Open new tab",
                         "2. Open incognito window"
-                    };
-                case "folder":
-                    return new string[]
-                    {
-                        "1. Open folder",
-                        "2. Rename folder",
-                        "3. View properties",
-                        "4. Share folder"
                     };
                 case "file manager":
                     return new string[]
@@ -169,11 +164,11 @@ namespace ATEDNIULI
                 case "youtube":
                     return new string[]
                     {
-                        "1. Play/Pause video",
-                        "2. Like video",
-                        "3. Subscribe to channel",
-                        "4. View comments",
-                        "5. Share video link"
+                        "1. YouTube Home page",
+                        "2. YouTube Shorts page",
+                        "3. YouTube Subscriptions page",
+                        "4. YouTube History page",
+                        "5. YouTube Playlists page"
                     };
                 case "microsoft word":
                     return new string[]
@@ -330,6 +325,32 @@ namespace ATEDNIULI
                         "1. Zoom Home page",
                         "2. Zoom Profile page",
                         "3. Zoom Meetings page"
+                    };
+                case "typing mode":
+                    return new string[]
+                    {
+                        "1. thermal one - .",
+                        "2. thermal two - ,",
+                        "3. thermal three - ?",
+                        "4. thermal four - !",
+                        "5. thermal five - @",
+                        "6. thermal six - (",
+                        "7. thermal seven - )",
+                        "8. thermal eight - ;",
+                        "9.thermal nine - :",
+                        "10. thermal ten - '",
+                        $"11. thermal eleven - {quotation}",
+                        "12 thermal twelve - -",
+                        "13. thermal thirteen - _",
+                        "14. thermal fourteen - /",
+                        "15. thermal fifteen - #",
+                        "16. thermal sixteen - $",
+                        "17. thermal seventeen - +",
+                        "18. thermal eighteen - *",
+                        "19. thermal nineteen - %",
+                        "20. thermal twenty - =",
+                        "21 thermal twenty one - new paragraph",
+                        "21 thermal twenty two - indent"
                     };
 
                 default:
@@ -1006,14 +1027,22 @@ namespace ATEDNIULI
 
         private void ExecuteYouTubeAction(int actionNumber)
         {
-            switch (actionNumber)
+            var actionUrls = new Dictionary<int, string>
             {
-                //case 1: PlayPauseVideo(); break;
-                //case 2: LikeVideo(); break;
-                //case 3: SubscribeToChannel(); break;
-                //case 4: ViewComments(); break;
-                //case 5: ShareVideoLink(); break;
-                default: Console.WriteLine("Action not recognized for YouTube."); break;
+                { 1, "https://www.youtube.com/" },
+                { 2, "https://www.youtube.com/shorts/" },
+                { 3, "https://www.youtube.com/feed/subscriptions" },
+                { 4, "https://www.youtube.com/feed/history" },
+                { 5, "https://www.youtube.com/feed/playlists" }
+            };
+
+            if (actionUrls.TryGetValue(actionNumber, out var url))
+            {
+                OpenUrl(url);
+            }
+            else
+            {
+                Console.WriteLine("Action not recognized for Chrome.");
             }
         }
 
@@ -1123,6 +1152,38 @@ namespace ATEDNIULI
             StartZMQListener();
             TrackMouse();
             user_guide = new UserGuide();
+
+            var quotation = '"';
+            // Define the list of items
+            var thermalActions = new List<string>
+            {
+                "1. thermal one - .",
+                "2. thermal two - ,",
+                "3. thermal three - ?",
+                "4. thermal four - !",
+                "5. thermal five - @",
+                "6. thermal six - (",
+                "7. thermal seven - )",
+                "8. thermal eight - ;",
+                "9. thermal nine - :",
+                "10. thermal ten - '",
+                $"11. thermal eleven - {quotation}",
+                "12. thermal twelve - -",
+                "13. thermal thirteen - _",
+                "14. thermal fourteen - /",
+                "15. thermal fifteen - #",
+                "16. thermal sixteen - $",
+                "17. thermal seventeen - +",
+                "18. thermal eighteen - *",
+                "19. thermal nineteen - %",
+                "20. thermal twenty - =",
+                "21. new paragraph - new paragraph",
+                "22. indent - indenttion"
+            };
+
+            // Assign the list to the ListBox
+            TypingActions.ItemsSource = thermalActions;
+
         }
 
         private static (int X, int Y) GetMousePosition()

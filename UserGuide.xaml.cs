@@ -43,7 +43,7 @@ namespace ATEDNIULI
             return handle;
         }
 
-        public int state_now = 4;
+        public int state_now = 0;
 
         // Switch between states based on direction
         public void SwitchState(string direction)
