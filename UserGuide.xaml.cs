@@ -251,7 +251,7 @@ namespace ATEDNIULI
             {
                 { "Chick", Brushes.DarkBlue },
                 { "Dog", Brushes.LightBlue },
-                { "Fox", Brushes.Orange },
+                { "Fox", Brushes.Red },
                 { "Panda", Brushes.Yellow },
                 { "Bunny", Brushes.Purple },
                 { "Cat", Brushes.Pink },
@@ -436,6 +436,18 @@ namespace ATEDNIULI
                             else
                             {
                                 Console.WriteLine("State4f not found!");
+                            }
+                            break;
+                        case "next":
+                            var state4button = content.FindName("next") as Button;
+                            if (state4button != null)
+                            {
+                                Console.WriteLine("next button found successfully!");
+                                state4button.Visibility = Visibility.Visible;
+                            }
+                            else
+                            {
+                                Console.WriteLine("next button not found!");
                             }
                             break;
                     }

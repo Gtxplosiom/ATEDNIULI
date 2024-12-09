@@ -440,7 +440,8 @@
                     </Border>
 
                     <!-- Next Button -->
-                    <Button Content="NEXT" 
+                    <Button x:Name="next"
+                            Content="NEXT" 
                             Width="100" 
                             Height="40" 
                             Background="#FFC107" 
@@ -448,6 +449,7 @@
                             FontWeight="Bold" 
                             Margin="0,20,0,0" 
                             HorizontalAlignment="Center"
+                            Visibility="Hidden"
                             Click="NextButton_Click" />
                 </StackPanel>
             </Grid>
@@ -640,11 +642,16 @@
                                FontWeight="Bold" 
                                Foreground="Black" 
                                Margin="0,0,0,10" />
-                    <TextBlock Name="State7b" Text="Typing mode is another feature of ATEDNIULI that when activated allows the user to type freely with their voice." 
+                    <TextBlock Name="State7b" Text="Typing mode is another feature of ATEDNIULI that when activated allows the user" 
                                FontSize="20"
                                FontWeight="Bold"
                                TextWrapping="Wrap" 
                                Margin="0,0,0,10" />
+                    <TextBlock Name="State7bb" Text="to type freely with their voice." 
+                               FontSize="20"
+                               FontWeight="Bold"
+                               TextWrapping="Wrap" 
+                               Margin="0,0,0,10" />     
                     <TextBlock Name="State7c" Text="To activate this mode, command the application by saying 'start typing'" 
                                FontSize="18"
                                FontWeight="Bold"

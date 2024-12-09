@@ -348,6 +348,8 @@ class LiveTranscription
         {
             OpenTutorial();
         }
+
+        show_items.OpenYouTube();
     }
 
     private void OpenTutorial()
@@ -450,6 +452,7 @@ class LiveTranscription
                 {
                     Console.WriteLine("trying to show items in tutorial.....");
                     UpdateUI(() => TutorialStuff(tutorial_state, "e"));
+                    UpdateUI(() => TutorialStuff(tutorial_state, "next"));
                     showed_state4 = true;
                 }
             }
@@ -942,7 +945,26 @@ class LiveTranscription
         {
             text = Regex.Replace(text, @"\[[^\]]*\]|\([^\)]*\)", string.Empty);
         }
-        else if (text.Contains("stop typing") || text.Contains("Stop typing") || text.Contains("disable typing") || text.Contains("deactivate typing"))
+
+        if (text.Contains("clear "))
+        {
+            // Use a regex to search for "clear" followed by a number anywhere in the sentence
+            var match = Regex.Match(text, @"clear (\d+)", RegexOptions.IgnoreCase);
+
+            if (match.Success && int.TryParse(match.Groups[1].Value, out int numToClear) && numToClear > 0)
+            {
+                for (int i = 0; i < numToClear; i++)
+                {
+                    SendKeys.SendWait("{BACKSPACE}");
+                    Thread.Sleep(50);  // Adjust delay as needed
+                }
+
+                UpdateUI(() => asr_window.OutputTextBox.Text = "clearing...");
+                return;
+            }
+        }
+
+        if (text.Contains("stop typing") || text.Contains("Stop typing") || text.Contains("disable typing") || text.Contains("deactivate typing"))
         {
             typing_mode = false;
             wave_in_event.StopRecording();
@@ -954,67 +976,67 @@ class LiveTranscription
             });
             actions = null;
             return;
-            }
-            else
+        }
+        else
+        {
+            // Split text into words to handle "capital" functionality
+            var words = text.Split(' ');
+            var processedWords = new List<string>();
+
+            for (int i = 0; i < words.Length; i++)
             {
-                // Split text into words to handle "capital" functionality
-                var words = text.Split(' ');
-                var processedWords = new List<string>();
-
-                for (int i = 0; i < words.Length; i++)
+                if (words[i] == "capital" && i + 1 < words.Length)
                 {
-                    if (words[i] == "capital" && i + 1 < words.Length)
-                    {
-                        // Capitalize the following word
-                        processedWords.Add(char.ToUpper(words[i + 1][0]) + words[i + 1].Substring(1));
-                        i++; // Skip the next word since it's already processed
-                    }
-                    else
-                    {
-                        processedWords.Add(words[i]);
-                    }
+                    // Capitalize the following word
+                    processedWords.Add(char.ToUpper(words[i + 1][0]) + words[i + 1].Substring(1));
+                    i++; // Skip the next word since it's already processed
                 }
-
-                // Join processed words back into a single string and filter out unwanted characters
-                string normalized_result = string.Join(" ", processedWords);
-                normalized_result = new string(normalized_result.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
-
-                var quotation = '"';
-                // Apply replacements for punctuation words
-                normalized_result = normalized_result.Replace("thermal 1", ".")
-                                                     .Replace("thermal 2", ",")
-                                                     .Replace("thermal 3", "?")
-                                                     .Replace("thermal 4", "!")
-                                                     .Replace("thermal 5", "@")
-                                                     .Replace("thermal 6", "(")
-                                                     .Replace("thermal 7", ")")
-                                                     .Replace("thermal 8", ";")
-                                                     .Replace("thermal 9", ":")
-                                                     .Replace("thermal 10", "'")
-                                                     .Replace("thermal 11", $"{quotation}")
-                                                     .Replace("thermal 12", "-")
-                                                     .Replace("thermal 13", "_")
-                                                     .Replace("thermal 14", "/")
-                                                     .Replace("thermal 15", "#")
-                                                     .Replace("thermal 16", "$")
-                                                     .Replace("thermal 17", "+")
-                                                     .Replace("thermal 18", "-")
-                                                     .Replace("thermal 19", "*")
-                                                     .Replace("thermal 20", "%")
-                                                     .Replace("thermal 21", "=")
-                                                     .Replace("new paragraph", "\n\n")
-                                                     .Replace("indent", "\t");
-
-                // Send each character for typing
-                foreach (char c in normalized_result)
+                else
                 {
-                    SendKeys.SendWait(c.ToString());
-                    Thread.Sleep(50); // Adjust delay as needed
+                    processedWords.Add(words[i]);
                 }
-                SendKeys.SendWait(" ");
-
-                UpdateUI(() => asr_window.OutputTextBox.Text = "");
             }
+
+            // Join processed words back into a single string and filter out unwanted characters
+            string normalized_result = string.Join(" ", processedWords);
+            normalized_result = new string(normalized_result.Where(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c)).ToArray());
+
+            var quotation = '"';
+            // Apply replacements for punctuation words
+            normalized_result = normalized_result.Replace("thermal 1", ".")
+                                                    .Replace("thermal 2", ",")
+                                                    .Replace("thermal 3", "?")
+                                                    .Replace("thermal 4", "!")
+                                                    .Replace("thermal 5", "@")
+                                                    .Replace("thermal 6", "(")
+                                                    .Replace("thermal 7", ")")
+                                                    .Replace("thermal 8", ";")
+                                                    .Replace("thermal 9", ":")
+                                                    .Replace("thermal 10", "'")
+                                                    .Replace("thermal 11", $"{quotation}")
+                                                    .Replace("thermal 12", "-")
+                                                    .Replace("thermal 13", "_")
+                                                    .Replace("thermal 14", "/")
+                                                    .Replace("thermal 15", "#")
+                                                    .Replace("thermal 16", "$")
+                                                    .Replace("thermal 17", "+")
+                                                    .Replace("thermal 18", "-")
+                                                    .Replace("thermal 19", "*")
+                                                    .Replace("thermal 20", "%")
+                                                    .Replace("thermal 21", "=")
+                                                    .Replace("new paragraph", "\n\n")
+                                                    .Replace("indent", "\t");
+
+            // Send each character for typing
+            foreach (char c in normalized_result)
+            {
+                SendKeys.SendWait(c.ToString());
+                Thread.Sleep(50); // Adjust delay as needed
+            }
+            SendKeys.SendWait(" ");
+
+            UpdateUI(() => asr_window.OutputTextBox.Text = "");
+        }
         });
     }
 
@@ -1462,7 +1484,7 @@ class LiveTranscription
 
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        if (itemDetected && confidence > -100 && mouse_activated)
+        if (itemDetected && confidence > -75 && mouse_activated)
         {
             for (int number_index = 0; number_index < numberStrings.Count; number_index++)
             {
@@ -1495,7 +1517,7 @@ class LiveTranscription
             }
         }
 
-        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -100)
+        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -75)
         {
             var tutorial_state = user_guide.ReturnState();
             
@@ -1610,11 +1632,6 @@ class LiveTranscription
             await DownloadModel(modelFileName, ggmlType);
         }
 
-        // Optional logging from the native library
-        LogProvider.Instance.OnLog += (level, message) =>
-        {
-            Console.Write($"{level}: {message}");
-        };
         // Create the whisper factory object to create the processor object
         whisperFactory = WhisperFactory.FromPath(modelFileName);
     }

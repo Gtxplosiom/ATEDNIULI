@@ -994,8 +994,7 @@ namespace ATEDNIULI
             switch (actionNumber)
             {
                 case 1: OpenNewTab(); break;
-                case 2: OpenLastVisitedWebsite(); break;
-                case 5: OpenIncognitoWindow(); break;
+                case 2: OpenIncognitoWindow(); break;
                 default: Console.WriteLine("Action not recognized for Chrome."); break;
             }
         }
@@ -1148,7 +1147,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://www.canva.com/en_ph/");
         }
 
         public void OpenDiscord()
@@ -1159,7 +1158,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://discord.com/");
         }
 
         public void OpenGmail()
@@ -1170,7 +1169,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://mail.google.com/mail/u/0/");
         }
 
         public void OpenGmeet()
@@ -1181,7 +1180,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://meet.google.com/landing");
         }
 
         public void OpenInstagram()
@@ -1192,7 +1191,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://www.instagram.com/");
         }
 
         public void OpenLazada()
@@ -1203,7 +1202,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://www.lazada.com.ph/");
         }
 
         public void OpenNetflix()
@@ -1214,7 +1213,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://www.netflix.com/ph-en/");
         }
 
         public void OpenOnedrive()
@@ -1225,7 +1224,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://www.microsoft.com/en-us/microsoft-365/onedrive/online-cloud-storage");
         }
 
         public void OpenPinterest()
@@ -1236,7 +1235,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://www.pinterest.com/");
         }
 
         public void OpenShopee()
@@ -1247,7 +1246,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://shopee.ph/");
         }
 
         public void OpenTelegram()
@@ -1258,7 +1257,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://web.telegram.org/");
         }
 
         public void OpenTiktok()
@@ -1269,7 +1268,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://www.tiktok.com/en/");
         }
 
         public void OpenGithub()
@@ -1280,7 +1279,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://github.com/");
         }
 
         public void OpenReddit()
@@ -1291,7 +1290,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://www.reddit.com/");
         }
 
         public void OpenSpotify()
@@ -1302,7 +1301,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://open.spotify.com/");
         }
 
         public void OpenTwitch()
@@ -1313,7 +1312,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://open.spotify.com/");
         }
 
         public void OpenWikipedia()
@@ -1324,7 +1323,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://en.wikipedia.org/wiki/Main_Page");
         }
 
         public void OpenX()
@@ -1335,7 +1334,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://x.com/?lang=en");
         }
 
         public void OpenZoom()
@@ -1346,7 +1345,7 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
+            driver.Navigate().GoToUrl("https://www.zoom.com/");
         }
 
         private void OpenNewTab()
@@ -1420,7 +1419,8 @@ namespace ATEDNIULI
                 "19. thermal nineteen - %",
                 "20. thermal twenty - =",
                 "21. new paragraph - new paragraph",
-                "22. indent - indenttion"
+                "22. indent - indenttion",
+                "23. clear {amount}"
             };
 
             // Assign the list to the ListBox
