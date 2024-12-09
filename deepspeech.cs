@@ -32,6 +32,7 @@ using FastText.NetWrapper;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using OpenCvSharp.Internal.Vectors;
+using System.Management;
 
 class LiveTranscription
 {
@@ -78,6 +79,8 @@ class LiveTranscription
     private int search_command_count = 0;
     private int show_items_command_count = 0;
     private int execute_number_command_count = 0;
+    private int window_actions_count = 0;
+    private int brightness_command_count = 0;
 
     private int switch_command_count = 0;
     private int left_command_count = 0;
@@ -1054,7 +1057,7 @@ class LiveTranscription
         }
     }
 
-    private void OnRecordingStopped(object sender, StoppedEventArgs e) // emergency stop handling
+    private void OnRecordingStopped(object sender, NAudio.Wave.StoppedEventArgs e) // emergency stop handling
     {
         if (e.Exception != null)
         {
@@ -1677,13 +1680,13 @@ class LiveTranscription
         }
     }
 
-    public static void VolumeUp(float amount = 0.1f) // Adjust amount as needed
+    public static void VolumeUp(float amount = 0.5f) // Adjust amount as needed
     {
         float newVolume = Math.Min(device.AudioEndpointVolume.MasterVolumeLevelScalar + amount, 1.0f);
         device.AudioEndpointVolume.MasterVolumeLevelScalar = newVolume;
     }
 
-    public static void VolumeDown(float amount = 0.1f) // Adjust amount as needed
+    public static void VolumeDown(float amount = 0.5f) // Adjust amount as needed
     {
         float newVolume = Math.Max(device.AudioEndpointVolume.MasterVolumeLevelScalar - amount, 0.0f);
         device.AudioEndpointVolume.MasterVolumeLevelScalar = newVolume;
@@ -1792,7 +1795,7 @@ class LiveTranscription
             }
             else
             {
-                Console.WriteLine("already in typing mode");
+                Console.WriteLine("already in searching mode");
             }
         }
 
@@ -1800,17 +1803,6 @@ class LiveTranscription
         {
             DetectScreen();
             UpdateUI(() => FinalizeStream());
-        }
-
-        if (transcription.IndexOf("search", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            string search_query = transcription.Substring("search".Length).Trim();
-            if (!string.IsNullOrEmpty(search_query))
-            {
-                OpenBrowserWithSearch(search_query);
-                commandExecuted = true;
-                UpdateUI(() => FinalizeStream());
-            }
         }
 
         if (transcription.IndexOf("open help", StringComparison.OrdinalIgnoreCase) >= 0)
@@ -1848,7 +1840,33 @@ class LiveTranscription
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => RemoveTags());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.ControlKey)); // Customize as needed
-        HandleCommand("open chrome", transcription, ref chrome_command_count, () => OpenBrowserWithSearch("who is the greatest lol player of all time"));
+        HandleCommand("open chrome", transcription, ref chrome_command_count, () => show_items.OpenChrome());
+        HandleCommand("open youtube", transcription, ref chrome_command_count, () => show_items.OpenYouTube());
+        HandleCommand("open facebook", transcription, ref chrome_command_count, () => show_items.OpenFaceBook());
+        HandleCommand("open messenger", transcription, ref chrome_command_count, () => show_items.OpenMessenger());
+        HandleCommand("open canva", transcription, ref chrome_command_count, () => show_items.OpenCanva());
+        HandleCommand("open discord", transcription, ref chrome_command_count, () => show_items.OpenDiscord());
+        HandleCommand("open gmail", transcription, ref chrome_command_count, () => show_items.OpenGmail());
+        HandleCommand("open gmeet", transcription, ref chrome_command_count, () => show_items.OpenGmeet());
+        HandleCommand("open instagram", transcription, ref chrome_command_count, () => show_items.OpenInstagram());
+        HandleCommand("open lazada", transcription, ref chrome_command_count, () => show_items.OpenLazada());
+        HandleCommand("open netflix", transcription, ref chrome_command_count, () => show_items.OpenNetflix());
+        HandleCommand("open onedrive", transcription, ref chrome_command_count, () => show_items.OpenOnedrive());
+        HandleCommand("open pinterest", transcription, ref chrome_command_count, () => show_items.OpenPinterest());
+        HandleCommand("open shopee", transcription, ref chrome_command_count, () => show_items.OpenShopee());
+        HandleCommand("open telegram", transcription, ref chrome_command_count, () => show_items.OpenTelegram());
+        HandleCommand("open tiktok", transcription, ref chrome_command_count, () => show_items.OpenTiktok());
+        HandleCommand("open github", transcription, ref chrome_command_count, () => show_items.OpenGithub());
+        HandleCommand("open reddit", transcription, ref chrome_command_count, () => show_items.OpenReddit());
+        HandleCommand("open spotify", transcription, ref chrome_command_count, () => show_items.OpenSpotify());
+        HandleCommand("open twitch", transcription, ref chrome_command_count, () => show_items.OpenTwitch());
+        HandleCommand("open wikipedia", transcription, ref chrome_command_count, () => show_items.OpenWikipedia());
+        HandleCommand("open x", transcription, ref chrome_command_count, () => show_items.OpenX());
+        HandleCommand("open zoom", transcription, ref chrome_command_count, () => show_items.OpenZoom());
+        HandleCommand("maximize", transcription, ref window_actions_count, () => MaximizeWindow());
+        HandleCommand("minimize", transcription, ref window_actions_count, () => MinimizeWindow());
+        HandleCommand("increase brightness", transcription, ref brightness_command_count, () => IncreaseBrightness());
+        HandleCommand("decrease brightness", transcription, ref brightness_command_count, () => DecreaseBrightness());
         HandleCommand("open edge", transcription, ref edge_command_count, () => StartProcess("msedge"));
         HandleCommand("open word", transcription, ref word_command_count, () => StartProcess("winword"));
         HandleCommand("open excel", transcription, ref excel_command_count, () => StartProcess("excel"));
@@ -1918,6 +1936,225 @@ class LiveTranscription
             wake_word_timer.Stop();
             intent_window_timer.Stop();
         }
+    }
+
+    public class WindowActions
+    {
+        [DllImport("user32.dll")]
+        private static extern uint SendInput(uint nInputs, [In] INPUT[] pInputs, int cbSize);
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct INPUT
+        {
+            public uint type;
+            public InputUnion u;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        struct InputUnion
+        {
+            [FieldOffset(0)] public KEYBDINPUT ki;
+            [FieldOffset(0)] public MOUSEINPUT mi;
+            [FieldOffset(0)] public HARDWAREINPUT hi;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct MOUSEINPUT
+        {
+            public int dx;
+            public int dy;
+            public uint mouseData;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct HARDWAREINPUT
+        {
+            public uint uMsg;
+            public ushort wParamL;
+            public ushort wParamH;
+        }
+
+        private const uint INPUT_KEYBOARD = 1;
+        private const ushort VK_LWIN = 0x5B; // Left Windows Key
+        private const ushort VK_UP = 0x26;  // Up Arrow Key
+        private const ushort VK_DOWN = 0x28; // Down Arrow Key
+        private const uint KEYEVENTF_KEYUP = 0x0002; // Key release flag
+
+        public void MaximizeActiveWindow()
+        {
+            SendKeyCombo(VK_LWIN, VK_UP);
+        }
+
+        public void MinimizeActiveWindow()
+        {
+            SendKeyCombo(VK_LWIN, VK_DOWN);
+        }
+
+        private void SendKeyCombo(ushort modifierKey, ushort actionKey)
+        {
+            INPUT[] inputs = new INPUT[4];
+
+            // Press Modifier Key (Windows Key)
+            inputs[0] = new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                u = new InputUnion
+                {
+                    ki = new KEYBDINPUT { wVk = modifierKey }
+                }
+            };
+
+            // Press Action Key (Up/Down Arrow)
+            inputs[1] = new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                u = new InputUnion
+                {
+                    ki = new KEYBDINPUT { wVk = actionKey }
+                }
+            };
+
+            // Release Action Key
+            inputs[2] = new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                u = new InputUnion
+                {
+                    ki = new KEYBDINPUT { wVk = actionKey, dwFlags = KEYEVENTF_KEYUP }
+                }
+            };
+
+            // Release Modifier Key
+            inputs[3] = new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                u = new InputUnion
+                {
+                    ki = new KEYBDINPUT { wVk = modifierKey, dwFlags = KEYEVENTF_KEYUP }
+                }
+            };
+
+            SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+        }
+    }
+
+    // Usage Example
+    private void MaximizeWindow()
+    {
+        var actions = new WindowActions();
+        actions.MaximizeActiveWindow();
+    }
+
+    private void MinimizeWindow()
+    {
+        var actions = new WindowActions();
+        actions.MinimizeActiveWindow();
+    }
+
+    public class BrightnessController
+    {
+        // Increase brightness by a specified step
+        public void IncreaseBrightness(int step = 20)
+        {
+            AdjustBrightness(step);
+        }
+
+        // Decrease brightness by a specified step
+        public void DecreaseBrightness(int step = 20)
+        {
+            AdjustBrightness(-step);
+        }
+
+        private void AdjustBrightness(int step)
+        {
+            try
+            {
+                // Get the current brightness
+                int currentBrightness = GetCurrentBrightness();
+
+                // Calculate the new brightness level
+                int newBrightness = Clamp(currentBrightness + step, 0, 100);
+
+                // Set the brightness to the new level
+                SetBrightness(newBrightness);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error adjusting brightness: {ex.Message}");
+            }
+        }
+
+        private int GetCurrentBrightness()
+        {
+            int brightness = 0;
+
+            // Query WMI for the current brightness
+            using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT CurrentBrightness FROM WmiMonitorBrightness"))
+            {
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    brightness = Convert.ToInt32(obj["CurrentBrightness"]);
+                    break;
+                }
+            }
+
+            return brightness;
+        }
+
+        private void SetBrightness(int brightness)
+        {
+            // Use WMI to set the brightness
+            using (var searcher = new ManagementObjectSearcher("root\\WMI", "SELECT * FROM WmiMonitorBrightnessMethods"))
+            {
+                foreach (ManagementObject obj in searcher.Get())
+                {
+                    obj.InvokeMethod("WmiSetBrightness", new object[] { UInt32.MaxValue, brightness });
+                }
+            }
+        }
+
+        // Clamp method for compatibility with .NET Framework
+        private int Clamp(int value, int min, int max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
+        }
+    }
+
+    public static class MathExtensions
+    {
+        public static int Clamp(int value, int min, int max)
+        {
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
+        }
+    }
+
+    private BrightnessController brightnessController = new BrightnessController();
+
+    private void IncreaseBrightness()
+    {
+        brightnessController.IncreaseBrightness(); // Increases brightness by the default 10%
+    }
+
+    private void DecreaseBrightness()
+    {
+        brightnessController.DecreaseBrightness(); // Decreases brightness by the default 10%
     }
 
     private void SearchingMode(object sender, System.Timers.ElapsedEventArgs e)
@@ -2202,6 +2439,8 @@ class LiveTranscription
         search_command_count = 0;
         show_items_command_count = 0;
         execute_number_command_count = 0;
+        window_actions_count = 0;
+        brightness_command_count = 0;
 
         switch_command_count = 0;
         left_command_count = 0;

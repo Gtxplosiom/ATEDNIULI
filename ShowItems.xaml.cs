@@ -1104,7 +1104,249 @@ namespace ATEDNIULI
 
             driver = new ChromeDriver(options);
 
-            driver.Navigate().GoToUrl("https://www.google.com/search?q=apple");
+            driver.Navigate().GoToUrl("https://www.google.com/");
+        }
+
+        public void OpenYouTube()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.youtube.com/");
+        }
+
+        public void OpenFaceBook()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.facebook.com/");
+        }
+
+        public void OpenMessenger()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenCanva()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenDiscord()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenGmail()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenGmeet()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenInstagram()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenLazada()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenNetflix()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenOnedrive()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenPinterest()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenShopee()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenTelegram()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenTiktok()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenGithub()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenReddit()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenSpotify()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenTwitch()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenWikipedia()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenX()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
+        }
+
+        public void OpenZoom()
+        {
+            ChromeOptions options = new ChromeOptions();
+
+            options.AddExcludedArgument("enable-automation");
+
+            driver = new ChromeDriver(options);
+
+            driver.Navigate().GoToUrl("https://www.messenger.com/");
         }
 
         private void OpenNewTab()
