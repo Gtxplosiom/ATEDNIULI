@@ -585,7 +585,7 @@ namespace ATEDNIULI
         public double lastSpeed = 0;
 
         public bool mouse_steady = true;
-
+        public int mouse_speed_multiplier = 0;
         public void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
             var screenWidth = (int)SystemParameters.PrimaryScreenWidth;
@@ -740,8 +740,8 @@ namespace ATEDNIULI
 
             lastSpeed = speed;
 
-            double incrementX = moveX * speed * 2;
-            double incrementY = moveY * speed * 2;
+            double incrementX = moveX * speed * mouse_speed_multiplier;
+            double incrementY = moveY * speed * mouse_speed_multiplier;
 
             // Update mouse position
             currentMousePosition.X += (int)incrementX;

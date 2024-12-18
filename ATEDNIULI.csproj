@@ -466,6 +466,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Resource>
     <Content Include="assets\models\please_work\pleasework.py" />
+    <Resource Include="assets\preview.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Resource>
     <Content Include="python\od.py">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

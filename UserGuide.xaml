@@ -72,7 +72,7 @@
                 <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
                     <!-- Simulated Device Section -->
                     <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
-                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
+                        <Image Source="assets/preview.png" Stretch="Uniform" />
                     </Border>
                 </StackPanel>
             </Grid>
@@ -126,14 +126,6 @@
                        Visibility="Hidden"
                        Margin="0,20,0,0" />
                 </StackPanel>
-
-                <!-- Right Section -->
-                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
-                    <!-- Simulated Device Section -->
-                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
-                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
-                    </Border>
-                </StackPanel>
             </Grid>
         </DataTemplate>
 
@@ -172,14 +164,6 @@
                                FontWeight="Bold"
                                Visibility="Hidden"
                                Margin="0,20,0,0" />
-                </StackPanel>
-
-                <!-- Right Section -->
-                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
-                    <!-- Simulated Device Section -->
-                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
-                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
-                    </Border>
                 </StackPanel>
             </Grid>
         </DataTemplate>
@@ -557,7 +541,8 @@
 
 
                     <!-- Next Button -->
-                    <Button Content="NEXT" 
+                    <Button x:Name="next"
+                            Content="NEXT" 
                             Width="100" 
                             Height="40" 
                             Background="#FFC107" 
@@ -565,6 +550,7 @@
                             FontWeight="Bold" 
                             Margin="0,20,0,0" 
                             HorizontalAlignment="Center"
+                            Visibility="Hidden"
                             Click="NextButton_Click" />
                 </StackPanel>
 
@@ -582,11 +568,16 @@
                FontWeight="Bold" 
                Foreground="Black" 
                Margin="0,0,0,10" />
-                    <TextBlock Name="State6b" Text="Is another feature of ATEDNIULI where if the mouse cursor is hovering above an icon of certain apps or websites, certain options will popup showing all possible executable options of that app/website." 
+                    <TextBlock Name="State6b" Text="Is another feature of ATEDNIULI where if the mouse cursor is hovering above an icon of certain apps or websites, " 
                FontSize="20"
                FontWeight="Bold"
                TextWrapping="Wrap" 
                Margin="0,0,0,10" />
+                    <TextBlock Name="State6bb" Text="certain options will popup showing all possible executable options of that app/website." 
+                    FontSize="20"
+                    FontWeight="Bold"
+                    TextWrapping="Wrap" 
+                    Margin="0,0,0,10" />        
                     <TextBlock Name="State6c" Text="try hovering on one of these application and website icons and say the number of the task you want to execute" 
                FontSize="18"
                FontWeight="Bold"

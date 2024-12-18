@@ -1646,7 +1646,7 @@ namespace ATEDNIULI
                     Dispatcher.Invoke(() => ProcessClickableElements(null, null, false, desktopIcons));
                 }
 
-                if (currentWindow != null && currentWindow.Current.Name != "UserGuide")
+                if (currentWindow != null && currentWindow.Current.Name != "UserGuide" && currentWindow.Current.Name != "SettingsWindow" && currentWindow.Current.Name != "HelpWindow" && currentWindow.Current.Name != "Shell_TrayWnd")
                 {
                     string windowTitle = currentWindow.Current.Name;
                     bool isBrowser = IsBrowserWindow(windowTitle);
@@ -1673,6 +1673,8 @@ namespace ATEDNIULI
                 }
 
                 InteractWithUserGuideWindow("UserGuide");
+                InteractWithUserGuideWindow("SettingsWindow");
+                InteractWithUserGuideWindow("Shell_TrayWnd");
             }
             catch (TaskCanceledException)
             {

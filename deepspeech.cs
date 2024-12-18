@@ -248,7 +248,10 @@ class LiveTranscription
     public class AppSettings
     {
         public bool IsFirstTime { get; set; }
+        public int MouseSpeed { get; set; }
     }
+
+    public int mouse_speed = 0;
 
     public void UpdateConfiguration(AppConfig config, string filePath)
     {
@@ -285,6 +288,9 @@ class LiveTranscription
 
         config = AppConfig.Load("appsettings.json");
         bool isFirstTime = config.AppSettings.IsFirstTime;
+        int MouseSpeed = config.AppSettings.MouseSpeed;
+
+        mouse_speed = MouseSpeed;
 
         vad = new WebRtcVad
         {
@@ -349,7 +355,10 @@ class LiveTranscription
             OpenTutorial();
         }
 
-        show_items.OpenYouTube();
+        camera_mouse.mouse_speed_multiplier = MouseSpeed;
+        settings_window.mouseSpeed = MouseSpeed;
+
+        //settings_window.Show();
     }
 
     private void OpenTutorial()
@@ -361,6 +370,14 @@ class LiveTranscription
         UpdateUI(() => user_guide.Show());
         in_tutorial = true;
         UpdateUI(() => FinalizeStream());
+    }
+
+    private void updateMouseSpeed(int speed)
+    {
+        config.AppSettings.MouseSpeed = speed;
+        mouse_speed = speed;
+        camera_mouse.mouse_speed_multiplier = speed;
+        UpdateConfiguration(config, "appsettings.json");
     }
 
     public string action = "none";
@@ -384,6 +401,10 @@ class LiveTranscription
                 show_items.lastDirectionY = camera_mouse.lastDirectionY;
 
                 show_items.lastSpeed = camera_mouse.lastSpeed;
+
+                config = AppConfig.Load("appsettings.json");
+                camera_mouse.mouse_speed_multiplier = config.AppSettings.MouseSpeed;
+                Console.WriteLine(camera_mouse.mouse_speed_multiplier);
 
                 show_items.Dispatcher.Invoke(() =>
                 {
@@ -833,6 +854,12 @@ class LiveTranscription
                 cleanedText = Regex.Replace(cleanedText, @"[\[\(].*?[\]\)]", string.Empty);
 
                 UpdateUI(() => asr_window.AppendText(cleanedText));
+
+                if (cleanedText.Contains("stop showing"))
+                {
+                    search_mode = false;
+                    StartTranscription();
+                }
 
                 if (cleanedText.Contains("search now"))
                 {
@@ -1484,7 +1511,7 @@ class LiveTranscription
 
     private void HandleWakeWord(string partial_result, double confidence)
     {
-        if (itemDetected && confidence > -75 && mouse_activated)
+        if (itemDetected && confidence > -100 && mouse_activated)
         {
             for (int number_index = 0; number_index < numberStrings.Count; number_index++)
             {
@@ -1517,7 +1544,7 @@ class LiveTranscription
             }
         }
 
-        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -75)
+        if (partial_result.Contains(wake_word) && !wake_word_detected && confidence > -100)
         {
             var tutorial_state = user_guide.ReturnState();
             
@@ -1853,33 +1880,158 @@ class LiveTranscription
             UpdateUI(() => FinalizeStream());
         }
 
+        if (transcription.IndexOf("play music", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            try
+            {
+                // Open the Windows Media Player app
+                System.Diagnostics.Process.Start("ms-player:");
+
+                UpdateUI(() => FinalizeStream());
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to open the Media Player app: {ex.Message}");
+            }
+        }
+
         HandleCommand("open calculator", transcription, ref calculator_command_count, () => StartProcess("calc"));
         HandleCommand("stop showing", transcription, ref show_items_command_count, () => RemoveTags());
         HandleCommand("open notepad", transcription, ref notepad_command_count, () => StartProcess("notepad"));
         HandleCommand("close window", transcription, ref close_window_command_count, () => SimulateKeyPress(System.Windows.Forms.Keys.ControlKey)); // Customize as needed
         HandleCommand("open chrome", transcription, ref chrome_command_count, () => show_items.OpenChrome());
-        HandleCommand("open youtube", transcription, ref chrome_command_count, () => show_items.OpenYouTube());
-        HandleCommand("open facebook", transcription, ref chrome_command_count, () => show_items.OpenFaceBook());
-        HandleCommand("open messenger", transcription, ref chrome_command_count, () => show_items.OpenMessenger());
-        HandleCommand("open canva", transcription, ref chrome_command_count, () => show_items.OpenCanva());
-        HandleCommand("open discord", transcription, ref chrome_command_count, () => show_items.OpenDiscord());
-        HandleCommand("open gmail", transcription, ref chrome_command_count, () => show_items.OpenGmail());
-        HandleCommand("open gmeet", transcription, ref chrome_command_count, () => show_items.OpenGmeet());
-        HandleCommand("open instagram", transcription, ref chrome_command_count, () => show_items.OpenInstagram());
-        HandleCommand("open lazada", transcription, ref chrome_command_count, () => show_items.OpenLazada());
-        HandleCommand("open netflix", transcription, ref chrome_command_count, () => show_items.OpenNetflix());
-        HandleCommand("open onedrive", transcription, ref chrome_command_count, () => show_items.OpenOnedrive());
-        HandleCommand("open pinterest", transcription, ref chrome_command_count, () => show_items.OpenPinterest());
-        HandleCommand("open shopee", transcription, ref chrome_command_count, () => show_items.OpenShopee());
-        HandleCommand("open telegram", transcription, ref chrome_command_count, () => show_items.OpenTelegram());
-        HandleCommand("open tiktok", transcription, ref chrome_command_count, () => show_items.OpenTiktok());
-        HandleCommand("open github", transcription, ref chrome_command_count, () => show_items.OpenGithub());
-        HandleCommand("open reddit", transcription, ref chrome_command_count, () => show_items.OpenReddit());
-        HandleCommand("open spotify", transcription, ref chrome_command_count, () => show_items.OpenSpotify());
-        HandleCommand("open twitch", transcription, ref chrome_command_count, () => show_items.OpenTwitch());
-        HandleCommand("open wikipedia", transcription, ref chrome_command_count, () => show_items.OpenWikipedia());
-        HandleCommand("open x", transcription, ref chrome_command_count, () => show_items.OpenX());
-        HandleCommand("open zoom", transcription, ref chrome_command_count, () => show_items.OpenZoom());
+        HandleCommand("open youtube", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenYouTube();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open facebook", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenFaceBook();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open messenger", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenMessenger();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open canva", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenCanva();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open discord", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenDiscord();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open gmail", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenGmail();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open gmeet", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenGmeet();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open instagram", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenInstagram();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open lazada", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenLazada();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open netflix", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenNetflix();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open onedrive", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenOnedrive();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open pinterest", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenPinterest();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open shopee", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenShopee();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open telegram", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenTelegram();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open tiktok", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenTiktok();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open github", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenGithub();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open reddit", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenReddit();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open spotify", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenSpotify();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open twitch", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenTwitch();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open wikipedia", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenWikipedia();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open x", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenX();
+            UpdateUI(() => FinalizeStream());
+        });
+
+        HandleCommand("open zoom", transcription, ref chrome_command_count, () =>
+        {
+            show_items.OpenZoom();
+            UpdateUI(() => FinalizeStream());
+        });
+
         HandleCommand("maximize", transcription, ref window_actions_count, () => MaximizeWindow());
         HandleCommand("minimize", transcription, ref window_actions_count, () => MinimizeWindow());
         HandleCommand("increase brightness", transcription, ref brightness_command_count, () => IncreaseBrightness());
@@ -1897,7 +2049,8 @@ class LiveTranscription
         HandleCommand("screenshot", transcription, ref screenshot_command_count, () => ScreenShot());
         HandleCommand("volume up", transcription, ref volume_up_command_count, () => VolumeUp());
         HandleCommand("volume down", transcription, ref volume_down_command_count, () => VolumeDown());
-        HandleCommand("open settings", transcription, ref settings_command_count, () => StartProcess("ms-settings:"));
+        HandleCommand("open settings", transcription, ref settings_command_count, () => UpdateUI(() => settings_window.Show()));
+        HandleCommand("close settings", transcription, ref settings_command_count, () => UpdateUI(() => settings_window.Hide()));
     }
 
     private bool HandleCommand(string commandPhrase, string transcription, ref int commandCount, Action action)
@@ -2518,6 +2671,7 @@ class LiveTranscription
                 UpdateUI(() => TutorialStuff(tutorial_state, "e"));
                 UpdateUI(() => TutorialStuff(tutorial_state, "f"));
                 UpdateUI(() => TutorialStuff(tutorial_state, "g"));
+                UpdateUI(() => TutorialStuff(tutorial_state, "next"));
                 mouse_state5 = true;
             }
         }
