@@ -22,6 +22,7 @@ using Microsoft.Office.Interop.Excel;
 using Microsoft.Office.Interop.PowerPoint;
 using System.Security.Policy;
 using static System.Net.WebRequestMethods;
+using System.Linq;
 
 
 namespace ATEDNIULI
@@ -518,15 +519,6 @@ namespace ATEDNIULI
             {
                 Console.WriteLine("Action not recognized for Chrome.");
             }
-        }
-
-        private void OpenUrl(string url)
-        {
-            System.Threading.Tasks.Task.Run(() =>
-            {
-                OpenChrome();
-                driver.Navigate().GoToUrl(url);
-            });
         }
 
         private void ExecuteMessengerAction(int actionNumber)
@@ -1097,262 +1089,89 @@ namespace ATEDNIULI
 
         public void OpenChrome()
         {
-            ChromeOptions options = new ChromeOptions();
+            try
+            {
+                string chromePath = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
 
-            options.AddExcludedArgument("enable-automation");
+                // Check if Chrome exists at the specified path
+                if (!System.IO.File.Exists(chromePath))
+                {
+                    Console.WriteLine("Chrome executable not found. Please verify the path.");
+                    return;
+                }
 
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.google.com/");
+                // Start Chrome with the remote debugging flag
+                Process.Start(chromePath, "--remote-debugging-port=9222");
+                Console.WriteLine("Chrome launched with remote debugging enabled.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to launch Chrome: {ex.Message}");
+            }
         }
 
-        public void OpenYouTube()
+        public void InitializeDriver()
         {
-            ChromeOptions options = new ChromeOptions();
+            if (driver == null)
+            {
+                ChromeOptions options = new ChromeOptions();
 
-            options.AddExcludedArgument("enable-automation");
+                // Set remote debugging URL and port
+                options.AddArgument("--remote-debugging-port=9222");
+                options.AddArgument("--remote-debugging-address=127.0.0.1");
 
-            driver = new ChromeDriver(options);
+                // Optional arguments to improve compatibility
+                options.AddExcludedArgument("enable-automation");
 
-            driver.Navigate().GoToUrl("https://www.youtube.com/");
+                driver = new ChromeDriver(options);
+                driver.Navigate().GoToUrl("about:blank");  // Ensure Chrome starts with a blank page
+            }
         }
 
-        public void OpenFaceBook()
+        public void OpenUrl(string url)
         {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.facebook.com/");
+            InitializeDriver();
+            ((IJavaScriptExecutor)driver).ExecuteScript($"window.open('{url}', '_blank');");
+            driver.SwitchTo().Window(driver.WindowHandles.Last());  // Focus on the newly opened tab
         }
 
-        public void OpenMessenger()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.messenger.com/");
-        }
-
-        public void OpenCanva()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.canva.com/en_ph/");
-        }
-
-        public void OpenDiscord()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://discord.com/");
-        }
-
-        public void OpenGmail()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://mail.google.com/mail/u/0/");
-        }
-
-        public void OpenGmeet()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://meet.google.com/landing");
-        }
-
-        public void OpenInstagram()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.instagram.com/");
-        }
-
-        public void OpenLazada()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.lazada.com.ph/");
-        }
-
-        public void OpenNetflix()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.netflix.com/ph-en/");
-        }
-
-        public void OpenOnedrive()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.microsoft.com/en-us/microsoft-365/onedrive/online-cloud-storage");
-        }
-
-        public void OpenPinterest()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.pinterest.com/");
-        }
-
-        public void OpenShopee()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://shopee.ph/");
-        }
-
-        public void OpenTelegram()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://web.telegram.org/");
-        }
-
-        public void OpenTiktok()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.tiktok.com/en/");
-        }
-
-        public void OpenGithub()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://github.com/");
-        }
-
-        public void OpenReddit()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.reddit.com/");
-        }
-
-        public void OpenSpotify()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://open.spotify.com/");
-        }
-
-        public void OpenTwitch()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://open.spotify.com/");
-        }
-
-        public void OpenWikipedia()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://en.wikipedia.org/wiki/Main_Page");
-        }
-
-        public void OpenX()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://x.com/?lang=en");
-        }
-
-        public void OpenZoom()
-        {
-            ChromeOptions options = new ChromeOptions();
-
-            options.AddExcludedArgument("enable-automation");
-
-            driver = new ChromeDriver(options);
-
-            driver.Navigate().GoToUrl("https://www.zoom.com/");
-        }
+        public void OpenYouTube() => OpenUrl("https://www.youtube.com/");
+        public void OpenFaceBook() => OpenUrl("https://www.facebook.com/");
+        public void OpenMessenger() => OpenUrl("https://www.messenger.com/");
+        public void OpenCanva() => OpenUrl("https://www.canva.com/en_ph/");
+        public void OpenDiscord() => OpenUrl("https://discord.com/");
+        public void OpenGmail() => OpenUrl("https://mail.google.com/mail/u/0/");
+        public void OpenGmeet() => OpenUrl("https://meet.google.com/landing");
+        public void OpenInstagram() => OpenUrl("https://www.instagram.com/");
+        public void OpenLazada() => OpenUrl("https://www.lazada.com.ph/");
+        public void OpenNetflix() => OpenUrl("https://www.netflix.com/ph-en/");
+        public void OpenOnedrive() => OpenUrl("https://www.microsoft.com/en-us/microsoft-365/onedrive/online-cloud-storage");
+        public void OpenPinterest() => OpenUrl("https://www.pinterest.com/");
+        public void OpenShopee() => OpenUrl("https://shopee.ph/");
+        public void OpenTelegram() => OpenUrl("https://web.telegram.org/");
+        public void OpenTiktok() => OpenUrl("https://www.tiktok.com/en/");
+        public void OpenGithub() => OpenUrl("https://github.com/");
+        public void OpenReddit() => OpenUrl("https://www.reddit.com/");
+        public void OpenSpotify() => OpenUrl("https://open.spotify.com/");
+        public void OpenTwitch() => OpenUrl("https://www.twitch.tv/");
+        public void OpenWikipedia() => OpenUrl("https://en.wikipedia.org/wiki/Main_Page");
+        public void OpenX() => OpenUrl("https://x.com/?lang=en");
+        public void OpenZoom() => OpenUrl("https://www.zoom.com/");
 
         private void OpenNewTab()
         {
-            driver = new ChromeDriver();
-            Console.WriteLine("Opening a new tab in Chrome...");
-            driver.Navigate().GoToUrl("chrome://newtab");
+            InitializeDriver();
+            ((IJavaScriptExecutor)driver).ExecuteScript("window.open('about:blank', '_blank');");
+            driver.SwitchTo().Window(driver.WindowHandles.Last());  // Focus on the new tab
+        }
+
+        public void CloseBrowser()
+        {
+            if (driver != null)
+            {
+                driver.Quit();
+                driver = null;
+            }
         }
 
         private void OpenLastVisitedWebsite()

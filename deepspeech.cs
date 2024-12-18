@@ -33,6 +33,8 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using OpenCvSharp.Internal.Vectors;
 using System.Management;
+using Newtonsoft.Json.Linq;
+using System.Net.Http;
 
 class LiveTranscription
 {
@@ -81,6 +83,7 @@ class LiveTranscription
     private int execute_number_command_count = 0;
     private int window_actions_count = 0;
     private int brightness_command_count = 0;
+    private int bookmark_command_count = 0;
 
     private int switch_command_count = 0;
     private int left_command_count = 0;
@@ -109,12 +112,14 @@ class LiveTranscription
     private System.Timers.Timer debounce_timer;
     private System.Timers.Timer typing_appear_timer;
     private System.Timers.Timer searching_appear_timer;
+    private System.Timers.Timer bookmarks_appear_timer;
     private System.Timers.Timer reset_typing_stream_timer;
 
     private const int debounce_timeout = 1000; // Delay in milliseconds
     private const int wake_word_timeout = 5000; // 10 seconds timeout for no wake word detection
     private const int typing_appear = 2000;
     private const int searching_appear = 2000;
+    private const int bookmarks_appear = 2000;
     private const int reset_typing_timeout = 7000;
 
     // pag store han current result and previous
@@ -130,6 +135,10 @@ class LiveTranscription
 
     private const byte VK_LWIN = 0x5B;
     private const byte VK_SNAPSHOT = 0x2C;
+    private const byte VK_CONTROL = 0x11;
+    private const byte VK_TAB = 0x09;
+    private const byte VK_SHIFT = 0x10;
+    private const byte VK_T = 0x54;
 
     // dlls kanan mouse variables
     [DllImport("user32.dll", SetLastError = true)]
@@ -228,13 +237,13 @@ class LiveTranscription
             try
             {
                 string fullPath = Path.GetFullPath(filePath);
-                Console.WriteLine($"Attempting to load configuration from: {fullPath}");
+                //Console.WriteLine($"Attempting to load configuration from: {fullPath}");
 
                 if (!File.Exists(fullPath))
                     throw new FileNotFoundException($"Configuration file not found at: {fullPath}");
 
                 var json = File.ReadAllText(fullPath);
-                Console.WriteLine("Configuration file successfully read.");
+                //Console.WriteLine("Configuration file successfully read.");
                 return JsonConvert.DeserializeObject<AppConfig>(json);
             }
             catch (Exception ex)
@@ -562,7 +571,7 @@ class LiveTranscription
         {
             DisposePreviousResources();
 
-            if (!typing_mode && !showed_detected && !search_mode)
+            if (!typing_mode && !showed_detected && !search_mode && !shown_bookmarks)
             {
                 if (!app_start)
                 {
@@ -596,7 +605,7 @@ class LiveTranscription
                     asr_window.HideWithFadeOut();
                 });
             }
-            else if (typing_mode && !showed_detected && !search_mode)
+            else if (typing_mode && !showed_detected && !search_mode && !shown_bookmarks)
             {
                 Console.WriteLine("Switching to typingmode");
 
@@ -629,7 +638,7 @@ class LiveTranscription
 
                 wave_in_event.StartRecording();
             }
-            else if (showed_detected && !typing_mode && !search_mode)
+            else if (showed_detected && !typing_mode && !search_mode && !shown_bookmarks)
             {
                 Console.WriteLine("listening for numbers...");
 
@@ -662,9 +671,42 @@ class LiveTranscription
 
                 wave_in_event.StartRecording();
             }
-            else if (search_mode && !showed_detected && !typing_mode)
+            else if (search_mode && !showed_detected && !typing_mode && !shown_bookmarks)
             {
                 Console.WriteLine("What are you searching...");
+
+                wave_in_event = new WaveInEvent
+                {
+                    WaveFormat = new WaveFormat(16000, 1) // 16kHz mono 
+                };
+
+                wave_in_event.DataAvailable += (s, e) =>
+                {
+                    int availableFrames = e.BytesRecorded / FrameSize;
+
+                    for (int i = 0; i < availableFrames; i++)
+                    {
+                        byte[] frame = new byte[FrameSize];
+                        Array.Copy(e.Buffer, i * FrameSize, frame, 0, FrameSize);
+                        typingBuffer.AddRange(frame); // Continuously add frame to the buffer
+                    }
+
+                    // If there's enough data, enqueue for transcription and clear the buffer
+                    if (typingBuffer.Count >= RequiredDurationMs * wave_in_event.WaveFormat.AverageBytesPerSecond / 1000)
+                    {
+                        byte[] audioToProcess = typingBuffer.ToArray();
+                        typingBuffer.Clear(); // Reset the buffer for the next round
+
+                        audioQueue.Enqueue(audioToProcess); // Enqueue buffer for processing
+                        ProcessAudioQueue(); // Start processing the queue if not already
+                    }
+                };
+
+                wave_in_event.StartRecording();
+            }
+            else if (shown_bookmarks && !showed_detected && !typing_mode && !search_mode)
+            {
+                Console.WriteLine("choose bookmark...");
 
                 wave_in_event = new WaveInEvent
                 {
@@ -797,7 +839,7 @@ class LiveTranscription
 
     private async Task ProcessResultsAsync(IAsyncEnumerable<SegmentData> results)
     {
-        if (!showed_detected && !search_mode)
+        if (!showed_detected && !search_mode && !shown_bookmarks)
         {
             UpdateUI(() => asr_window.OutputTextBox.Text = "Result: "); // Clear previous results
 
@@ -823,7 +865,7 @@ class LiveTranscription
                 TypeText(result.Text);
             }
         }
-        else if (search_mode && !showed_detected)
+        else if (search_mode && !showed_detected && !shown_bookmarks)
         {
             string queryText = "";
             var resultList = new List<SegmentData>();
@@ -872,6 +914,91 @@ class LiveTranscription
                 {
                     search_mode = false;
                     StartTranscription();
+                }
+            }
+        }
+        else if (shown_bookmarks && !search_mode && !showed_detected)
+        {
+            var resultList = new List<SegmentData>();
+            var enumerator = results.GetAsyncEnumerator();
+
+            try
+            {
+                while (await enumerator.MoveNextAsync())
+                {
+                    resultList.Add(enumerator.Current);
+                }
+            }
+            finally
+            {
+                await enumerator.DisposeAsync();
+            }
+
+            // List of words to replace with numbers
+            var wordToNumberMap = new Dictionary<string, string>
+            {
+                { "one", "1" },
+                { "two", "2" },
+                { "too", "2" },
+                { "do", "2" },
+                { "three", "3" },
+                { "four", "4" },
+                { "five", "5" },
+                { "six", "6" },
+                { "seven", "7" },
+                { "eight", "8" },
+                { "ate", "8" },
+                { "nine", "9" },
+                { "ten", "10" },
+                { "ben", "10" },
+                { "and", "10" },
+                { "then", "10" }
+            };
+
+            // Append results to the TextBox
+            foreach (var result in resultList)
+            {
+                string cleanedText = result.Text
+                    .Replace(".", " ")
+                    .Replace(",", " ")
+                    .Replace("!", " ")
+                    .Replace("?", " ")
+                    .ToLower(); // Clean up and standardize to lowercase
+
+                // Remove content inside brackets and parentheses
+                cleanedText = Regex.Replace(cleanedText, @"[\[\(].*?[\]\)]", string.Empty);
+
+                // Replace words with numbers using the dictionary
+                foreach (var word in wordToNumberMap)
+                {
+                    // Use word boundaries to replace only whole words
+                    cleanedText = Regex.Replace(cleanedText, @"\b" + Regex.Escape(word.Key) + @"\b", word.Value);
+                }
+
+                // Check if the text contains "stop showing"
+                if (cleanedText.Contains("hide bookmarks"))
+                {
+                    shown_bookmarks = false;
+                    StartTranscription();
+                }
+
+                // Use a regular expression to find all numbers in the cleaned text
+                var numberMatches = Regex.Matches(cleanedText, @"\d+");
+
+                foreach (var match in numberMatches)
+                {
+                    // Convert the matched number string to an integer
+                    if (int.TryParse(match.ToString(), out int number))
+                    {
+                        // Handle the command for each number found in cleanedText
+                        HandleCommand(number.ToString(), cleanedText, ref execute_number_command_count, () =>
+                        {
+                            CheckAndLaunchBookmark(number); // Process the parsed number
+                            UpdateUI(() => show_items.BookmarkList.Visibility = System.Windows.Visibility.Collapsed);
+                            shown_bookmarks = false;
+                            StartTranscription();
+                        });
+                    }
                 }
             }
         }
@@ -1150,6 +1277,10 @@ class LiveTranscription
         searching_appear_timer = new System.Timers.Timer(searching_appear);
         searching_appear_timer.Elapsed += SearchingMode;
         searching_appear_timer.AutoReset = false; // Timer will only trigger once
+
+        bookmarks_appear_timer = new System.Timers.Timer(bookmarks_appear);
+        bookmarks_appear_timer.Elapsed += BookmarksShown;
+        bookmarks_appear_timer.AutoReset = false; // Timer will only trigger once
 
         reset_typing_stream_timer = new System.Timers.Timer(reset_typing_timeout);
         reset_typing_stream_timer.Elapsed += OnResetTypingTimerElapsed;
@@ -1814,6 +1945,22 @@ class LiveTranscription
             }
         }
 
+        if (transcription.IndexOf("show bookmarks", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            if (!shown_bookmarks)
+            {
+
+                UpdateUI(() => FinalizeStream());
+                wave_in_event.StopRecording();
+                bookmarks_appear_timer.Start();
+                audioBuffer.SetLength(0);
+            }
+            else
+            {
+                Console.WriteLine("already in searching mode");
+            }
+        }
+
         if (transcription.IndexOf("search", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             if (!search_mode)
@@ -2051,6 +2198,232 @@ class LiveTranscription
         HandleCommand("volume down", transcription, ref volume_down_command_count, () => VolumeDown());
         HandleCommand("open settings", transcription, ref settings_command_count, () => UpdateUI(() => settings_window.Show()));
         HandleCommand("close settings", transcription, ref settings_command_count, () => UpdateUI(() => settings_window.Hide()));
+        HandleCommand("add bookmark", transcription, ref bookmark_command_count, () => CreateBookmark());
+        HandleCommand("next tab", transcription, ref bookmark_command_count, () => NextTab());
+        HandleCommand("previous tab", transcription, ref bookmark_command_count, () => PreviousTab());
+        HandleCommand("new tab", transcription, ref bookmark_command_count, () => NewTab());
+    }
+
+    private static string bookmarksFile = "assets/bookmarks.txt";
+    private static List<string> bookmarks = new List<string>();
+
+    private void CreateBookmark()
+    {
+        string url = GetActiveChromeURL();
+        if (!string.IsNullOrEmpty(url))
+        {
+            StoreBookmark(url);
+            Console.WriteLine($"Stored URL: {url}");
+        }
+        else
+        {
+            Console.WriteLine("No active Chrome URL detected.");
+        }
+
+        UpdateUI(() => FinalizeStream());
+    }
+
+    private void ShowBookmarks() // for adjustment for show items
+    {
+        UpdateUI(() =>
+        {
+            if (File.Exists(bookmarksFile))
+            {
+                show_items.BookmarkList.Items.Clear();  // Clear existing items
+
+                foreach (string line in File.ReadLines(bookmarksFile))
+                {
+                    show_items.BookmarkList.Items.Add(line);
+                }
+
+                show_items.BookmarkList.Visibility = System.Windows.Visibility.Visible;
+            }
+            else
+            {
+                Console.WriteLine("No bookmarks saved yet.");
+            }
+        });
+    }
+
+    private void CheckAndLaunchBookmark(int bookmarkNumber)
+    {
+        if (bookmarkNumber < 1 || bookmarkNumber > 10)
+        {
+            Console.WriteLine("Invalid bookmark number.");
+            return;
+        }
+
+        LaunchBookmark(bookmarkNumber);
+    }
+
+
+    private void LaunchBookmark(int index)
+    {
+        if (!File.Exists(bookmarksFile))
+        {
+            Console.WriteLine("No bookmarks file found.");
+            return;
+        }
+
+        var lines = File.ReadAllLines(bookmarksFile);
+
+        if (index >= 1 && index <= lines.Length)
+        {
+            var line = lines[index - 1];
+
+            try
+            {
+                // Split the line into parts by " - " and get the last part (URL)
+                var parts = line.Split(new[] { " - " }, StringSplitOptions.RemoveEmptyEntries);
+
+                if (parts.Length >= 3)
+                {
+                    string url = parts[2];  // URL is the third part
+                    Console.WriteLine($"Opening {url} in a new tab...");
+
+                    // Use OpenUrl to launch the bookmark in the existing Chrome instance
+                    show_items.OpenUrl(url);
+                }
+                else
+                {
+                    Console.WriteLine("Malformed bookmark entry.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to open URL: {ex.Message}");
+            }
+        }
+        else
+        {
+            Console.WriteLine($"No bookmark found at position {index}");
+        }
+    }
+
+    public static void NewTab()
+    {
+        try
+        {
+            // Simulate pressing Ctrl + T to open a new tab
+            keybd_event(VK_CONTROL, 0, 0, 0);  // Press Ctrl
+            keybd_event(VK_T, 0, 0, 0);        // Press T
+            keybd_event(VK_T, 0, KEYEVENTF_KEYUP, 0);          // Release T
+            keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);    // Release Ctrl
+
+            Console.WriteLine("New tab opened.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to open a new tab: {ex.Message}");
+        }
+    }
+
+    public static void NextTab() // can be improved so selenium will switch focus everytime the tab is switched
+    {
+        // Simulate Ctrl + Tab
+        keybd_event(VK_CONTROL, 0, 0, 0); // Press Ctrl
+        keybd_event(VK_TAB, 0, 0, 0);     // Press Tab
+        keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0); // Release Tab
+        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0); // Release Ctrl
+    }
+
+    public static void PreviousTab()
+    {
+        // Simulate Ctrl + Shift + Tab
+        keybd_event(VK_CONTROL, 0, 0, 0); // Press Ctrl
+        keybd_event(VK_SHIFT, 0, 0, 0);   // Press Shift
+        keybd_event(VK_TAB, 0, 0, 0);     // Press Tab
+        keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0); // Release Tab
+        keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0); // Release Shift
+        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0); // Release Ctrl
+    }
+
+    static string GetActiveChromeURL()
+    {
+        try
+        {
+            using (HttpClient client = new HttpClient())
+            {
+                string chromeDebugUrl = "http://localhost:9222/json";
+                string json = client.GetStringAsync(chromeDebugUrl).Result;
+
+                // Parse the JSON response
+                JArray tabs = JArray.Parse(json);
+
+                foreach (var tab in tabs)
+                {
+                    // Check for the active and visible tab with a non-extension URL
+                    if (tab["type"]?.ToString() == "page" &&
+                        tab["url"] != null &&
+                        !tab["url"].ToString().StartsWith("chrome-extension://") &&
+                        tab["url"].ToString().Length > 0 &&
+                        tab["title"]?.ToString().Length > 0 &&
+                        tab["title"]?.ToString() != "New Tab")
+                    {
+                        return tab["url"].ToString();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching URL: {ex.Message}");
+        }
+
+        return string.Empty;
+    }
+
+    private static void StoreBookmark(string url)
+    {
+        try
+        {
+            int nextNumber = 1;
+
+            // Check if the file already exists and find the highest number
+            if (File.Exists(bookmarksFile))
+            {
+                var lines = File.ReadAllLines(bookmarksFile);
+
+                if (lines.Length > 0)
+                {
+                    // Get the last line and parse its number
+                    var lastLine = lines.LastOrDefault();
+                    if (lastLine != null)
+                    {
+                        var parts = lastLine.Split(new[] { '-' }, 2);
+                        if (parts.Length == 2 && int.TryParse(parts[0].Trim().Replace("Bookmark ", ""), out int lastNumber))
+                        {
+                            nextNumber = lastNumber + 1;
+                        }
+                    }
+                }
+            }
+
+            // Append the new bookmark with a sequential number
+            string newBookmark = $"Bookmark {nextNumber} - {DateTime.Now.ToLongTimeString()} - {url}";
+            File.AppendAllText(bookmarksFile, $"{newBookmark}{Environment.NewLine}");
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to store bookmark: {ex.Message}");
+        }
+    }
+
+    private static void ListBookmarks()
+    {
+        if (File.Exists(bookmarksFile))
+        {
+            Console.WriteLine("--- Stored Bookmarks ---");
+            foreach (string line in File.ReadLines(bookmarksFile))
+            {
+                Console.WriteLine(line);
+            }
+        }
+        else
+        {
+            Console.WriteLine("No bookmarks saved yet.");
+        }
     }
 
     private bool HandleCommand(string commandPhrase, string transcription, ref int commandCount, Action action)
@@ -2344,6 +2717,26 @@ class LiveTranscription
         }
     }
 
+    private bool shown_bookmarks = false;
+    private void BookmarksShown(object sender, System.Timers.ElapsedEventArgs e)
+    {
+        UpdateUI(() => ShowBookmarks());
+
+        shown_bookmarks = true;
+
+        UpdateUI(() => asr_window.ShowWithFadeIn(true));
+
+        StartTranscription();
+
+        UpdateUI(() => show_items.NotificationLabel.Content = "Choose Bookmark...");
+
+        if (shown_bookmarks)
+        {
+            wake_word_timer.Stop();
+            intent_window_timer.Stop();
+        }
+    }
+
     private void ProcessSpokenTag(string spokenTag)
     {
         Console.WriteLine($"Processing spoken tag: {spokenTag}");  // Add this line for debugging
@@ -2455,8 +2848,6 @@ class LiveTranscription
 
     public void OpenBrowserWithSearch(string query)
     {
-        // Open Chrome using the show_items instance
-        show_items.OpenChrome();
         Console.WriteLine("Opening Google search in Chrome...");
 
         // Encode the query to ensure special characters are handled correctly
@@ -2464,6 +2855,8 @@ class LiveTranscription
 
         // Construct the Google search URL with the encoded query
         string googleSearchUrl = $"https://www.google.com/search?q={encodedQuery}";
+
+        show_items.OpenUrl(googleSearchUrl);
 
         // Navigate to the constructed URL
         show_items.driver.Navigate().GoToUrl(googleSearchUrl);
@@ -2611,6 +3004,7 @@ class LiveTranscription
         execute_number_command_count = 0;
         window_actions_count = 0;
         brightness_command_count = 0;
+        bookmark_command_count = 0;
 
         switch_command_count = 0;
         left_command_count = 0;

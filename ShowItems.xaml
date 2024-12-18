@@ -70,5 +70,14 @@
          Canvas.Top="90" 
          Width="200"
          Visibility="Collapsed"/>
+
+        <ListBox x:Name="BookmarkList"
+        Foreground="#031926" 
+        Background="#f4e9cd"
+        FontSize="14"
+        Canvas.Top="90" 
+        Width="300"
+        Height="500"
+        Visibility="Collapsed"/>       
     </Canvas>
 </Window>

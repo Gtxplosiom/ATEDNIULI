@@ -465,6 +465,9 @@
     <Resource Include="assets\icons\chrome_icon.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Resource>
+    <Resource Include="assets\bookmarks.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Resource>
     <Content Include="assets\models\please_work\pleasework.py" />
     <Resource Include="assets\preview.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
