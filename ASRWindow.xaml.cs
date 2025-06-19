@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 
@@ -17,6 +18,9 @@ namespace ATEDNIULI
         private IntentWindow intent_window;
         private ShowItems show_items;
         private CameraMouse camera_mouse;
+        private HelpWindow help_window;
+        private SettingsWindow settings_window;
+        private UserGuide user_guide;
 
         public ASRWindow(MainWindow mainWindow)
         {
@@ -25,14 +29,18 @@ namespace ATEDNIULI
             camera_mouse = new CameraMouse();
             show_items = new ShowItems();
             intent_window = new IntentWindow(mainWindow);
+            help_window = new HelpWindow();
+            settings_window = new SettingsWindow();
+            user_guide = new UserGuide();
 
-            live_transcription = new LiveTranscription(this, intent_window, mainWindow, show_items, camera_mouse);
+            live_transcription = new LiveTranscription(this, intent_window, mainWindow, user_guide, show_items, camera_mouse, help_window, settings_window);
             background_worker = new BackgroundWorker();
             background_worker.DoWork += BackgroundWorker_DoWork;
             background_worker.RunWorkerCompleted += BackgroundWorker_RunWorkerCompleted;
             background_worker.WorkerSupportsCancellation = true;
             Loaded += ASRWindow_Loaded;
             Topmost = true;
+            Focusable = false;
             main_window = mainWindow;
 
             Dispatcher.UnhandledException += (sender, e) =>
@@ -41,17 +49,31 @@ namespace ATEDNIULI
             };
         }
 
-        private bool allowTextUpdates = false;
+        // Override OnActivated to prevent window from getting focus
+        protected override void OnActivated(EventArgs e)
+        {
+            base.OnActivated(e);
+
+            // Force window to lose focus if activated
+            var focusedElement = FocusManager.GetFocusedElement(this);
+            if (focusedElement != null)
+            {
+                Keyboard.ClearFocus();  // Clears focus from any element inside ASRWindow
+            }
+        }
 
         // Fade in the window
+        private bool isAnimating = false;
+
         public void ShowWithFadeIn(bool isTyping)
         {
-            allowTextUpdates = false;
+            if (isAnimating || this.IsVisible) return; // Prevent retriggering
+
+            isAnimating = true;
 
             if (isTyping)
             {
                 this.Height = 100;
-                // Optionally adjust Top if Height changes
                 SetInitialPosition();
             }
             else
@@ -59,32 +81,35 @@ namespace ATEDNIULI
                 SetInitialPosition();
             }
 
-            this.Opacity = 0; // Start fully transparent  
-
+            this.Opacity = 0;
             this.Show();
 
             var fadeInAnimation = new DoubleAnimation
             {
                 From = 0,
                 To = 1,
-                Duration = new Duration(TimeSpan.FromMilliseconds(150)), // Increased duration for smoother fade
+                Duration = new Duration(TimeSpan.FromMilliseconds(150)),
                 FillBehavior = FillBehavior.HoldEnd
             };
 
             fadeInAnimation.Completed += (s, e) =>
             {
+                isAnimating = false;
                 StartBeatingAnimation();
-                allowTextUpdates = true;
+                AnimateWindowGrowth(300); // Start growth animation after fade-in
+                Focusable = false;
+                ShowActivated = false;
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeInAnimation);
-
-            AnimateWindowGrowth(300);
         }
 
         public void HideWithFadeOut()
         {
-            // Stop any ongoing animations to prevent conflicts
+            if (isAnimating || !this.IsVisible) return; // Prevent retriggering
+
+            isAnimating = true;
+
             BeginAnimation(WidthProperty, null);
             BeginAnimation(LeftProperty, null);
             BeginAnimation(Window.OpacityProperty, null);
@@ -95,19 +120,16 @@ namespace ATEDNIULI
             {
                 From = 1,
                 To = 0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(200)), // Increased duration for smoother fade
+                Duration = new Duration(TimeSpan.FromMilliseconds(200)), // Smooth fade
                 FillBehavior = FillBehavior.HoldEnd
             };
 
             fadeOutAnimation.Completed += (s, e) =>
             {
-                this.Hide(); // Hide the window after fade-out
+                isAnimating = false;
+                this.Hide(); // Hide window after fade-out
                 StopBeatingAnimation();
-                allowTextUpdates = false;
                 OutputTextBox.Text = "";
-
-                // Optionally reset Width to initial value if necessary
-                // this.Width = initialWidth; // Define initialWidth as a class member
             };
 
             this.BeginAnimation(Window.OpacityProperty, fadeOutAnimation);
@@ -217,6 +239,9 @@ namespace ATEDNIULI
                 Left = Math.Round(main_window_right_x - Width - 25); // Adjust 35 as needed
                 Top = Math.Round(main_window_bottom_y - Height);
             }
+
+            Focusable = false;
+            ShowActivated = false;
         }
 
         // Optionally, separate AdjustWindow to only adjust Top if necessary
@@ -271,24 +296,17 @@ namespace ATEDNIULI
 
         public void AppendText(string text, bool is_partial = false)
         {
-            if (!allowTextUpdates)
+            if (is_partial)
             {
-                return; // Prevent text updates if animations are in progress
+                // Clear previous partial transcription
+                OutputTextBox.Text = text;
             }
             else
             {
-                if (is_partial)
-                {
-                    // Clear previous partial transcription
-                    OutputTextBox.Text = text;
-                }
-                else
-                {
-                    // Append final transcription
-                    OutputTextBox.AppendText(text + "\n");
-                }
-                OutputTextBox.ScrollToEnd();
+                // Append final transcription
+                OutputTextBox.AppendText(text + "\n");
             }
+            OutputTextBox.ScrollToEnd();
         }
 
         private void StopButton_Click(object sender, RoutedEventArgs e)

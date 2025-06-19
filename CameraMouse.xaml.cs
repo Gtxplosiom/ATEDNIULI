@@ -13,6 +13,8 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Windows.Controls;
+using System.Drawing;
+using System.Linq;
 
 namespace ATEDNIULI
 {
@@ -104,7 +106,7 @@ namespace ATEDNIULI
         private int webcamHeight = 480;
 
         // precision mode stuff
-        private static int initialPrecisionRadius = 100; // Initial size of the precision area
+        private static int initialPrecisionRadius = 150; // Initial size of the precision area
         private static int reducedPrecisionRadius = 50; // Reduced size of the precision area
         private double precisionFactor = 1.0;
         private static DateTime precisionStartTime;
@@ -124,6 +126,63 @@ namespace ATEDNIULI
         private double originalTop;
 
         private BitmapSource ConvertMat;
+
+        public static class MouseSimulator
+        {
+            public static void LeftClick()
+            {
+                MouseEvent(MouseEventFlags.LeftDown | MouseEventFlags.LeftUp);
+            }
+
+            public static void RightClick()
+            {
+                MouseEvent(MouseEventFlags.RightDown | MouseEventFlags.RightUp);
+            }
+
+            public static void DoubleClick()
+            {
+                LeftClick();
+                Thread.Sleep(100); // Short delay between clicks
+                LeftClick();
+            }
+
+            public static void HoldLeftClick()
+            {
+                MouseEvent(MouseEventFlags.LeftDown); // Press down the left mouse button
+            }
+
+            public static void ReleaseLeftClick()
+            {
+                MouseEvent(MouseEventFlags.LeftUp); // Release the left mouse button
+            }
+
+            public static void ScrollLock()
+            {
+                MouseEvent(MouseEventFlags.MiddleDown);
+                MouseEvent(MouseEventFlags.MiddleUp);
+            }
+
+            private static void MouseEvent(MouseEventFlags value)
+            {
+                mouse_event((int)value, 0, 0, 0, 0);
+            }
+
+            [DllImport("user32.dll")]
+            private static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo);
+
+            [Flags]
+            private enum MouseEventFlags
+            {
+                LeftDown = 0x02,
+                LeftUp = 0x04,
+                RightDown = 0x08,
+                RightUp = 0x10,
+                MiddleDown = 0x20,  // Simulates pressing the scroll wheel
+                MiddleUp = 0x40,    // Simulates releasing the scroll wheel
+                Wheel = 0x0800,     // Vertical scrolling
+                HWheel = 0x01000    // Horizontal scrolling
+            }
+        }
 
         private void PositionWindow()
         {
@@ -172,26 +231,30 @@ namespace ATEDNIULI
         {
             isRunning = true;
 
+            InitializeKalmanFilter();
+
+            baselineHorizontalDistance = 0;
+            baselineVerticalDistance = 0;
+            isDefaultMouthSet = false;
+
             cameraThread = new Thread(CameraLoop);
             cameraThread.IsBackground = true;
             cameraThread.Start();
-
-            mouseThread = new Thread(MouseMovementLoop);
-            mouseThread.IsBackground = true;
-            mouseThread.Start();
         }
 
         public void StopCameraMouse()
         {
             isRunning = false;
 
+            baselineHorizontalDistance = 0;
+            baselineVerticalDistance = 0;
+            isDefaultMouthSet = false;
+
             // Signal threads to stop and wait for them to finish
             cameraThread?.Join(500); // Give threads a maximum of 500ms to finish gracefully
             mouseThread?.Join(500);
 
             Cv2.DestroyAllWindows();
-            capture?.Release();
-            capture = null;
 
             ClosePreview();
         }
@@ -214,122 +277,187 @@ namespace ATEDNIULI
         private Point previousNosePosition = new Point(0, 0);
         private bool isFirstFrame = true; // To handle the very first frame where there's no previous data
 
+        private DlibDotNet.Rectangle? previousFaceRect = null;  // Track the previous face's bounding box
+
         private void CameraLoop()
         {
-            using (var detector = Dlib.GetFrontalFaceDetector())
-            using (var predictor = ShapePredictor.Deserialize("assets/models/shape_predictor_68_face_landmarks.dat"))
+            try
             {
-                capture = IsCameraAvailable(1) ? new VideoCapture(1) : new VideoCapture(0);
-
-                if (!capture.IsOpened())
+                using (var detector = Dlib.GetFrontalFaceDetector())
+                using (var predictor = ShapePredictor.Deserialize("assets/models/shape_predictor_68_face_landmarks.dat"))
                 {
-                    Console.WriteLine("Error: Could not open webcam.");
-                    return;
-                }
+                    capture = IsCameraAvailable(1) ? new VideoCapture(1) : new VideoCapture(0);
 
-                int screenWidth = GetSystemMetrics(0);
-                int screenHeight = GetSystemMetrics(1);
+                    if (!capture.IsOpened())
+                    {
+                        Console.WriteLine("Error: Could not open webcam.");
+                        return;
+                    }
 
-                double roiPercentage = 0.05;
-                int roiWidth = (int)(webcamWidth * roiPercentage);
-                int roiHeight = (int)(webcamHeight * roiPercentage);
+                    int screenWidth = GetSystemMetrics(0);
+                    int screenHeight = GetSystemMetrics(1);
 
-                // Set initial ROI position
-                int roiX = (webcamWidth - roiWidth) / 2;
-                int roiY = (webcamHeight - roiHeight) / 2;
+                    double roiPercentage = 0.05;
+                    int roiWidth = (int)(webcamWidth * roiPercentage);
+                    int roiHeight = (int)(webcamHeight * roiPercentage);
+                    int roiX = (webcamWidth - roiWidth) / 2;
+                    int roiY = (webcamHeight - roiHeight) / 2;
+                    double scalingFactorX = screenWidth / (double)roiWidth;
+                    double scalingFactorY = screenHeight / (double)roiHeight;
 
-                double scalingFactorX = screenWidth / (double)roiWidth;
-                double scalingFactorY = screenHeight / (double)roiHeight;
-
-                var frame = new Mat();
-                var gray = new Mat();
-                var landmarksList = new List<Point>();
-
-                try
-                {
-                    Task.Run(() => PrecisionMode());
+                    int retryCount = 0;
 
                     while (isRunning)
                     {
-                        // Read the frame
-                        capture.Read(frame);
-
-                        if (frame.Empty())
+                        using (var frame = new Mat())
+                        using (var gray = new Mat())
                         {
-                            Console.WriteLine("Error: Failed to grab frame.");
-                            break;
-                        }
-
-                        // Resize and flip the frame
-                        Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
-                        Cv2.Flip(frame, frame, FlipMode.Y);
-
-                        // Convert to grayscale
-                        Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
-
-                        try
-                        {
-                            // Perform face detection on every frame
-                            using (var dlibImage = Dlib.LoadImageData<byte>(gray.Data, (uint)gray.Width, (uint)gray.Height, (uint)gray.Width))
+                            try
                             {
-                                DlibDotNet.Rectangle[] faces = detector.Operator(dlibImage);
+                                capture.Read(frame);
 
-                                foreach (var face in faces)
+                                if (frame.Empty())
                                 {
-                                    try
+                                    Console.WriteLine("Warning: Failed to grab frame.");
+                                    if (retryCount++ > 5) break;
+                                    continue;
+                                }
+                                retryCount = 0;
+
+                                Cv2.Resize(frame, frame, new OpenCvSharp.Size(webcamWidth, webcamHeight));
+                                Cv2.Flip(frame, frame, FlipMode.Y);
+                                Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
+
+                                if (gray.Empty() || gray.Data == IntPtr.Zero)
+                                {
+                                    Console.WriteLine("Error: Invalid grayscale data.");
+                                    continue;
+                                }
+
+                                byte[] imageData = new byte[gray.Rows * gray.Cols];
+                                Marshal.Copy(gray.Data, imageData, 0, imageData.Length);
+
+                                // Debugging: Check the image data dimensions and steps
+                                uint steps = (uint)gray.Step();
+                                uint rows = (uint)gray.Rows;
+                                uint columns = (uint)gray.Cols;
+
+                                Console.WriteLine($"Rows: {rows}, Columns: {columns}, Steps: {steps}");
+
+                                using (var dlibImage = Dlib.LoadImageData<byte>(imageData, rows, columns, steps))
+                                {
+                                    var faces = detector.Operator(dlibImage);
+
+                                    if (faces.Any())
                                     {
-                                        var landmarks = predictor.Detect(dlibImage, face);
-                                        landmarksList.Clear();  // Clear previous landmarks to reuse list
-                                        for (int i = 0; i < (int)landmarks.Parts; i++)
+                                        var face = faces[0]; // Only process the first face
+
+                                        // Check if the current face is similar to the previous one
+                                        if (previousFaceRect.HasValue)
                                         {
-                                            landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
+                                            var distance = Math.Sqrt(Math.Pow(face.Left - previousFaceRect.Value.Left, 2) +
+                                                                     Math.Pow(face.Top - previousFaceRect.Value.Top, 2));
+
+                                            // Define a threshold for how much movement is allowed before switching faces
+                                            if (distance < 30)  // You can adjust this threshold value
+                                            {
+                                                // It's the same face or very close
+                                                try
+                                                {
+                                                    var landmarks = predictor.Detect(dlibImage, face);
+
+                                                    var landmarksList = new List<Point>();
+
+                                                    for (int i = 0; i < (int)landmarks.Parts; i++)
+                                                    {
+                                                        landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
+                                                    }
+
+                                                    ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                                                }
+                                                catch (Exception landmarkEx)
+                                                {
+                                                    Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
+                                                }
+                                            }
+                                            else
+                                            {
+                                                Console.WriteLine("Face moved too far. Ignoring this frame.");
+                                            }
+                                        }
+                                        else
+                                        {
+                                            // If no previous face, process the current one
+                                            try
+                                            {
+                                                var landmarks = predictor.Detect(dlibImage, face);
+
+                                                var landmarksList = new List<Point>();
+
+                                                for (int i = 0; i < (int)landmarks.Parts; i++)
+                                                {
+                                                    landmarksList.Add(new Point(landmarks.GetPart((uint)i).X, landmarks.GetPart((uint)i).Y));
+                                                }
+
+                                                ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                                            }
+                                            catch (Exception landmarkEx)
+                                            {
+                                                Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
+                                            }
                                         }
 
-                                        // Draw landmarks and process the nose position
-                                        ProcessLandmarks(frame, landmarksList, ref roiX, ref roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
+                                        // Update the previous face's rectangle position
+                                        previousFaceRect = face;
                                     }
-                                    catch (Exception landmarkEx)
+                                    else
                                     {
-                                        Console.WriteLine($"Error processing landmarks: {landmarkEx.Message}");
+                                        Console.WriteLine("No face detected.");
+                                        previousFaceRect = null;  // Reset previous face if no face is detected
                                     }
+                                }
+
+                                // Ensure the frame is valid before updating the UI
+                                if (frame != null && !frame.Empty())
+                                {
+                                    Dispatcher.Invoke(new Action(() =>
+                                    {
+                                        if (this.Visibility == Visibility.Collapsed)
+                                        {
+                                            this.Visibility = Visibility.Visible;
+                                        }
+
+                                        try
+                                        {
+                                            CameraImageSource = ConvertMatToBitmapSource(frame);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Console.WriteLine($"Error converting frame to BitmapSource: {ex.Message}");
+                                        }
+                                    }));
                                 }
                             }
-
-                            // Update UI on the main thread without delay
-                            Dispatcher.BeginInvoke(new Action(() =>
+                            catch (Exception loopEx)
                             {
-                                if (this.Visibility == Visibility.Collapsed)
-                                {
-                                    this.Visibility = Visibility.Visible;
-                                }
-
-                                CameraImageSource = ConvertMatToBitmapSource(frame);
-                            }));
-
-                        }
-                        catch (Exception dlibEx)
-                        {
-                            Console.WriteLine($"Error loading Dlib image: {dlibEx.Message}");
-                        }
-
-                        // Exit if 'ESC' is pressed
-                        if (Cv2.WaitKey(1) == 27)
-                        {
-                            break;
+                                Console.WriteLine($"Error during frame processing: {loopEx.Message}");
+                            }
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error in CameraLoop: {ex.Message}");
-                }
-                finally
-                {
-                    // Ensure the capture is released when done
-                    capture?.Release();
-                    frame?.Dispose();
-                    gray?.Dispose();
-                }
+            }
+            catch (AccessViolationException avEx)
+            {
+                Console.WriteLine($"Memory access violation error: {avEx.Message}");
+                // Log or handle the memory access violation specifically
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Fatal error in CameraLoop: {ex.Message}");
+            }
+            finally
+            {
+                capture?.Release();
             }
         }
 
@@ -356,140 +484,293 @@ namespace ATEDNIULI
             });
         }
 
-        private void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
+        private double baselineHorizontalDistance = 0;
+        private double baselineVerticalDistance = 0;
+        private bool isDefaultMouthSet = false; // Flag to track if the neutral expression is captured
+        private Point currentMousePosition = new Point(0, 0);
+
+        private double mouthToHeadRatio = 0;
+
+        private bool IsUserSmiling(List<Point> landmarksList, Mat frame)
         {
-            // Step 1: Define key landmarks
-            var targetNosePoint = landmarksList[30];
-            var leftBrowPoint = landmarksList[19];
-            var rightBrowPoint = landmarksList[24];
-            var leftUpperEyelidPoint = landmarksList[37];
-            var rightUpperEyelidPoint = landmarksList[44];
+            // Define a base smile threshold in pixel-based measurements
+            double smileThreshold = 0.43; // Base value, adjustable
 
-            // Step 2: Check for first frame
-            if (isFirstFrame)
+            if (landmarksList == null || landmarksList.Count < 68)
             {
-                previousNosePosition = targetNosePoint;
-                isFirstFrame = false;
+                Console.WriteLine("Invalid landmarks detected.");
+                return false; // Ensure landmarks are valid
             }
 
-            int steps = 10;
-            double smoothingFactor = 0.5;
+            // Smooth key mouth landmarks
+            var leftMouthCorner = landmarksList[48];
+            var rightMouthCorner = landmarksList[54];
+            var topLip = landmarksList[51];
+            var bottomLip = landmarksList[57];
 
-            // Step 3: Process smoothing for nose movement
-            for (int i = 0; i <= steps; i++)
+            // Smooth face side landmarks
+            var leftFace = landmarksList[0];
+            var rightFace = landmarksList[16];
+
+            // Head size (distance between left and right side of the face)
+            double headWidth = Math.Sqrt(Math.Pow(rightFace.X - leftFace.X, 2) +
+                                         Math.Pow(rightFace.Y - leftFace.Y, 2));
+
+            Console.WriteLine($"Head width: {headWidth}");
+
+            // Apply a minimum threshold for head width to avoid extremely small values
+            if (headWidth < 10.0) // Threshold is 10 pixels
             {
-                int smoothedNoseX = (int)(previousNosePosition.X + (targetNosePoint.X - previousNosePosition.X) * (i / (double)steps) * (1 - smoothingFactor));
-                int smoothedNoseY = (int)(previousNosePosition.Y + (targetNosePoint.Y - previousNosePosition.Y) * (i / (double)steps) * (1 - smoothingFactor));
-
-                var smoothedNosePoint = new Point(smoothedNoseX, smoothedNoseY);
-                Cv2.Circle(frame, new OpenCvSharp.Point(smoothedNosePoint.X, smoothedNosePoint.Y), 4, Scalar.Red, -1);
-
-                UpdateRoi(smoothedNosePoint, ref roiX, ref roiY, roiWidth, roiHeight);
-                UpdateTargetPosition(smoothedNosePoint, roiX, roiY, roiWidth, roiHeight, scalingFactorX, scalingFactorY);
-
-                previousNosePosition = smoothedNosePoint;
+                Console.WriteLine("Head width too small, skipping frame.");
+                return false; // Prevents NaN or invalid results
             }
 
-            // Step 4: Detect if brows are raised
-            // Calculate distances between the brow and the upper eyelid for both left and right sides
-            double leftBrowToEyelidDist = Math.Abs(leftBrowPoint.Y - leftUpperEyelidPoint.Y);
-            double rightBrowToEyelidDist = Math.Abs(rightBrowPoint.Y - rightUpperEyelidPoint.Y);
+            // Calculate mouth dimensions in pixels
+            double mouthWidth = Math.Sqrt(Math.Pow(rightMouthCorner.X - leftMouthCorner.X, 2) +
+                                          Math.Pow(rightMouthCorner.Y - leftMouthCorner.Y, 2));
+            double mouthHeight = Math.Sqrt(Math.Pow(topLip.X - bottomLip.X, 2) +
+                                           Math.Pow(topLip.Y - bottomLip.Y, 2));
 
-            // Define a threshold for determining if the brow is raised (you can tweak this value based on your tests)
-            double browRaiseThreshold = 35.0;
-
-            bool isLeftBrowRaised = leftBrowToEyelidDist > browRaiseThreshold;
-            bool isRightBrowRaised = rightBrowToEyelidDist > browRaiseThreshold;
-
-            // Step 5: Draw rectangles or markers to visualize the brow status
-            Cv2.Rectangle(frame, new OpenCvSharp.Rect(roiX, roiY, roiWidth, roiHeight), Scalar.Red, 2);
-
-            Cv2.Circle(frame, new OpenCvSharp.Point(leftBrowPoint.X, leftBrowPoint.Y), 3, Scalar.Blue, -1); // Left Brow Point
-            Cv2.Circle(frame, new OpenCvSharp.Point(rightBrowPoint.X, rightBrowPoint.Y), 3, Scalar.Blue, -1); // Right Brow Point
-            Cv2.Circle(frame, new OpenCvSharp.Point(leftUpperEyelidPoint.X, leftUpperEyelidPoint.Y), 3, Scalar.Green, -1); // Left Upper Eyelid Point
-            Cv2.Circle(frame, new OpenCvSharp.Point(rightUpperEyelidPoint.X, rightUpperEyelidPoint.Y), 3, Scalar.Green, -1); // Right Upper Eyelid Point
-
-            // Optionally, you can draw lines to better visualize the connections
-            Cv2.Line(frame, new OpenCvSharp.Point(leftBrowPoint.X, leftBrowPoint.Y), new OpenCvSharp.Point(leftUpperEyelidPoint.X, leftUpperEyelidPoint.Y), Scalar.White, 1); // Left side connection
-            Cv2.Line(frame, new OpenCvSharp.Point(rightBrowPoint.X, rightBrowPoint.Y), new OpenCvSharp.Point(rightUpperEyelidPoint.X, rightUpperEyelidPoint.Y), Scalar.White, 1); // Right side connection
-
-            // Step 6: Display if the brows are raised
-            if (isLeftBrowRaised)
+            // Apply a minimum threshold for mouth height to avoid division by zero or very small values
+            if (mouthHeight < 5.0) // Minimum value for mouth height in pixels
             {
-                Cv2.PutText(frame, "Left Brow Raised", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
+                Console.WriteLine("Mouth height too small, skipping frame.");
+                return false; // Prevents NaN or invalid results
             }
 
-            if (isRightBrowRaised)
+            // Calculate the mouth-to-head width ratio (using pixel dimensions)
+            mouthToHeadRatio = mouthWidth / headWidth;
+
+            // Visualize metrics on the frame
+            Cv2.PutText(frame, $"Ratio: {mouthToHeadRatio:F2}", new OpenCvSharp.Point(10, 30), HersheyFonts.HersheySimplex, 0.6, Scalar.White, 2);
+
+            // Check if the mouth-to-head ratio is greater than the smile threshold
+            if (mouthToHeadRatio > smileThreshold)
             {
-                Cv2.PutText(frame, "Right Brow Raised", new OpenCvSharp.Point(10, 60), HersheyFonts.HersheySimplex, 1, Scalar.Green, 2);
+                Console.WriteLine($"Smile Detected!{smileThreshold}:{mouthToHeadRatio}");
+                return true; // Smile detected
             }
 
-            if (isLeftBrowRaised || isRightBrowRaised)
+            Console.WriteLine($"No Smile Detected...{smileThreshold}:{mouthToHeadRatio}");
+            return false; // No smile detected
+        }
+
+        public string action = "none";
+        private bool isHolding = false;
+
+        private DateTime? smileStartTime = null; // Nullable DateTime to track when the smile started
+        private TimeSpan smileDuration = TimeSpan.Zero;
+
+        public void UpdateAction(string newAction)
+        {
+            lock (_lock) // Ensure that only one thread can modify the action at a time
             {
-                //mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-            }
-            else
-            {
-                //mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                action = newAction;
             }
         }
 
-
-        private void UpdateRoi(Point smoothedNosePoint, ref int roiX, ref int roiY, int roiWidth, int roiHeight)
+        public string GetAction()
         {
-            int edgeThreshold = 0;
-
-            if (smoothedNosePoint.X < roiX + edgeThreshold)
+            lock (_lock) // Ensure that the action is not changed while we're reading it
             {
-                roiX = Clamp(roiX - (roiX + edgeThreshold - smoothedNosePoint.X), 0, webcamWidth - roiWidth);
-            }
-            else if (smoothedNosePoint.X > roiX + roiWidth - edgeThreshold)
-            {
-                roiX = Clamp(roiX + (smoothedNosePoint.X - (roiX + roiWidth - edgeThreshold)), 0, webcamWidth - roiWidth);
-            }
-
-            if (smoothedNosePoint.Y < roiY + edgeThreshold)
-            {
-                roiY = Clamp(roiY - (roiY + edgeThreshold - smoothedNosePoint.Y), 0, webcamHeight - roiHeight);
-            }
-            else if (smoothedNosePoint.Y > roiY + roiHeight - edgeThreshold)
-            {
-                roiY = Clamp(roiY + (smoothedNosePoint.Y - (roiY + roiHeight - edgeThreshold)), 0, webcamHeight - roiHeight);
+                return action;
             }
         }
 
-        private void UpdateTargetPosition(Point smoothedNosePoint, int roiX, int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
+        private readonly object _lock = new object();
+
+        public double lastDirectionX = 0;
+        public double lastDirectionY = 0;
+
+        public double lastSpeed = 0;
+
+        public bool mouse_steady = true;
+        public int mouse_speed_multiplier = 0;
+        public void ProcessLandmarks(Mat frame, List<Point> landmarksList, ref int roiX, ref int roiY, int roiWidth, int roiHeight, double scalingFactorX, double scalingFactorY)
         {
-            if (smoothedNosePoint.X >= roiX && smoothedNosePoint.X <= roiX + roiWidth &&
-                smoothedNosePoint.Y >= roiY && smoothedNosePoint.Y <= roiY + roiHeight)
+            var screenWidth = (int)SystemParameters.PrimaryScreenWidth;
+            var screenHeight = (int)SystemParameters.PrimaryScreenHeight;
+
+            // Step 1: Define key landmarks (using the face edge points)
+            var chinPoint = landmarksList[8];   // Chin
+            var leftCheekPoint = landmarksList[0];  // Left edge of the face
+            var rightCheekPoint = landmarksList[16]; // Right edge of the face
+
+            var leftMouthCorner = landmarksList[48];
+            var rightMouthCorner = landmarksList[54];
+            var topLip = landmarksList[51];
+            var bottomLip = landmarksList[57];
+            var nosePoint = landmarksList[30]; // Nose point
+
+            // Step 2: Calculate the ROI center based on the face landmarks
+            roiX = (chinPoint.X + leftCheekPoint.X + rightCheekPoint.X) / 3;
+            roiY = (chinPoint.Y + leftCheekPoint.Y + rightCheekPoint.Y) / 3;
+
+            // Inner and Outer Circle Radii
+            int innerCircleRadius = 15; // Neutral area
+            int outerCircleRadius = 50; // Max movement area
+
+            // Step 3: Calculate the distance from the nose to the ROI center
+            double distanceFromCenter = Math.Sqrt(Math.Pow(nosePoint.X - roiX, 2) + Math.Pow(nosePoint.Y - roiY, 2));
+
+            // Draw the mouth region on the original frame
+            Cv2.Circle(frame, new OpenCvSharp.Point(leftMouthCorner.X, leftMouthCorner.Y), 3, Scalar.Cyan, -1);  // Left corner
+            Cv2.Circle(frame, new OpenCvSharp.Point(rightMouthCorner.X, rightMouthCorner.Y), 3, Scalar.Cyan, -1); // Right corner
+            Cv2.Circle(frame, new OpenCvSharp.Point(topLip.X, topLip.Y), 3, Scalar.Green, -1);  // Top lip
+            Cv2.Circle(frame, new OpenCvSharp.Point(bottomLip.X, bottomLip.Y), 3, Scalar.Green, -1);  // Bottom lip
+
+            // circles
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2); // Outer circle
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2); // Inner circle
+
+            // nose point
+            Cv2.Circle(frame, new OpenCvSharp.Point(nosePoint.X, nosePoint.Y), 5, Scalar.Red, -1); // Nose point
+
+            // Step 4: Handle actions based on the distance from the center
+            if (distanceFromCenter <= innerCircleRadius)
             {
-                lock (positionLock)
+                mouse_steady = true;
+
+                if (IsUserSmiling(landmarksList, frame))
                 {
-                    targetPosition = new TargetPosition(
-                        (int)((smoothedNosePoint.X - roiX) * scalingFactorX),
-                        (int)((smoothedNosePoint.Y - roiY) * scalingFactorY)
-                    );
+                    if (smileStartTime == null)
+                    {
+                        smileStartTime = DateTime.Now;
+                    }
+
+                    smileDuration = DateTime.Now - smileStartTime.Value;
+
+                    Cv2.PutText(frame, $"Smile Detected: {smileDuration.Seconds}s", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Green, 2);
+
+                    if (smileDuration.TotalSeconds >= 1 && smileDuration.TotalSeconds < 2)
+                    {
+                        Cv2.PutText(frame, "Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        UpdateAction("Click");
+                    }
+                    else if (smileDuration.TotalSeconds >= 2 && smileDuration.TotalSeconds < 3)
+                    {
+                        Cv2.PutText(frame, "Double Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        UpdateAction("Double Click");
+                    }
+                    else if (smileDuration.TotalSeconds >= 3 && smileDuration.TotalSeconds < 4)
+                    {
+                        Cv2.PutText(frame, "Right Click", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        UpdateAction("Right Click");
+                    }
+                    else if (smileDuration.TotalSeconds >= 4 && smileDuration.TotalSeconds < 5)
+                    {
+                        Cv2.PutText(frame, "Hold", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        UpdateAction("Hold");
+                    }
+                    else if (smileDuration.TotalSeconds >= 5 && smileDuration.TotalSeconds < 6)
+                    {
+                        Cv2.PutText(frame, "Scroll Lock", new OpenCvSharp.Point(roiX - 20, roiY - 40), HersheyFonts.HersheySimplex, 0.5, Scalar.Yellow, 2);
+                        UpdateAction("Scroll Lock");
+                    }
+                    else if (smileDuration.TotalSeconds >= 6)
+                    {
+                        smileStartTime = null; // Reset
+                        smileDuration = TimeSpan.Zero;
+                    }
+                    else if (smileDuration.TotalSeconds < 1)
+                    {
+                        UpdateAction("none");
+                    }
+
+                    return;
+                }
+                else
+                {
+                    smileStartTime = null; // Reset
+                    smileDuration = TimeSpan.Zero;
+
+                    lastSpeed = 0;
+
+                    if (action == "none")
+                    {
+
+                    }
+                    else if (action == "Click")
+                    {
+                        MouseSimulator.LeftClick();
+                    }
+                    else if (action == "Double Click")
+                    {
+                        MouseSimulator.DoubleClick();
+                    }
+                    else if (action == "Right Click")
+                    {
+                        MouseSimulator.RightClick();
+                    }
+                    else if (action == "Hold")
+                    {
+                        MouseSimulator.HoldLeftClick();
+                    }
+                    else if (action == "Scroll Lock")
+                    {
+                        MouseSimulator.ScrollLock();
+                    }
+
+                    Cv2.PutText(frame, "No Smile", new OpenCvSharp.Point(roiX - 20, roiY - 20), HersheyFonts.HersheySimplex, 0.5, Scalar.Red, 2);
+
+                    UpdateAction("none");
+
+                    return;
                 }
             }
-        }
 
-        private void MouseMovementLoop()
-        {
-            while (isRunning)
+            // Step 5: Calculate movement based on nose position
+            double moveX = nosePoint.X - roiX; // X direction of the nose from the center
+            double moveY = nosePoint.Y - roiY; // Y direction of the nose from the center
+
+            // Normalize the direction vector
+            double magnitude = Math.Sqrt(moveX * moveX + moveY * moveY);
+            if (magnitude > 0)
             {
-                // Get the current target position
-                TargetPosition currentTargetPosition;
-                lock (positionLock) // Lock access to targetPosition
-                {
-                    currentTargetPosition = targetPosition;
-                }
-                SmoothMoveTo(currentTargetPosition.X, currentTargetPosition.Y);
-                Thread.Sleep(50); // Adjust the delay to manage the mouse movement frequency
+                moveX /= magnitude;
+                moveY /= magnitude;
             }
+
+            lastDirectionX = moveX;
+            lastDirectionY = moveY;
+
+            // Scale movement based on distance
+            double distanceToInnerCircleEdge = distanceFromCenter - innerCircleRadius;
+            double speed = Math.Min(distanceToInnerCircleEdge, 25); // Cap speed
+
+            lastSpeed = speed;
+
+            double incrementX = moveX * speed * mouse_speed_multiplier;
+            double incrementY = moveY * speed * mouse_speed_multiplier;
+
+            // Update mouse position
+            currentMousePosition.X += (int)incrementX;
+            currentMousePosition.Y += (int)incrementY;
+
+            // Clamp to screen boundaries
+            currentMousePosition.X = Clamp(currentMousePosition.X, 0, screenWidth);
+            currentMousePosition.Y = Clamp(currentMousePosition.Y, 0, screenHeight);
+
+            // Move cursor
+            Task.Run(() => SmoothMoveTo(currentMousePosition.X, currentMousePosition.Y));
+
+            mouse_steady = false;
+
+            // Visualization
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), outerCircleRadius, Scalar.Blue, 2);
+            Cv2.Circle(frame, new OpenCvSharp.Point(roiX, roiY), innerCircleRadius, Scalar.Green, 2);
+            Cv2.Circle(frame, new OpenCvSharp.Point(nosePoint.X, nosePoint.Y), 5, Scalar.Red, -1);
+            Cv2.Line(frame, new OpenCvSharp.Point(roiX, roiY), new OpenCvSharp.Point(nosePoint.X, nosePoint.Y), Scalar.Yellow, 2);
         }
 
         private void SmoothMoveTo(int targetX, int targetY, int duration = 100, int steps = 10)
         {
+            // Null check for Kalman filters
+            if (kalmanFilterX == null || kalmanFilterY == null)
+            {
+                throw new InvalidOperationException("Kalman filter not initialized. Call InitializeKalmanFilter first.");
+            }
+
             GetCursorPos(out Point currentPos);
             int startX = currentPos.X;
             int startY = currentPos.Y;
@@ -501,37 +782,108 @@ namespace ATEDNIULI
 
             for (int i = 0; i <= steps; i++)
             {
-                int newX = 0;
-                int newY = 0;
+                // Prediction step for Kalman filter (using last known state)
+                Mat predictedX = kalmanFilterX.Predict();
+                Mat predictedY = kalmanFilterY.Predict();
 
-                // Start transitioning to precision mode if necessary
-                if (preparingPrecision == true)
-                {
-                    // Only set transition time once when transitioning begins
-                    if (transitionPrecision == default)
-                    {
-                        transitionPrecision = DateTime.Now; // Set when transitioning begins
-                    }
+                // Correct the prediction with the actual target position (the measurement)
+                Mat measurementX = new Mat(2, 1, MatType.CV_32F);
+                measurementX.Set<float>(0, targetX);
+                measurementX.Set<float>(1, 0); // Assuming you want to ignore the second measurement
 
-                    double elapsedTime = (DateTime.Now - transitionPrecision).TotalMilliseconds;
+                Mat measurementY = new Mat(2, 1, MatType.CV_32F);
+                measurementY.Set<float>(0, targetY);
+                measurementY.Set<float>(1, 0); // Assuming you want to ignore the second measurement
 
-                    if (elapsedTime <= 1500)
-                    {
-                        precisionFactor = 1.0 - (0.95 * (elapsedTime / 1500.0)); // Linear transition
-                    }
-                    else
-                    {
-                        precisionFactor = 0.1; // Cap at 10% after 2 seconds
-                    }
-                }
+                kalmanFilterX.Correct(measurementX);
+                kalmanFilterY.Correct(measurementY);
 
-                // Calculate smoothed movement
-                newX = (int)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-                newY = (int)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
-                SetCursorPos(newX, newY);
+                // Get smoothed position
+                float smoothedX = kalmanFilterX.StatePost.Get<float>(0);
+                float smoothedY = kalmanFilterY.StatePost.Get<float>(0);
+
+                // PRECISION MODE
+                //// If transitioning to precision mode, adjust precisionFactor
+                //if (preparingPrecision == true)
+                //{
+                //    // Only set transition time once when transitioning begins
+                //    if (transitionPrecision == null)
+                //    {
+                //        transitionPrecision = DateTime.Now; // Set when transitioning begins
+                //    }
+
+                //    double elapsedTime = (DateTime.Now - transitionPrecision).TotalMilliseconds;
+
+                //    if (elapsedTime <= 1500)
+                //    {
+                //        precisionFactor = 1.0 - (0.95 * (elapsedTime / 1500.0)); // Linear transition
+                //    }
+                //    else
+                //    {
+                //        precisionFactor = 0.1; // Cap at 10% after 2 seconds
+                //    }
+                //}
+
+                // Calculate smoothed movement with adjusted precision factor
+                smoothedX = (float)(startX + deltaX * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
+                smoothedY = (float)(startY + deltaY * (i / (double)steps) * (1 - smoothingFactor) * precisionFactor);
+
+                // Set the cursor position
+                SetCursorPos((int)smoothedX, (int)smoothedY);
 
                 Thread.Sleep(duration / steps); // Wait between steps
             }
+        }
+
+
+        private KalmanFilter kalmanFilterX;
+        private KalmanFilter kalmanFilterY;
+
+        private void InitializeKalmanFilter()
+        {
+            // Kalman filter for X and Y coordinates
+            kalmanFilterX = new KalmanFilter(4, 2, 0);  // State: [x, dx] (position and velocity), Measurement: [x]
+            kalmanFilterY = new KalmanFilter(4, 2, 0);  // State: [y, dy] (position and velocity), Measurement: [y]
+
+            // Create and populate transition matrix (A) - assuming constant velocity model
+            kalmanFilterX.TransitionMatrix = new Mat(4, 4, MatType.CV_32F);
+            kalmanFilterX.TransitionMatrix.Set<float>(0, 0, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(0, 2, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(1, 1, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(1, 3, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(2, 2, 1);
+            kalmanFilterX.TransitionMatrix.Set<float>(3, 3, 1);
+
+            kalmanFilterY.TransitionMatrix = new Mat(4, 4, MatType.CV_32F);
+            kalmanFilterY.TransitionMatrix.Set<float>(0, 0, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(0, 2, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(1, 1, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(1, 3, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(2, 2, 1);
+            kalmanFilterY.TransitionMatrix.Set<float>(3, 3, 1);
+
+            // Measurement matrix (H)
+            kalmanFilterX.MeasurementMatrix = new Mat(2, 4, MatType.CV_32F);
+            kalmanFilterX.MeasurementMatrix.Set<float>(0, 0, 1);
+            kalmanFilterX.MeasurementMatrix.Set<float>(1, 2, 1);
+
+            kalmanFilterY.MeasurementMatrix = new Mat(2, 4, MatType.CV_32F);
+            kalmanFilterY.MeasurementMatrix.Set<float>(0, 1, 1);
+            kalmanFilterY.MeasurementMatrix.Set<float>(1, 3, 1);
+
+            // Set initial state estimate (set to initial cursor position)
+            GetCursorPos(out Point currentPos);
+            kalmanFilterX.StatePost = new Mat(4, 1, MatType.CV_32F);
+            kalmanFilterX.StatePost.Set<float>(0, currentPos.X);
+            kalmanFilterX.StatePost.Set<float>(1, 0);
+            kalmanFilterX.StatePost.Set<float>(2, 0);
+            kalmanFilterX.StatePost.Set<float>(3, 0);
+
+            kalmanFilterY.StatePost = new Mat(4, 1, MatType.CV_32F);
+            kalmanFilterY.StatePost.Set<float>(0, currentPos.Y);
+            kalmanFilterY.StatePost.Set<float>(1, 0);
+            kalmanFilterY.StatePost.Set<float>(2, 0);
+            kalmanFilterY.StatePost.Set<float>(3, 0);
         }
 
         private void PrecisionMode()

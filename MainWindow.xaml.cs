@@ -20,6 +20,7 @@ namespace ATEDNIULI
         double screenHeight = SystemParameters.PrimaryScreenHeight;
 
         private Window ODoverlay; //design a simple ODoverlay
+        private Window Typingoverlay;
 
         public MainWindow()
         {
@@ -38,6 +39,7 @@ namespace ATEDNIULI
             };
 
             ODWindow();
+            TypingWindow();
         }
 
         public void ShowWithFadeIn(Window window)
@@ -160,13 +162,90 @@ namespace ATEDNIULI
 
             // Set the main grid as the content of the overlay window
             ODoverlay.Content = mainGrid;
+        }
 
-            // Optional: Event handler for closing the overlay (e.g., click)
-            ODoverlay.MouseDown += (s, e) =>
+        private void TypingWindow()
+        {
+            // Initialize the overlay window
+            Typingoverlay = new Window
             {
-                if (e.ChangedButton == MouseButton.Left)
-                    ODoverlay.Hide(); // Hide the overlay on click
+                Title = "Typing Overlay",  // Title of the overlay
+                Width = 100,                  // Adjust width for a compact overlay
+                Height = 100,                 // Adjust height for a compact overlay
+                Background = Brushes.Transparent,
+                WindowStyle = WindowStyle.None, // No window chrome
+                AllowsTransparency = true, // Allow transparency
+                ShowInTaskbar = false,     // Do not show in taskbar
+                Topmost = true,            // Stay on top of other windows
+                Visibility = Visibility.Hidden, // Start hidden
+                ShowActivated = false
             };
+
+            // Create the layout similar to the Xamarin design
+            var mainGrid = new Grid();
+
+            var border = new Border
+            {
+                Background = (SolidColorBrush)new BrushConverter().ConvertFrom("#F4E9CD"),
+                CornerRadius = new CornerRadius(30, 30, 30, 30),
+                BorderBrush = Brushes.Black,
+                BorderThickness = new Thickness(0),
+                Width = 70,
+                Height = 55,
+            };
+
+            // Create the inner Grid for the image
+            var innerGrid = new Grid();
+
+            var imageBorder = new Border
+            {
+                Width = 55,
+                Height = 55,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Effect = new DropShadowEffect
+                {
+                    Color = Colors.Black,
+                    BlurRadius = 3,
+                    ShadowDepth = 2,
+                    Opacity = 0.5
+                }
+            };
+
+            var ellipse = new Ellipse
+            {
+                Width = 55,
+                Height = 45,
+                Fill = (SolidColorBrush)new BrushConverter().ConvertFrom("#77ACA2"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Create the Listening Image
+            var typingImage = new Image
+            {
+                Source = new BitmapImage(new Uri("pack://application:,,,/assets/icons/typing.png")),
+                Width = 35,
+                Height = 35,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                ClipToBounds = true,
+                Stretch = Stretch.UniformToFill
+            };
+
+            // Add elements to the inner Grid
+            imageBorder.Child = ellipse;
+            innerGrid.Children.Add(imageBorder);
+            innerGrid.Children.Add(typingImage);
+
+            // Add inner grid to the border
+            border.Child = innerGrid;
+
+            // Add border to the main grid
+            mainGrid.Children.Add(border);
+
+            // Set the main grid as the content of the overlay window
+            Typingoverlay.Content = mainGrid;
         }
 
         // Call this method to show the overlay
@@ -183,6 +262,21 @@ namespace ATEDNIULI
         public void HideODOverlay()
         {
             HideWithFadeOut(ODoverlay);
+        }
+
+        private void ShowTypingOverlay()
+        {
+            //ODoverlay.Show(); // Show the overlay
+            if (Typingoverlay != null)
+            {
+                ShowWithFadeIn(Typingoverlay);
+            }
+        }
+
+        // Call this method to hide the overlay
+        public void HideTypingOverlay()
+        {
+            HideWithFadeOut(Typingoverlay);
         }
 
         private void Window_Activated(object sender, EventArgs e)
@@ -203,6 +297,20 @@ namespace ATEDNIULI
             else
             {
                 HideODOverlay();
+            }
+        }
+
+        public void HighlightTypingIcon(bool typing)
+        {
+            AnimateTypingIcon(typing ? -20 : 0, typing);
+
+            if (typing)
+            {
+                ShowTypingOverlay();
+            }
+            else
+            {
+                HideTypingOverlay();
             }
         }
 
@@ -296,6 +404,48 @@ namespace ATEDNIULI
             storyboard.Begin();
         }
 
+        private void AnimateTypingIcon(double targetX, bool isActive)
+        {
+            // Update the icon source based on the active state
+            SetTypingIcon(isActive);
+
+            // Ensure the RenderTransform is initialized with a new TranslateTransform
+            TranslateTransform transform;
+
+            // Check if RenderTransform is a TranslateTransform
+            if (typing_icon.RenderTransform is TranslateTransform existingTransform)
+            {
+                transform = existingTransform; // Use existing transform
+            }
+            else
+            {
+                transform = new TranslateTransform(); // Create a new transform
+                typing_icon.RenderTransform = transform; // Assign the TranslateTransform to the icon
+            }
+
+            // Create the storyboard for the animation
+            var storyboard = new Storyboard();
+
+            // Create the animation to move to targetX
+            var moveAnimation = new DoubleAnimation
+            {
+                From = transform.X, // Use the current X value
+                To = targetX, // Move to the target X position
+                Duration = TimeSpan.FromMilliseconds(150) // Duration of the animation
+            };
+
+            // Set the target of the animation
+            Storyboard.SetTarget(moveAnimation, typing_icon); // Target the UI element
+                                                                        // Correct property path for the TranslateTransform X property
+            Storyboard.SetTargetProperty(moveAnimation, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
+
+            // Add the animation to the storyboard
+            storyboard.Children.Add(moveAnimation);
+
+            // Start the animation
+            storyboard.Begin();
+        }
+
         public void SetListeningIcon(bool isActive)
         {
             // Determine the icon path based on the active state
@@ -372,6 +522,44 @@ namespace ATEDNIULI
             object_detection_icon.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
         }
 
+        public void SetTypingIcon(bool isActive)
+        {
+            // Determine the icon path based on the active state
+            string iconPath = isActive ? "/assets/icons/typing.png" : "/assets/icons/typing-disabled.png";
+
+            // Preload the BitmapImage
+            var icon = new BitmapImage(new Uri(iconPath, UriKind.Relative));
+
+            // Create an animation for the opacity transition to fade out
+            DoubleAnimation fadeOutAnimation = new DoubleAnimation
+            {
+                From = 1, // Start fully visible
+                To = 0, // Fade out
+                Duration = TimeSpan.FromMilliseconds(75)
+            };
+
+            // Attach the Completed event handler
+            fadeOutAnimation.Completed += (s, e) =>
+            {
+                // Set the new icon source after fading out
+                typing_icon.Source = icon;
+
+                // Create a fade-in animation
+                DoubleAnimation fadeInAnimation = new DoubleAnimation
+                {
+                    From = 0, // Start fully transparent
+                    To = 1, // Fade in
+                    Duration = TimeSpan.FromMilliseconds(75)
+                };
+
+                // Start the fade-in animation
+                typing_icon.BeginAnimation(UIElement.OpacityProperty, fadeInAnimation);
+            };
+
+            // Apply the fade-out animation to the icon
+            typing_icon.BeginAnimation(UIElement.OpacityProperty, fadeOutAnimation);
+        }
+
         private void ExecuteOpenApplication(object sender, ExecutedRoutedEventArgs e) //method for opening applications
         {
             string appPath = e.Parameter as string;
@@ -433,6 +621,9 @@ namespace ATEDNIULI
 
                 ODoverlay.Left = (mainWindowBottomLeftX - ODoverlay.Width) + 45;
                 ODoverlay.Top = (mainWindowBottomLeftY - ODoverlay.Height) - 85;
+
+                Typingoverlay.Left = (mainWindowBottomLeftX - Typingoverlay.Width) + 45;
+                Typingoverlay.Top = (mainWindowBottomLeftY - Typingoverlay.Height) - 35;
 
                 double mainWindowTopLeftX = Left;
                 double mainWindowTopY = Top;

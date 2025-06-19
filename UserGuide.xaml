@@ -1,0 +1,753 @@
+﻿<Window x:Class="ATEDNIULI.UserGuide"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:ATEDNIULI"
+        mc:Ignorable="d"
+        Title="UserGuide"
+        Height="800" Width="1500"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None">
+    <Window.Resources>
+        <!-- State 0 -->
+        <DataTemplate x:Key="State0">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="Hello User, It seems it is your first time using the application. Welcome to the User Guide!" 
+                           FontSize="24" 
+                           TextAlignment="Center" 
+                           TextWrapping="Wrap" 
+                           Margin="20" />
+                <TextBlock Text="Say 'Thermal' to proceed" 
+                           FontSize="18" 
+                           FontStyle="Italic" 
+                           TextAlignment="Center" 
+                           Margin="10" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- State 1 -->
+        <DataTemplate x:Key="State1">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State1a" Text="TRML AND COMMANDS" 
+                       FontSize="40" 
+                       FontWeight="Bold" 
+                       Foreground="Black" 
+                       Margin="0,0,0,10" />
+
+                    <TextBlock Name="State1b" Text="TRML is an application that allows you to navigate desktops with only using voice and facial gestures" 
+                       FontSize="20" 
+                       FontWeight="Bold"
+                       TextWrapping="Wrap" 
+                       Margin="0,0,0,10" />
+
+                    <TextBlock Name="State1c" Text="To start giving commands, you need to call trml first" 
+                       FontSize="20" 
+                       FontWeight="Bold"
+                       Margin="0,0,0,5" />
+
+                    <TextBlock Name="State1d" Text="Try saying 'TRML' prounounced as thermal. this will make a window pop up just like in the image." 
+                       FontSize="18" 
+                       FontWeight="Bold"
+                       FontStyle="Italic" 
+                       Margin="0,0,0,20" />
+
+                    <TextBlock Name="State1e" Text="Great! Remember that you need to call thermal first then wait for the window to pop up and then you can now say the command you want" 
+                       FontSize="18" 
+                       FontWeight="Bold"
+                       Visibility="Hidden"
+                       Margin="0,0,0,5" />
+
+                    <TextBlock Name="State1f" Text="To proceed, say 'TRML next'" 
+                       FontSize="18" 
+                       FontStyle="Italic"
+                       FontWeight="Bold"
+                       Visibility="Hidden"
+                       Margin="0,20,0,0" />
+                </StackPanel>
+
+                <!-- Right Section -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <!-- Simulated Device Section -->
+                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
+                        <Image Source="assets/preview.png" Stretch="Uniform" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- State 2 -->
+        <DataTemplate x:Key="State2">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State2a" Text="TRML AND COMMANDS" 
+                       FontSize="40" 
+                       FontWeight="Bold" 
+                       Foreground="Black" 
+                       Margin="0,0,0,10" />
+
+                    <TextBlock Name="State2b" Text="You can open application, close them, search, type, and much more with ATENIULI" 
+                       FontSize="20" 
+                       FontWeight="Bold"
+                       TextWrapping="Wrap" 
+                       Margin="0,0,0,10" />
+
+                    <TextBlock Name="State2c" Text="For now let us try to open microsoft word" 
+                       FontSize="18"
+                       FontWeight="Bold"
+                       Margin="0,0,0,5" />
+
+                    <TextBlock Name="State2d" Text="Call 'TRML' first. then say 'open word'" 
+                       FontSize="18" 
+                       FontStyle="Italic"
+                       FontWeight="Bold"
+                       Margin="0,0,0,20" />
+
+                    <TextBlock Name="State2e" Text="Great! Now try closing the word application by calling 'TRML' and saying 'close application'" 
+                       FontSize="18"
+                       FontWeight="Bold"
+                       Visibility="Hidden"
+                       Margin="0,0,0,5" />
+
+                    <TextBlock Name="State2f" Text="Now from now on remember to always call 'TRML' first before giving commands" 
+                       FontSize="18" 
+                       FontStyle="Italic"
+                       FontWeight="Bold"
+                       Visibility="Hidden"
+                       Margin="0,20,0,0" />
+
+                    <TextBlock Name="State2g" Text="To proceed, say 'TRML next'" 
+                       FontSize="18" 
+                       FontStyle="Italic"
+                       FontWeight="Bold"
+                       Visibility="Hidden"
+                       Margin="0,20,0,0" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- State 3 -->
+        <DataTemplate x:Key="State3">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State3a" Text="TRML AND COMMANDS" 
+                               FontSize="40" 
+                               FontWeight="Bold" 
+                               Foreground="Black" 
+                               Margin="0,0,0,10" />
+                    <TextBlock Name="State3b" Text="ATEDNIULI is not very strict on the word of commands. You can say words that are similar to the command you are going to do." 
+                               FontSize="20"
+                               FontWeight="Bold"
+                               TextWrapping="Wrap" 
+                               Margin="0,0,0,10" />
+                    <TextBlock Name="State3c" Text="Like for example when opening an app instead of saying open, you can either say; activate, show, or nay similar  word to the command" 
+                               FontSize="18"
+                               FontWeight="Bold"
+                               Margin="0,0,0,5" />
+                    <TextBlock Name="State3d" Text="Open microsoft word. instead of saying 'open word' try substituting with 'activate word' or 'show word'" 
+                               FontSize="18"
+                               FontWeight="Bold"
+                               FontStyle="Italic" 
+                               Margin="0,0,0,20" />
+                    <TextBlock Name="State3e" Text="Great! Now try closing the application by subtituting 'close app' with 'terminate app' or 'exit app'" 
+                               FontSize="18"
+                               FontWeight="Bold"
+                               Visibility="Hidden"
+                               Margin="0,0,0,5" />
+                    <TextBlock Name="State3f" Text="Great! To proceed, say 'TRML next'" 
+                               FontSize="18" 
+                               FontStyle="Italic"
+                               FontWeight="Bold"
+                               Visibility="Hidden"
+                               Margin="0,20,0,0" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- State 4 -->
+        <DataTemplate x:Key="State4">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State4a" Text="SHOW ITEMS COMMAND" 
+                   FontSize="40" 
+                   FontWeight="Bold" 
+                   Foreground="Black" 
+                   Margin="0,0,0,20" />
+                    
+                    
+                    
+                    <TextBlock Name="State4b" Text="'show items' is a special type of command of ATEDNIULI that show all clickable items on your screen"
+                               FontSize="20" 
+                               FontWeight="Bold" 
+                               TextWrapping="Wrap"
+ 
+                               Margin="0,0,0,10" />
+                    <TextBlock Name="State4c" Text="This command will enable you to click the clickable items just by saying the tag it associates with" 
+                               FontSize="18" 
+                               FontWeight="Bold" 
+                               Margin="0,0,0,5" />
+                    <TextBlock Name="State4d" Text="Try commanding ATEDNIULI with 'show items'. Don't forget to call 'TRML' first" 
+                               FontSize="20" 
+                               FontWeight="Bold" 
+                               FontStyle="Italic" 
+                               Margin="0,0,0,20" />
+                    <TextBlock Name="State4e" Text="Great! Now try saying the number that is on the clickable item you want to click" 
+                               FontSize="18" 
+                               FontWeight="Bold" 
+                               Visibility="Hidden"
+                               Margin="0,0,0,5" />
+                    <TextBlock Name="State4f" Text="Great! To proceed, click the next button by using the show items command to proceed" 
+                               FontSize="18" 
+                               FontWeight="Bold" 
+                               FontStyle="Italic"
+                               Visibility="Hidden"
+                               Margin="0,20,0,0" />
+                </StackPanel>
+
+                <!-- Right Section -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="ClickedButtonText" 
+                       Text="No Button Clicked Yet" 
+                       FontSize="15"
+                       FontWeight="Bold"
+                       Foreground="Black"
+                       TextAlignment="Center"
+                       Margin="0,0,0,20" />
+                    <!-- Border with background containing buttons -->
+                    <Border x:Name="ButtonContainerBorder" Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
+                        <UniformGrid Rows="4" Columns="2" Margin="10">
+                            <!-- Chick Button -->
+                            <Button Content="🐥 Chick" 
+                                    Tag="Chick" 
+                                    FontSize="18" 
+                                    Click="Button_Click"
+                                    Width="100" Height="40">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="DarkBlue" CornerRadius="20" BorderThickness="0">
+                                                        <TextBlock Text="🐥 Chick" 
+                                                                    Foreground="White" 
+                                                                    HorizontalAlignment="Center" 
+                                                                    VerticalAlignment="Center" 
+                                                                    FontSize="18" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Dog Button -->
+                            <Button Content="🐶 Dog" 
+                                    Tag="Dog" 
+                                    FontSize="18" 
+                                    Click="Button_Click"
+                                    Width="100" Height="40">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="LightBlue" CornerRadius="20" BorderThickness="0">
+                                                        <TextBlock Text="🐶 Dog" 
+                                                                    Foreground="Black" 
+                                                                    HorizontalAlignment="Center" 
+                                                                    VerticalAlignment="Center" 
+                                                                    FontSize="18" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Fox Button -->
+                            <Button Content="🦊 Fox" 
+                                    Tag="Fox" 
+                                    FontSize="18" 
+                                    Click="Button_Click"
+                                    Width="100" Height="40">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Red" CornerRadius="20" BorderThickness="0">
+                                                        <TextBlock Text="🦊 Fox" 
+                                                                    Foreground="White" 
+                                                                    HorizontalAlignment="Center" 
+                                                                    VerticalAlignment="Center" 
+                                                                    FontSize="18" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Panda Button -->
+                            <Button Content="🐼 Panda" 
+                                    Tag="Panda" 
+                                    FontSize="18" 
+                                    Click="Button_Click"
+                                    Width="100" Height="40">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Yellow" CornerRadius="20" BorderThickness="0">
+                                                        <TextBlock Text="🐼 Panda" 
+                                                                    Foreground="Black" 
+                                                                    HorizontalAlignment="Center" 
+                                                                    VerticalAlignment="Center" 
+                                                                    FontSize="18" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Bunny Button -->
+                            <Button Content="🐰 Bunny" 
+                                    Tag="Bunny" 
+                                    FontSize="18" 
+                                    Click="Button_Click"
+                                    Width="100" Height="40">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Purple" CornerRadius="20" BorderThickness="0">
+                                                        <TextBlock Text="🐰 Bunny" 
+                                                                    Foreground="White" 
+                                                                    HorizontalAlignment="Center" 
+                                                                    VerticalAlignment="Center" 
+                                                                    FontSize="18" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Cat Button -->
+                            <Button Content="🐱 Cat" 
+                                    Tag="Cat" 
+                                    FontSize="18" 
+                                    Click="Button_Click"
+                                    Width="100" Height="40">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Pink" CornerRadius="20" BorderThickness="0">
+                                                        <TextBlock Text="🐱 Cat" 
+                                                       Foreground="Black" 
+                                                       HorizontalAlignment="Center" 
+                                                       VerticalAlignment="Center" 
+                                                       FontSize="18" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Koala Button -->
+                            <Button Content="🐨 Koala" 
+                                    Tag="Koala" 
+                                    FontSize="18" 
+                                    Click="Button_Click"
+                                    Width="100" Height="40">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Orange" CornerRadius="20" BorderThickness="0">
+                                                        <TextBlock Text="🐨 Koala" 
+                                                   Foreground="Black" 
+                                                   HorizontalAlignment="Center" 
+                                                   VerticalAlignment="Center" 
+                                                   FontSize="18" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
+                            <!-- Wolf Button -->
+                            <Button Content="🐺 Wolf" 
+                                    Tag="Wolf" 
+                                    FontSize="18" 
+                                    Click="Button_Click"
+                                    Width="100" Height="40">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Green" CornerRadius="20" BorderThickness="0">
+                                                        <TextBlock Text="🐺 Wolf" 
+                                                   Foreground="White" 
+                                                   HorizontalAlignment="Center" 
+                                                   VerticalAlignment="Center" 
+                                                   FontSize="18" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </UniformGrid>
+                    </Border>
+
+                    <!-- Next Button -->
+                    <Button x:Name="next"
+                            Content="NEXT" 
+                            Width="100" 
+                            Height="40" 
+                            Background="#FFC107" 
+                            Foreground="Black" 
+                            FontWeight="Bold" 
+                            Margin="0,20,0,0" 
+                            HorizontalAlignment="Center"
+                            Visibility="Hidden"
+                            Click="NextButton_Click" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+        
+        <!-- State 5 -->
+        <DataTemplate x:Key="State5">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State5a" Text="MOUSE CONTROL" 
+                       FontSize="40" 
+                       FontWeight="Bold" 
+                       Foreground="Black" 
+                       Margin="0,0,0,10" />
+                    <TextBlock Name="State5b" Text="mouse control is an ATEDNIULI feature in that allows you to move the mouse cursor by tilting your head in certain direction." 
+                       FontSize="20" 
+                       FontWeight="Bold"
+                       TextWrapping="Wrap" 
+                       Margin="0,0,0,10" />
+                    <TextBlock Name="State5c" FontSize="18" TextWrapping="Wrap" Margin="0,0,0,5">
+                                Aside from moving the mouse cursor, you can also access the mouse's functions;
+                                <LineBreak />
+                                Click, Double-click, Right-click, Hold-click, and Scroll-lock by just smiling :)
+                    </TextBlock>
+                    <TextBlock Name="State5d" Text="Try it right now, activate mouse control by commanding 'activate mouse'" 
+                       FontSize="18" 
+                       FontStyle="Italic" 
+                       FontWeight="Bold"
+                       Margin="0,0,0,20" />
+                    <TextBlock Name="State5e" Text="Great! Now try moving the mouse all around and get a feel for it" 
+                       FontSize="18"
+                       FontWeight="Bold"
+                       Visibility="Hidden"
+                       Margin="0,0,0,5" />
+                    <TextBlock Name="State5f" FontSize="18" TextWrapping="Wrap" Margin="0,20,0,0" Visibility="Hidden">
+                                Once you you get the hang of it try smiling for a certain amount of time to try the mouse functions on the shape on the right;
+                                <LineBreak />
+                                Smile for 1 second - Click,
+                                <LineBreak />
+                                Smile for 2 seconds - Double-Click,
+                                <LineBreak />
+                                Smile for 3 seconds - Right-Click,
+                                <LineBreak />
+                                Smile for 4 seconds - Hold-Click,
+                                <LineBreak />
+                                Smile for 5 seconds - Scroll Lock
+                    </TextBlock>
+                    <TextBlock Name="State5g" Text="Once you're done, proceed by clicking the Next Button" 
+                           FontSize="18"
+                           FontWeight="Bold"
+                           Visibility="Hidden"
+                           Margin="0,0,0,5" />
+                </StackPanel>
+
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <!-- Simulated Device Section -->
+                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
+                        <StackPanel>
+                            <!-- Scrollable Element -->
+                            <Border x:Name="ScrollableBorder" 
+                                    Width="200" 
+                                    Height="200" 
+                                    CornerRadius="0" 
+                                    Background="LightGray" 
+                                    Margin="0,0,0,20">
+                                <ScrollViewer>
+                                    <TextBlock x:Name="TextContent" 
+                                               TextWrapping="Wrap" 
+                                               Padding="10">
+                                        Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                                    </TextBlock>
+                                </ScrollViewer>
+                            </Border>
+
+                            <!-- Hint Text -->
+                            <TextBlock x:Name="HintText"
+                                       Text="Click to cycle font color, double-click to add more text, right-click to cycle font style."
+                                       FontSize="12"
+                                       Foreground="Gray"
+                                       Margin="0,10,0,10"
+                                       TextWrapping="Wrap" />
+                            <!-- Hint Text -->
+                            <TextBlock x:Name="HintText2"
+                                        Text="Once the text is long enough try scrolling by hold-clicking the scroll bar"
+                                        FontSize="12"
+                                        Foreground="Gray"
+                                        Margin="0,10,0,10"
+                                        TextWrapping="Wrap" />
+
+                            <!-- Single Button -->
+                            <Button x:Name="ActionButton" 
+                                    Content="Click me!" 
+                                    Width="150" 
+                                    Height="40" 
+                                    Background="#4CAF50" 
+                                    Foreground="White" 
+                                    FontWeight="Bold" 
+                                    HorizontalAlignment="Center"
+                                    Click="ActionButton_Click"
+                                    MouseRightButtonDown="ActionButton_RightClick"
+                                    MouseDoubleClick="ActionButton_DoubleClick" />
+                        </StackPanel>
+                    </Border>
+
+
+                    <!-- Next Button -->
+                    <Button x:Name="next"
+                            Content="NEXT" 
+                            Width="100" 
+                            Height="40" 
+                            Background="#FFC107" 
+                            Foreground="Black" 
+                            FontWeight="Bold" 
+                            Margin="0,20,0,0" 
+                            HorizontalAlignment="Center"
+                            Visibility="Hidden"
+                            Click="NextButton_Click" />
+                </StackPanel>
+
+
+            </Grid>
+        </DataTemplate>
+
+        <!-- State 6 -->
+        <DataTemplate x:Key="State6">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State6a" Text="QUICK NAVIGATE OPTIONS" 
+               FontSize="40" 
+               FontWeight="Bold" 
+               Foreground="Black" 
+               Margin="0,0,0,10" />
+                    <TextBlock Name="State6b" Text="Is another feature of ATEDNIULI where if the mouse cursor is hovering above an icon of certain apps or websites, " 
+               FontSize="20"
+               FontWeight="Bold"
+               TextWrapping="Wrap" 
+               Margin="0,0,0,10" />
+                    <TextBlock Name="State6bb" Text="certain options will popup showing all possible executable options of that app/website." 
+                    FontSize="20"
+                    FontWeight="Bold"
+                    TextWrapping="Wrap" 
+                    Margin="0,0,0,10" />        
+                    <TextBlock Name="State6c" Text="try hovering on one of these application and website icons and say the number of the task you want to execute" 
+               FontSize="18"
+               FontWeight="Bold"
+               Margin="0,0,0,5" />
+                    <TextBlock Name="State6d" Text="Great! Now close it and try another one" 
+               FontSize="18" 
+               Visibility="Hidden"
+               FontStyle="Italic" 
+               FontWeight="Bold"
+               Margin="0,0,0,20" />
+                    <TextBlock Name="State6e" Text="Once you're click next button to proceed." 
+               FontSize="18" 
+               FontWeight="Bold"
+               Visibility="Hidden"
+               Margin="0,0,0,5" />
+                </StackPanel>
+
+                <!-- Right Section -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <!-- Simulated Device Section -->
+                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
+                        <UniformGrid Rows="2" Columns="2">
+                            <!-- Website/App Icons -->
+                            <Image Source="assets/icons/chrome_icon.png" Width="40" Height="40" Margin="5" Cursor="Hand" />
+                            <Image Source="assets/icons/file_explorer_icon.png" Width="40" Height="40" Margin="5" Cursor="Hand" />
+                            <Image Source="assets/icons/youtube_icon.png" Width="40" Height="40" Margin="5" Cursor="Hand" />
+                            <Image Source="assets/icons/word_icon.png" Width="40" Height="40" Margin="5" Cursor="Hand" />
+                        </UniformGrid>
+                    </Border>
+
+                    <!-- Next Button -->
+                    <Button Content="NEXT" 
+                            Width="100" 
+                            Height="40" 
+                            Background="#FFC107" 
+                            Foreground="Black" 
+                            FontWeight="Bold" 
+                            Margin="0,20,0,0" 
+                            HorizontalAlignment="Center"
+                            Click="NextButton_Click" />
+                </StackPanel>
+
+            </Grid>
+        </DataTemplate>
+
+        <!-- State 7 -->
+        <DataTemplate x:Key="State7">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State7a" Text="TYPING MODE" 
+                               FontSize="40" 
+                               FontWeight="Bold" 
+                               Foreground="Black" 
+                               Margin="0,0,0,10" />
+                    <TextBlock Name="State7b" Text="Typing mode is another feature of ATEDNIULI that when activated allows the user" 
+                               FontSize="20"
+                               FontWeight="Bold"
+                               TextWrapping="Wrap" 
+                               Margin="0,0,0,10" />
+                    <TextBlock Name="State7bb" Text="to type freely with their voice." 
+                               FontSize="20"
+                               FontWeight="Bold"
+                               TextWrapping="Wrap" 
+                               Margin="0,0,0,10" />     
+                    <TextBlock Name="State7c" Text="To activate this mode, command the application by saying 'start typing'" 
+                               FontSize="18"
+                               FontWeight="Bold"
+                               Margin="0,0,0,5" />
+                    <TextBlock Name="State7d" Text="Great! Now try typing by saying for example 'the quick brown fox jumps over the lazy dog' or whatever you want" 
+                               FontSize="18"
+                               FontWeight="Bold"
+                               Visibility="Hidden"
+                               FontStyle="Italic" 
+                               Margin="0,0,0,20" />
+                    <TextBlock Name="State7e" Text="Try invoking saying the words that are listed at the top-left of the screen to type the corresponding symbols" 
+                               FontSize="18"
+                               FontWeight="Bold"
+                               Visibility="Hidden"
+                               Margin="0,0,0,5" />
+                    <TextBlock Name="State7f" Text="Once you're done say 'stop typing' and say 'TRML next' to proceed" 
+                               FontSize="18" 
+                               FontStyle="Italic"
+                               FontWeight="Bold"
+                               Visibility="Hidden"
+                               Margin="0,20,0,0" />
+                </StackPanel>
+
+                <!-- Right Section -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <!-- Simulated Device Section -->
+                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
+                        <!-- Text Input Section -->
+                        <TextBox x:Name="InputTextBox"
+                 Background="Transparent"
+                 VerticalAlignment="Stretch"
+                 HorizontalAlignment="Stretch"
+                 TextWrapping="Wrap"
+                 AcceptsReturn="True"
+                 BorderThickness="0"
+                 FontSize="16"
+                 Padding="10"
+                 IsVisibleChanged="InputTextBox_IsVisibleChanged" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+
+        <!-- State 8 -->
+        <DataTemplate x:Key="State8">
+            <Grid>
+                <!-- Left Section -->
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20">
+                    <TextBlock Name="State8a" Text="QUICK WEB SEARCHING" 
+                       FontSize="40" 
+                       FontWeight="Bold" 
+                       Foreground="Black" 
+                       Margin="0,0,0,10" />
+                    <TextBlock Name="State8b" Text="ATEDNIUIL also supports quick web searching." 
+                       FontSize="20"
+                       FontWeight="Bold"
+                       TextWrapping="Wrap" 
+                       Margin="0,0,0,10" />
+                    <TextBlock Name="State8c" Text="Just command the application with 'search' and say what you want to search. If you're ready to search say 'search now'" 
+                       FontSize="18"
+                       FontWeight="Bold"
+                       Margin="0,0,0,5" />
+                    <TextBlock Name="State8d" Text="Try it now say 'TRML' first and say 'search' to activate search mode and searching whatever you want" 
+                       FontSize="18" 
+                       FontStyle="Italic"
+                       FontWeight="Bold"
+                       Margin="0,0,0,20" />
+                    <TextBlock Name="State8e" Text="Great! Now you're ready to use the application, if you want to recap something just command 'help'" 
+                       FontSize="18"
+                       FontWeight="Bold"
+                       Visibility="Hidden"
+                       Margin="0,0,0,5" />
+                    <TextBlock Name="State8f" Text="Close the guide by saying 'TRML close'" 
+                       FontSize="18" 
+                       FontStyle="Italic"
+                       FontWeight="Bold"
+                       Visibility="Hidden"
+                       Margin="0,20,0,0" />
+                </StackPanel>
+
+                <!-- Right Section -->
+                <StackPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="20">
+                    <!-- Simulated Device Section -->
+                    <Border Background="#F0F0F0" CornerRadius="10" Padding="10" Width="300" Height="400">
+                        <Image Source="assets/sample_device_screenshot.png" Stretch="Uniform" />
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <!-- Background Image -->
+        <Grid.Background>
+            <ImageBrush ImageSource="assets/ATEDNIULI_bg.jpg" Stretch="UniformToFill" />
+        </Grid.Background>
+
+        <!-- Transparent White Panel -->
+        <Border Width="1350" Height="720" 
+                HorizontalAlignment="Center" 
+                VerticalAlignment="Center" 
+                Background="#9FFFFFFF" 
+                CornerRadius="5">
+            <!-- Content Control to Switch States -->
+            <ContentControl x:Name="StateControl" />
+        </Border>
+    </Grid>
+</Window>
