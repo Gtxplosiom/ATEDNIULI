@@ -1,3 +1,3 @@
-ATEDNIULI: Assistive Technology for Enhanced Desktop Navigation for Individuals with Upper Limb Impairments
+ATEDNIULI: Assistive Technology for Enhanced Desktop Navigation for Individuals with Upper Limb Impairments (LEGACY)
 
-Pending remake
+Refactored codebase: [ATEDNIULI-NET8](https://github.com/Gtxplosiom/ATEDNIULI-NET8)
